@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Data;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
 using SiteServer.BackgroundPages.Core;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.Model;
 using SiteServer.CMS.Plugin;
 
 namespace SiteServer.BackgroundPages.Settings
@@ -12,26 +13,26 @@ namespace SiteServer.BackgroundPages.Settings
 	public class PageLogError : BasePage
 	{
 	    public DropDownList DdlPluginId;
-        public TextBox TbKeyword;
         public DateTimeTextBox TbDateFrom;
         public DateTimeTextBox TbDateTo;
-
+        public TextBox TbKeyword;
         public Repeater RptContents;
         public SqlPager SpContents;
-
 		public Button BtnDelete;
 		public Button BtnDeleteAll;
+        public Literal LtlState;
+        public Button BtnSetting;
 
-		public void Page_Load(object sender, EventArgs e)
+        public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            if (Body.IsQueryExists("Delete"))
+            if (AuthRequest.IsQueryExists("Delete"))
             {
-                var list = TranslateUtils.StringCollectionToIntList(Body.GetQueryString("IDCollection"));
+                var list = TranslateUtils.StringCollectionToIntList(AuthRequest.GetQueryString("IDCollection"));
                 try
                 {
-                    BaiRongDataProvider.ErrorLogDao.Delete(list);
+                    DataProvider.ErrorLogDao.Delete(list);
                     SuccessDeleteMessage();
                 }
                 catch (Exception ex)
@@ -39,45 +40,51 @@ namespace SiteServer.BackgroundPages.Settings
                     FailDeleteMessage(ex);
                 }
             }
-            else if (Body.IsQueryExists("DeleteAll"))
+            else if (AuthRequest.IsQueryExists("DeleteAll"))
             {
                 try
                 {
-                    BaiRongDataProvider.ErrorLogDao.DeleteAll();
+                    DataProvider.ErrorLogDao.DeleteAll();
                     SuccessDeleteMessage();
                 }
                 catch (Exception ex)
                 {
                     FailDeleteMessage(ex);
                 }
+            }
+            else if (AuthRequest.IsQueryExists("Setting"))
+            {
+                ConfigManager.SystemConfigInfo.IsLogError = !ConfigManager.SystemConfigInfo.IsLogError;
+                DataProvider.ConfigDao.Update(ConfigManager.Instance);
+                SuccessMessage($"成功{(ConfigManager.SystemConfigInfo.IsLogError ? "启用" : "禁用")}日志记录");
             }
 
             SpContents.ControlToPaginate = RptContents;
             SpContents.ItemsPerPage = StringUtils.Constants.PageSize;
 
-            SpContents.SelectCommand = BaiRongDataProvider.ErrorLogDao.GetSelectCommend(Body.GetQueryString("PluginId"), Body.GetQueryString("Keyword"),
-                    Body.GetQueryString("DateFrom"), Body.GetQueryString("DateTo"));
+            SpContents.SelectCommand = DataProvider.ErrorLogDao.GetSelectCommend(AuthRequest.GetQueryString("PluginId"), AuthRequest.GetQueryString("Keyword"),
+                    AuthRequest.GetQueryString("DateFrom"), AuthRequest.GetQueryString("DateTo"));
 
-            SpContents.SortField = "Id";
+            SpContents.SortField = nameof(ErrorLogInfo.Id);
             SpContents.SortMode = SortMode.DESC;
             RptContents.ItemDataBound += RptContents_ItemDataBound;
 
             if (IsPostBack) return;
 
             DdlPluginId.Items.Add(new ListItem("全部错误", string.Empty));
-            foreach (var pair in PluginCache.AllPluginPairs)
+            foreach (var pluginInfo in PluginManager.AllPluginInfoList)
             {
-                DdlPluginId.Items.Add(new ListItem(pair.Metadata.DisplayName, pair.Metadata.Id));
+                DdlPluginId.Items.Add(new ListItem(pluginInfo.Id, pluginInfo.Id));
             }
 
-            BreadCrumbSettings("系统错误日志", AppManager.Permissions.Settings.Log);
+            VerifySystemPermissions(ConfigManager.SettingsPermissions.Log);
 
-            if (Body.IsQueryExists("Keyword"))
+            if (AuthRequest.IsQueryExists("Keyword"))
             {
-                ControlUtils.SelectListItems(DdlPluginId, Body.GetQueryString("PluginId"));
-                TbKeyword.Text = Body.GetQueryString("Keyword");
-                TbDateFrom.Text = Body.GetQueryString("DateFrom");
-                TbDateTo.Text = Body.GetQueryString("DateTo");
+                ControlUtils.SelectSingleItem(DdlPluginId, AuthRequest.GetQueryString("PluginId"));
+                TbKeyword.Text = AuthRequest.GetQueryString("Keyword");
+                TbDateFrom.Text = AuthRequest.GetQueryString("DateFrom");
+                TbDateTo.Text = AuthRequest.GetQueryString("DateTo");
             }
 
             BtnDelete.Attributes.Add("onclick", PageUtils.GetRedirectStringWithCheckBoxValueAndAlert(PageUtils.GetSettingsUrl(nameof(PageLogError), new NameValueCollection
@@ -85,10 +92,34 @@ namespace SiteServer.BackgroundPages.Settings
                 {"Delete", "True" }
             }), "IDCollection", "IDCollection", "请选择需要删除的日志！", "此操作将删除所选日志，确认吗？"));
 
-            BtnDeleteAll.Attributes.Add("onclick", PageUtils.GetRedirectStringWithConfirm(PageUtils.GetSettingsUrl(nameof(PageLogError), new NameValueCollection
+            BtnDeleteAll.Attributes.Add("onclick",
+                AlertUtils.ConfirmRedirect("删除所有日志", "此操作将删除所有日志信息，确定吗？", "删除全部",
+                    PageUtils.GetSettingsUrl(nameof(PageLogError), new NameValueCollection
+                    {
+                        {"DeleteAll", "True"}
+                    })));
+
+            if (ConfigManager.SystemConfigInfo.IsLogError)
             {
-                {"DeleteAll", "True" }
-            }), "此操作将删除所有日志信息，确定吗？"));
+                BtnSetting.Text = "禁用系统错误日志";
+                BtnSetting.Attributes.Add("onclick",
+                    AlertUtils.ConfirmRedirect("禁用系统错误日志", "此操作将禁用系统错误日志记录功能，确定吗？", "禁 用",
+                        PageUtils.GetSettingsUrl(nameof(PageLogError), new NameValueCollection
+                        {
+                            {"Setting", "True"}
+                        })));
+            }
+            else
+            {
+                LtlState.Text = @"<div class=""alert alert-danger m-t-10"">系统错误日志当前处于禁用状态，系统将不会记录系统错误日志！</div>";
+                BtnSetting.Text = "启用系统错误日志";
+                BtnSetting.Attributes.Add("onclick",
+                    AlertUtils.ConfirmRedirect("启用系统错误日志", "此操作将启用系统错误日志记录功能，确定吗？", "启 用",
+                        PageUtils.GetSettingsUrl(nameof(PageLogError), new NameValueCollection
+                        {
+                            {"Setting", "True"}
+                        })));
+            }
 
             SpContents.DataBind();
         }
@@ -97,28 +128,35 @@ namespace SiteServer.BackgroundPages.Settings
         {
             if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
+            var id = SqlUtils.EvalInt(e.Item.DataItem, nameof(ErrorLogInfo.Id));
+            var addDate = SqlUtils.EvalDateTime(e.Item.DataItem, nameof(ErrorLogInfo.AddDate));
+            var message = SqlUtils.EvalString(e.Item.DataItem, nameof(ErrorLogInfo.Message));
+            var summary = SqlUtils.EvalString(e.Item.DataItem, nameof(ErrorLogInfo.Summary));
+
+            var ltlId = (Literal)e.Item.FindControl("ltlId");
             var ltlAddDate = (Literal)e.Item.FindControl("ltlAddDate");
             var ltlMessage = (Literal)e.Item.FindControl("ltlMessage");
-            var ltlStacktrace = (Literal)e.Item.FindControl("ltlStacktrace");
             var ltlSummary = (Literal)e.Item.FindControl("ltlSummary");
 
-            ltlAddDate.Text = DateUtils.GetDateAndTimeString(SqlUtils.EvalDateTime(e.Item.DataItem, "AddDate"));
-            ltlMessage.Text = SqlUtils.EvalString(e.Item.DataItem, "Message");
-            ltlStacktrace.Text = SqlUtils.EvalString(e.Item.DataItem, "Stacktrace");
-            ltlSummary.Text = SqlUtils.EvalString(e.Item.DataItem, "Summary");
+            ltlId.Text = $@"<a href=""{PageUtils.GetErrorPageUrl(id)}"" target=""_blank"">{id}</a>";
+            ltlAddDate.Text = DateUtils.GetDateAndTimeString(addDate);
+            ltlMessage.Text = message;
+            ltlSummary.Text = summary;
+            if (!string.IsNullOrEmpty(ltlSummary.Text))
+            {
+                ltlSummary.Text += "<br />";
+            }
         }
 
-        public void Search_OnClick(object sender, EventArgs e)
-        {
-            Response.Redirect(PageUrl, true);
-        }
-
-	    private string PageUrl => PageUtils.GetSettingsUrl(nameof(PageLogError), new NameValueCollection
+	    public void Search_OnClick(object sender, EventArgs e)
 	    {
-            {"PluginId", DdlPluginId.SelectedValue},
-            {"Keyword", TbKeyword.Text},
-	        {"DateFrom", TbDateFrom.Text},
-	        {"DateTo", TbDateTo.Text}
-	    });
+	        PageUtils.Redirect(PageUtils.GetSettingsUrl(nameof(PageLogError), new NameValueCollection
+	        {
+	            {"PluginId", DdlPluginId.SelectedValue},
+	            {"Keyword", TbKeyword.Text},
+	            {"DateFrom", TbDateFrom.Text},
+	            {"DateTo", TbDateTo.Text}
+	        }));
+	    }
 	}
 }

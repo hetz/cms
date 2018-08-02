@@ -1,59 +1,60 @@
 ﻿using System;
 using System.Web;
 using System.Web.Http;
-using BaiRong.Core;
-using SiteServer.CMS.Controllers.Sys.Stl;
+using SiteServer.CMS.Api.Sys.Stl;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.StlParser.Utility;
+using SiteServer.CMS.Plugin;
+using SiteServer.CMS.StlParser.StlElement;
 
 namespace SiteServer.API.Controllers.Sys.Stl
 {
     [RoutePrefix("api")]
     public class StlActionsDynamicController : ApiController
     {
-        [HttpPost, Route(ActionsDynamic.Route)]
+        [HttpPost, Route(ApiRouteActionsDynamic.Route)]
         public IHttpActionResult Main()
         {
             try
             {
-                var body = new RequestBody();
+                var request = new AuthRequest();
 
-                var publishmentSystemId = body.GetPostInt("publishmentSystemId");
-                var pageNodeId = body.GetPostInt("pageNodeId");
-                if (pageNodeId == 0)
+                var siteId = request.GetPostInt("siteId");
+                var pageChannelId = request.GetPostInt("pageChannelId");
+                if (pageChannelId == 0)
                 {
-                    pageNodeId = publishmentSystemId;
+                    pageChannelId = siteId;
                 }
-                var pageContentId = body.GetPostInt("pageContentId");
-                var pageTemplateId = body.GetPostInt("pageTemplateId");
-                var isPageRefresh = body.GetPostBool("isPageRefresh");
-                var templateContent = TranslateUtils.DecryptStringBySecretKey(body.GetPostString("templateContent"));
-                var ajaxDivId = PageUtils.FilterSqlAndXss(body.GetPostString("ajaxDivId"));
+                var pageContentId = request.GetPostInt("pageContentId");
+                var pageTemplateId = request.GetPostInt("pageTemplateId");
+                var isPageRefresh = request.GetPostBool("isPageRefresh");
+                var templateContent = TranslateUtils.DecryptStringBySecretKey(request.GetPostString("templateContent"));
+                var ajaxDivId = PageUtils.FilterSqlAndXss(request.GetPostString("ajaxDivId"));
 
-                var channelId = body.GetPostInt("channelId");
+                var channelId = request.GetPostInt("channelId");
                 if (channelId == 0)
                 {
-                    channelId = pageNodeId;
+                    channelId = pageChannelId;
                 }
-                var contentId = body.GetPostInt("contentId");
+                var contentId = request.GetPostInt("contentId");
                 if (contentId == 0)
                 {
                     contentId = pageContentId;
                 }
 
-                var pageUrl = TranslateUtils.DecryptStringBySecretKey(body.GetPostString("pageUrl"));
-                var pageIndex = body.GetPostInt("pageNum");
+                var pageUrl = TranslateUtils.DecryptStringBySecretKey(request.GetPostString("pageUrl"));
+                var pageIndex = request.GetPostInt("pageNum");
                 if (pageIndex > 0)
                 {
                     pageIndex--;
                 }
 
                 var queryString = PageUtils.GetQueryStringFilterXss(PageUtils.UrlDecode(HttpContext.Current.Request.RawUrl));
-                queryString.Remove("publishmentSystemID");
+                queryString.Remove("siteId");
 
                 return Ok(new
                 {
-                    Html = StlUtility.ParseDynamicContent(publishmentSystemId, channelId, contentId, pageTemplateId, isPageRefresh, templateContent, pageUrl, pageIndex, ajaxDivId, queryString, body.UserInfo)
+                    Html = StlDynamic.ParseDynamicContent(siteId, channelId, contentId, pageTemplateId, isPageRefresh, templateContent, pageUrl, pageIndex, ajaxDivId, queryString, request.UserInfo)
                 });
             }
             catch(Exception ex)

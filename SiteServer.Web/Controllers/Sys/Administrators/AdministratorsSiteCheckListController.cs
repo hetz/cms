@@ -1,54 +1,54 @@
 ﻿using System.Collections.Generic;
 using System.Web.Http;
 using SiteServer.BackgroundPages.Cms;
-using SiteServer.CMS.Controllers.Sys.Administrators;
+using SiteServer.CMS.Api.Sys.Administrators;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Core.User;
+using SiteServer.CMS.Plugin;
 
 namespace SiteServer.API.Controllers.Sys.Administrators
 {
     [RoutePrefix("api")]
     public class AdministratorsSiteCheckListController : ApiController
     {
-        [HttpGet, Route(SiteCheckList.Route)]
+        [HttpGet, Route(ApiRouteSiteCheckList.Route)]
         public IHttpActionResult Main(string userName)
         {
-            var body = new RequestBody();
+            var request = new AuthRequest();
 
-            if (!body.IsAdminLoggin)
+            if (!request.IsAdminLoggin)
             {
                 return Unauthorized();
             }
 
             var list = new List<object>();
-            var unCheckedList = CheckManager.GetUserCountListUnChecked(body.AdminName);
+            var unCheckedList = CheckManager.GetUserCountListUnChecked(request.AdminPermissions);
             if (unCheckedList.Count <= 0) return Ok(list);
 
             var dict = new Dictionary<int, int>();
 
             foreach (var pair in unCheckedList)
             {
-                var publishmentSystemId = pair.Key;
+                var siteId = pair.Key;
                 var count = pair.Value;
-                if (dict.ContainsKey(publishmentSystemId))
+                if (dict.ContainsKey(siteId))
                 {
-                    dict[publishmentSystemId] = dict[publishmentSystemId] + count;
+                    dict[siteId] = dict[siteId] + count;
                 }
                 else
                 {
-                    dict[publishmentSystemId] = count;
+                    dict[siteId] = count;
                 }
             }
 
-            foreach (var publishmentSystemId in dict.Keys)
+            foreach (var siteId in dict.Keys)
             {
-                var count = dict[publishmentSystemId];
-                if (!PublishmentSystemManager.IsExists(publishmentSystemId)) continue;
+                var count = dict[siteId];
+                if (!SiteManager.IsExists(siteId)) continue;
 
                 list.Add(new
                 {
-                    Url = PageContentCheck.GetRedirectUrl(publishmentSystemId),
-                    SiteName = PublishmentSystemManager.GetPublishmentSystemInfo(publishmentSystemId).PublishmentSystemName,
+                    Url = PageContentSearch.GetRedirectUrlCheck(siteId),
+                    SiteManager.GetSiteInfo(siteId).SiteName,
                     Count = count
                 });
             }

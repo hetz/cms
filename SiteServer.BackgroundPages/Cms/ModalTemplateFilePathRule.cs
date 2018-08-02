@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Create;
 using SiteServer.CMS.Model.Enumerations;
@@ -10,23 +10,21 @@ namespace SiteServer.BackgroundPages.Cms
 {
     public class ModalTemplateFilePathRule : BasePageCms
     {
-        public PlaceHolder phFilePath;
-        public TextBox tbFilePath;
-        public TextBox tbChannelFilePathRule;
-        public TextBox tbContentFilePathRule;
+        public PlaceHolder PhFilePath;
+        public TextBox TbFilePath;
+        public TextBox TbChannelFilePathRule;
+        public TextBox TbContentFilePathRule;
+        public Button BtnCreateChannelRule;
+        public Button BtnCreateContentRule;
 
-        public Button btnCreateChannelRule;
-        public Button btnCreateContentRule;
+		private int _channelId;
 
-		private int _nodeId;
-
-        public static string GetOpenWindowString(int publishmentSystemId, int nodeId)
+        public static string GetOpenWindowString(int siteId, int channelId)
         {
-            return PageUtils.GetOpenWindowString("页面命名规则",
-                PageUtils.GetCmsUrl(nameof(ModalTemplateFilePathRule), new NameValueCollection
+            return LayerUtils.GetOpenScript("页面命名规则",
+                PageUtils.GetCmsUrl(siteId, nameof(ModalTemplateFilePathRule), new NameValueCollection
                 {
-                    {"PublishmentSystemID", publishmentSystemId.ToString()},
-                    {"NodeID", nodeId.ToString()}
+                    {"channelId", channelId.ToString()}
                 }));
         }
 
@@ -34,52 +32,30 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID", "NodeID");
-            _nodeId = Body.GetQueryInt("NodeID");
+            PageUtils.CheckRequestParameter("siteId", "channelId");
+            _channelId = AuthRequest.GetQueryInt("channelId");
 
-			if (!IsPostBack)
-			{
-                var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, _nodeId);
+            if (IsPostBack) return;
 
-                if (nodeInfo.NodeType == ENodeType.BackgroundPublishNode || nodeInfo.LinkType == ELinkType.LinkToFirstChannel || nodeInfo.LinkType == ELinkType.LinkToFirstContent || nodeInfo.LinkType == ELinkType.LinkToLastAddChannel || nodeInfo.LinkType == ELinkType.NoLink)
-                {
-                    phFilePath.Visible = false;
-                }
-
-                var showPopWinString = ModalFilePathRule.GetOpenWindowString(PublishmentSystemId, _nodeId, true, tbChannelFilePathRule.ClientID);
-                btnCreateChannelRule.Attributes.Add("onclick", showPopWinString);
-
-                showPopWinString = ModalFilePathRule.GetOpenWindowString(PublishmentSystemId, _nodeId, false, tbContentFilePathRule.ClientID);
-                btnCreateContentRule.Attributes.Add("onclick", showPopWinString);
-
-                if (string.IsNullOrEmpty(nodeInfo.FilePath))
-                {
-                    tbFilePath.Text = PageUtility.GetInputChannelUrl(PublishmentSystemInfo, nodeInfo, false);
-                }
-                else
-                {
-                    tbFilePath.Text = nodeInfo.FilePath;
-                }
-
-                if (string.IsNullOrEmpty(nodeInfo.ChannelFilePathRule))
-                {
-                    tbChannelFilePathRule.Text = PathUtility.GetChannelFilePathRule(PublishmentSystemInfo, _nodeId);
-                }
-                else
-                {
-                    tbChannelFilePathRule.Text = nodeInfo.ChannelFilePathRule;
-                }
-
-                if (string.IsNullOrEmpty(nodeInfo.ContentFilePathRule))
-                {
-                    tbContentFilePathRule.Text = PathUtility.GetContentFilePathRule(PublishmentSystemInfo, _nodeId);
-                }
-                else
-                {
-                    tbContentFilePathRule.Text = nodeInfo.ContentFilePathRule;
-                }
+            var channelInfo = ChannelManager.GetChannelInfo(SiteId, _channelId);
+            var linkType = ELinkTypeUtils.GetEnumType(channelInfo.LinkType);
+            if (channelInfo.ParentId == 0 || linkType == ELinkType.LinkToFirstChannel || linkType == ELinkType.LinkToFirstContent || linkType == ELinkType.LinkToLastAddChannel || linkType == ELinkType.NoLink)
+            {
+                PhFilePath.Visible = false;
             }
-		}
+
+            var showPopWinString = ModalFilePathRule.GetOpenWindowString(SiteId, _channelId, true, TbChannelFilePathRule.ClientID);
+            BtnCreateChannelRule.Attributes.Add("onclick", showPopWinString);
+
+            showPopWinString = ModalFilePathRule.GetOpenWindowString(SiteId, _channelId, false, TbContentFilePathRule.ClientID);
+            BtnCreateContentRule.Attributes.Add("onclick", showPopWinString);
+
+            TbFilePath.Text = string.IsNullOrEmpty(channelInfo.FilePath) ? PageUtility.GetInputChannelUrl(SiteInfo, channelInfo, false) : channelInfo.FilePath;
+
+            TbChannelFilePathRule.Text = string.IsNullOrEmpty(channelInfo.ChannelFilePathRule) ? PathUtility.GetChannelFilePathRule(SiteInfo, _channelId) : channelInfo.ChannelFilePathRule;
+
+            TbContentFilePathRule.Text = string.IsNullOrEmpty(channelInfo.ContentFilePathRule) ? PathUtility.GetContentFilePathRule(SiteInfo, _channelId) : channelInfo.ContentFilePathRule;
+        }
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
@@ -87,29 +63,29 @@ namespace SiteServer.BackgroundPages.Cms
 
             try
             {
-                var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, _nodeId);
+                var channelInfo = ChannelManager.GetChannelInfo(SiteId, _channelId);
 
-                var filePath = nodeInfo.FilePath;
+                var filePath = channelInfo.FilePath;
 
-                if (phFilePath.Visible)
+                if (PhFilePath.Visible)
                 {
-                    tbFilePath.Text = tbFilePath.Text.Trim();
-                    if (!string.IsNullOrEmpty(tbFilePath.Text) && !StringUtils.EqualsIgnoreCase(filePath, tbFilePath.Text))
+                    TbFilePath.Text = TbFilePath.Text.Trim();
+                    if (!string.IsNullOrEmpty(TbFilePath.Text) && !StringUtils.EqualsIgnoreCase(filePath, TbFilePath.Text))
                     {
-                        if (!DirectoryUtils.IsDirectoryNameCompliant(tbFilePath.Text))
+                        if (!DirectoryUtils.IsDirectoryNameCompliant(TbFilePath.Text))
                         {
                             FailMessage("栏目页面路径不符合系统要求！");
                             return;
                         }
 
-                        if (PathUtils.IsDirectoryPath(tbFilePath.Text))
+                        if (PathUtils.IsDirectoryPath(TbFilePath.Text))
                         {
-                            tbFilePath.Text = PageUtils.Combine(tbFilePath.Text, "index.html");
+                            TbFilePath.Text = PageUtils.Combine(TbFilePath.Text, "index.html");
                         }
 
-                        var filePathArrayList = DataProvider.NodeDao.GetAllFilePathByPublishmentSystemId(PublishmentSystemId);
-                        filePathArrayList.AddRange(DataProvider.TemplateMatchDao.GetAllFilePathByPublishmentSystemId(PublishmentSystemId));
-                        if (filePathArrayList.IndexOf(tbFilePath.Text) != -1)
+                        var filePathArrayList = DataProvider.ChannelDao.GetAllFilePathBySiteId(SiteId);
+                        filePathArrayList.AddRange(DataProvider.TemplateMatchDao.GetAllFilePathBySiteId(SiteId));
+                        if (filePathArrayList.IndexOf(TbFilePath.Text) != -1)
                         {
                             FailMessage("栏目修改失败，栏目页面路径已存在！");
                             return;
@@ -117,9 +93,9 @@ namespace SiteServer.BackgroundPages.Cms
                     }
                 }
 
-                if (!string.IsNullOrEmpty(tbChannelFilePathRule.Text))
+                if (!string.IsNullOrEmpty(TbChannelFilePathRule.Text))
                 {
-                    var filePathRule = tbChannelFilePathRule.Text.Replace("|", string.Empty);
+                    var filePathRule = TbChannelFilePathRule.Text.Replace("|", string.Empty);
                     if (!DirectoryUtils.IsDirectoryNameCompliant(filePathRule))
                     {
                         FailMessage("栏目页面命名规则不符合系统要求！");
@@ -132,9 +108,9 @@ namespace SiteServer.BackgroundPages.Cms
                     }
                 }
 
-                if (!string.IsNullOrEmpty(tbContentFilePathRule.Text))
+                if (!string.IsNullOrEmpty(TbContentFilePathRule.Text))
                 {
-                    var filePathRule = tbContentFilePathRule.Text.Replace("|", string.Empty);
+                    var filePathRule = TbContentFilePathRule.Text.Replace("|", string.Empty);
                     if (!DirectoryUtils.IsDirectoryNameCompliant(filePathRule))
                     {
                         FailMessage("内容页面命名规则不符合系统要求！");
@@ -147,24 +123,24 @@ namespace SiteServer.BackgroundPages.Cms
                     }
                 }
 
-                if (tbFilePath.Text != PageUtility.GetInputChannelUrl(PublishmentSystemInfo, nodeInfo, false))
+                if (TbFilePath.Text != PageUtility.GetInputChannelUrl(SiteInfo, channelInfo, false))
                 {
-                    nodeInfo.FilePath = tbFilePath.Text;
+                    channelInfo.FilePath = TbFilePath.Text;
                 }
-                if (tbChannelFilePathRule.Text != PathUtility.GetChannelFilePathRule(PublishmentSystemInfo, _nodeId))
+                if (TbChannelFilePathRule.Text != PathUtility.GetChannelFilePathRule(SiteInfo, _channelId))
                 {
-                    nodeInfo.ChannelFilePathRule = tbChannelFilePathRule.Text;
+                    channelInfo.ChannelFilePathRule = TbChannelFilePathRule.Text;
                 }
-                if (tbContentFilePathRule.Text != PathUtility.GetContentFilePathRule(PublishmentSystemInfo, _nodeId))
+                if (TbContentFilePathRule.Text != PathUtility.GetContentFilePathRule(SiteInfo, _channelId))
                 {
-                    nodeInfo.ContentFilePathRule = tbContentFilePathRule.Text;
+                    channelInfo.ContentFilePathRule = TbContentFilePathRule.Text;
                 }
 
-                DataProvider.NodeDao.UpdateNodeInfo(nodeInfo);
+                DataProvider.ChannelDao.Update(channelInfo);
 
-                CreateManager.CreateChannel(PublishmentSystemId, _nodeId);
+                CreateManager.CreateChannel(SiteId, _channelId);
 
-                Body.AddSiteLog(PublishmentSystemId, _nodeId, 0, "设置页面命名规则", $"栏目:{nodeInfo.NodeName}");
+                AuthRequest.AddSiteLog(SiteId, _channelId, 0, "设置页面命名规则", $"栏目:{channelInfo.ChannelName}");
 
                 isSuccess = true;
             }
@@ -175,7 +151,7 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (isSuccess)
             {
-                PageUtils.CloseModalPageAndRedirect(Page, PageTemplateFilePathRule.GetRedirectUrl(PublishmentSystemId, _nodeId));
+                LayerUtils.CloseAndRedirect(Page, PageConfigurationCreateRule.GetRedirectUrl(SiteId, _channelId));
             }
         }
 	}

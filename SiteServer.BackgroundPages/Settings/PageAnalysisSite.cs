@@ -3,162 +3,182 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Data;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
 using SiteServer.CMS.Core;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Settings
 {
     public class PageAnalysisSite : BasePageCms
     {
-        public DateTimeTextBox StartDate;
-        public DateTimeTextBox EndDate;
-        public Repeater RpContents;
-        public Literal LtlArray;
+        public DropDownList DdlSiteId;
+        public DateTimeTextBox TbStartDate;
+        public DateTimeTextBox TbEndDate;
+        public Repeater RptContents;
         public Literal LtlVerticalNew;
         public Literal LtlVerticalUpdate;
-        public Literal LtlVerticalRemrk;
         public Literal LtlVerticalTotalNum;
+
+        public string StrArray { get; set; }
 
         //总数
         private readonly Hashtable _horizentalHashtable = new Hashtable();
         private readonly Hashtable _verticalHashtable = new Hashtable();
         //sort key
-        private readonly List<int> _publishmentSystemIdList = new List<int>();
+        private readonly List<int> _siteIdList = new List<int>();
         //x
         private readonly Hashtable _xHashtable = new Hashtable();
         //y
         private readonly Hashtable _yHashtableNew = new Hashtable();
         private readonly Hashtable _yHashtableUpdate = new Hashtable();
-        private readonly Hashtable _yHashtableRemark = new Hashtable();
         //y轴类型
         private const string YTypeNew = "YType_New";
         private const string YTypeUpdate = "YType_Update";
-        private const string YTypeRemrk = "YType_Remrk";
+        private DateTime _begin;
+        private DateTime _end;
 
-        public static string GetRedirectUrl(string returnUrl)
+        public static string GetRedirectUrl(string startDate, string endDate)
         {
             return PageUtils.GetSettingsUrl(nameof(PageAnalysisSite), new NameValueCollection
             {
-                {"returnUrl", StringUtils.ValueToUrl(returnUrl)}
+                {"startDate", startDate},
+                {"endDate", endDate}
             });
         }
 
         public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
+
+            if (string.IsNullOrEmpty(AuthRequest.GetQueryString("startDate")))
+            {
+                _begin = DateTime.Now.AddMonths(-1);
+                _end = DateTime.Now;
+            }
+            else
+            {
+                _begin = TranslateUtils.ToDateTime(AuthRequest.GetQueryString("startDate"));
+                _end = TranslateUtils.ToDateTime(AuthRequest.GetQueryString("endDate"));
+            }
+
             if (IsPostBack) return;
 
-            BreadCrumbSettings("站点数据统计", AppManager.Permissions.Settings.Chart);
+            VerifySystemPermissions(ConfigManager.SettingsPermissions.Chart);
 
-            StartDate.Text = DateUtils.GetDateAndTimeString(DateTime.Now.AddMonths(-1));
-            EndDate.Now = true;
+            DdlSiteId.Items.Add(new ListItem("<<全部站点>>", "0"));
+            var siteIdList = SiteManager.GetSiteIdListOrderByLevel();
+            foreach (var siteId in siteIdList)
+            {
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                DdlSiteId.Items.Add(new ListItem(siteInfo.SiteName, siteId.ToString()));
+            }
+
+            TbStartDate.Text = DateUtils.GetDateAndTimeString(_begin);
+            TbEndDate.Text = DateUtils.GetDateAndTimeString(_end);
 
             BindGrid();
 
-            foreach (var key in _publishmentSystemIdList)
+            foreach (var key in _siteIdList)
             {
                 var yValueNew = GetYHashtable(key, YTypeNew);
                 var yValueUpdate = GetYHashtable(key, YTypeUpdate);
-                var yValueRemark = GetYHashtable(key, YTypeRemrk);
 
                 if (yValueNew != "0")
                 {
-                    LtlArray.Text += $@"
+                    StrArray += $@"
 xArrayNew.push('{GetXHashtable(key)}');
 yArrayNew.push('{yValueNew}');";
                 }
                 if (yValueUpdate != "0")
                 {
-                    LtlArray.Text += $@"
+                    StrArray += $@"
 xArrayUpdate.push('{GetXHashtable(key)}');
 yArrayUpdate.push('{yValueUpdate}');";
-                }
-                if (yValueRemark != "0")
-                {
-                    LtlArray.Text += $@"
-xArrayRemark.push('{GetXHashtable(key)}');
-yArrayRemark.push('{yValueRemark}');";
                 }
             }
 
             LtlVerticalNew.Text = GetVertical(YTypeNew);
             LtlVerticalUpdate.Text = GetVertical(YTypeUpdate);
-            LtlVerticalRemrk.Text = GetVertical(YTypeRemrk);
             LtlVerticalTotalNum.Text = GetVerticalTotalNum();
         }
 
         public void BindGrid()
         {
-            var ie = DataProvider.PublishmentSystemDao.GetDataSource().GetEnumerator();
-            while (ie.MoveNext())
+            var siteIdList = SiteManager.GetSiteIdList();
+            
+            foreach(var siteId in siteIdList)
             {
-                var publishmentSystemId = SqlUtils.EvalInt(ie.Current, "PublishmentSystemID");
-                var publishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(publishmentSystemId);
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
 
-                var key = publishmentSystemInfo.PublishmentSystemId;
+                var key = siteInfo.Id;
                 //x轴信息
-                SetXHashtable(key, publishmentSystemInfo.PublishmentSystemName);
+                SetXHashtable(key, siteInfo.SiteName);
                 //y轴信息
-                SetYHashtable(key, DataProvider.ContentDao.GetCountOfContentAdd(publishmentSystemInfo.AuxiliaryTableForContent, publishmentSystemInfo.PublishmentSystemId, publishmentSystemInfo.PublishmentSystemId, EScopeType.All, TranslateUtils.ToDateTime(StartDate.Text), TranslateUtils.ToDateTime(EndDate.Text), string.Empty), YTypeNew);
-                SetYHashtable(key, DataProvider.ContentDao.GetCountOfContentUpdate(publishmentSystemInfo.AuxiliaryTableForContent, publishmentSystemInfo.PublishmentSystemId, publishmentSystemInfo.PublishmentSystemId, EScopeType.All, TranslateUtils.ToDateTime(StartDate.Text), TranslateUtils.ToDateTime(EndDate.Text), string.Empty), YTypeUpdate);
-                SetYHashtable(key, DataProvider.CommentDao.GetCountChecked(publishmentSystemInfo.PublishmentSystemId, TranslateUtils.ToDateTime(StartDate.Text), TranslateUtils.ToDateTime(EndDate.Text)), YTypeRemrk);
+                SetYHashtable(key, DataProvider.ContentDao.GetCountOfContentAdd(siteInfo.TableName, siteInfo.Id, siteInfo.Id, EScopeType.All, _begin, _end, string.Empty, ETriState.All), YTypeNew);
+                SetYHashtable(key, DataProvider.ContentDao.GetCountOfContentUpdate(siteInfo.TableName, siteInfo.Id, siteInfo.Id, EScopeType.All, _begin, _end, string.Empty), YTypeUpdate);
             }
 
-            RpContents.DataSource = DataProvider.PublishmentSystemDao.GetDataSource();
-            RpContents.ItemDataBound += rpContents_ItemDataBound;
-            RpContents.DataBind();
+            RptContents.DataSource = siteIdList;
+            RptContents.ItemDataBound += RptContents_ItemDataBound;
+            RptContents.DataBind();
         }
 
-        private void rpContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
+        private void RptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
         {
             if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-            var publishmentSystemId = SqlUtils.EvalInt(e.Item.DataItem, "PublishmentSystemID");
-            var publishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(publishmentSystemId);
-            var ltlPublishmentSystemName = (Literal)e.Item.FindControl("ltlPublishmentSystemName");
+            var siteId = (int) e.Item.DataItem;
+            var siteInfo = SiteManager.GetSiteInfo(siteId);
+
+            var ltlSiteName = (Literal)e.Item.FindControl("ltlSiteName");
             var ltlNewContentNum = (Literal)e.Item.FindControl("ltlNewContentNum");
             var ltlUpdateContentNum = (Literal)e.Item.FindControl("ltlUpdateContentNum");
-            var ltlNewRemarkNum = (Literal)e.Item.FindControl("ltlNewRemarkNum");
             var ltlTotalNum = (Literal)e.Item.FindControl("ltlTotalNum");
 
-            ltlPublishmentSystemName.Text = $@"<a href=""{PageAnalysisAdminWork.GetRedirectUrl(publishmentSystemId, GetRedirectUrl(string.Empty))}"">{publishmentSystemInfo.PublishmentSystemName}</a>";
-            ltlNewContentNum.Text = GetYHashtable(publishmentSystemId, YTypeNew);
-            ltlUpdateContentNum.Text = GetYHashtable(publishmentSystemId, YTypeUpdate);
-            ltlNewRemarkNum.Text = GetYHashtable(publishmentSystemId, YTypeRemrk);
-            ltlTotalNum.Text = GetHorizental(publishmentSystemId);
+            ltlSiteName.Text = $@"<a href=""{PageAnalysisSiteChannels.GetRedirectUrl(siteId)}"">{siteInfo.SiteName}</a>";
+            ltlNewContentNum.Text = GetYHashtable(siteId, YTypeNew);
+            ltlUpdateContentNum.Text = GetYHashtable(siteId, YTypeUpdate);
+            ltlTotalNum.Text = GetHorizental(siteId);
         }
 
         public void Analysis_OnClick(object sender, EventArgs e)
         {
-            BindGrid();
+            var siteId = TranslateUtils.ToInt(DdlSiteId.SelectedValue);
+            if (siteId > 0)
+            {
+                PageUtils.Redirect(PageAnalysisSiteChannels.GetRedirectUrl(siteId, TbStartDate.Text,
+                    TbEndDate.Text));
+            }
+            else
+            {
+                PageUtils.Redirect(GetRedirectUrl(TbStartDate.Text, TbEndDate.Text));
+            }
         }
 
         /// <summary>
         /// 设置x轴数据
         /// </summary>
-        private void SetXHashtable(int publishmentSystemId, string publishmentSystemName)
+        private void SetXHashtable(int siteId, string siteName)
         {
-            if (!_xHashtable.ContainsKey(publishmentSystemId))
+            if (!_xHashtable.ContainsKey(siteId))
             {
-                _xHashtable.Add(publishmentSystemId, publishmentSystemName);
+                _xHashtable.Add(siteId, siteName);
             }
-            if (!_publishmentSystemIdList.Contains(publishmentSystemId))
+            if (!_siteIdList.Contains(siteId))
             {
-                _publishmentSystemIdList.Add(publishmentSystemId);
+                _siteIdList.Add(siteId);
             }
-            _publishmentSystemIdList.Sort();
-            _publishmentSystemIdList.Reverse();
+            _siteIdList.Sort();
+            _siteIdList.Reverse();
         }
 
         /// <summary>
         /// 获取x轴数据
         /// </summary>
-        private string GetXHashtable(int publishmentSystemId)
+        private string GetXHashtable(int siteId)
         {
-            return _xHashtable.ContainsKey(publishmentSystemId) ? _xHashtable[publishmentSystemId].ToString() : string.Empty;
+            return _xHashtable.ContainsKey(siteId) ? _xHashtable[siteId].ToString() : string.Empty;
         }
 
         /// <summary>
@@ -192,18 +212,6 @@ yArrayRemark.push('{yValueRemark}');";
                     }
                     SetVertical(YTypeUpdate, value);
                     break;
-                case YTypeRemrk:
-                    if (!_yHashtableRemark.ContainsKey(publishemtSystemId))
-                    {
-                        _yHashtableRemark.Add(publishemtSystemId, value);
-                    }
-                    else
-                    {
-                        var num = TranslateUtils.ToInt(_yHashtableRemark[publishemtSystemId].ToString());
-                        _yHashtableRemark[publishemtSystemId] = num + value;
-                    }
-                    SetVertical(YTypeRemrk, value);
-                    break;
             }
             SetHorizental(publishemtSystemId, value);
         }
@@ -229,13 +237,6 @@ yArrayRemark.push('{yValueRemark}');";
                         return num.ToString();
                     }
                     return "0";
-                case YTypeRemrk:
-                    if (_yHashtableRemark.ContainsKey(publishemtSystemId))
-                    {
-                        var num = TranslateUtils.ToInt(_yHashtableRemark[publishemtSystemId].ToString());
-                        return num.ToString();
-                    }
-                    return "0";
 
                 default:
                     return "0";
@@ -245,31 +246,31 @@ yArrayRemark.push('{yValueRemark}');";
         /// <summary>
         /// 设置y总数
         /// </summary>
-        /// <param name="publishmentSystemId"></param>
+        /// <param name="siteId"></param>
         /// <param name="num"></param>
-        private void SetHorizental(int publishmentSystemId, int num)
+        private void SetHorizental(int siteId, int num)
         {
-            if (_horizentalHashtable[publishmentSystemId] == null)
+            if (_horizentalHashtable[siteId] == null)
             {
-                _horizentalHashtable[publishmentSystemId] = num;
+                _horizentalHashtable[siteId] = num;
             }
             else
             {
-                var totalNum = (int)_horizentalHashtable[publishmentSystemId];
-                _horizentalHashtable[publishmentSystemId] = totalNum + num;
+                var totalNum = (int)_horizentalHashtable[siteId];
+                _horizentalHashtable[siteId] = totalNum + num;
             }
         }
 
         /// <summary>
         /// 获取y总数
         /// </summary>
-        /// <param name="publishmentSystemId"></param>
+        /// <param name="siteId"></param>
         /// <returns></returns>
-        private string GetHorizental(int publishmentSystemId)
+        private string GetHorizental(int siteId)
         {
-            if (_horizentalHashtable[publishmentSystemId] != null)
+            if (_horizentalHashtable[siteId] != null)
             {
-                var num = TranslateUtils.ToInt(_horizentalHashtable[publishmentSystemId].ToString());
+                var num = TranslateUtils.ToInt(_horizentalHashtable[siteId].ToString());
                 return (num == 0) ? "0" : $"<strong>{num}</strong>";
             }
             return "0";

@@ -2,28 +2,27 @@
 using System.Collections.Specialized;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.ImportExport;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
 	public class ModalChannelImport : BasePageCms
     {
-        protected DropDownList DdlParentNodeId;
+        protected DropDownList DdlParentChannelId;
 		public HtmlInputFile HifFile;
 		public DropDownList DdlIsOverride;
 
         private bool[] _isLastNodeArray;
 
-        public static string GetOpenWindowString(int publishmentSystemId, int nodeId)
+        public static string GetOpenWindowString(int siteId, int channelId)
         {
-            return PageUtils.GetOpenLayerString("导入栏目",
-                PageUtils.GetCmsUrl(nameof(ModalChannelImport), new NameValueCollection
+            return LayerUtils.GetOpenScript("导入栏目",
+                PageUtils.GetCmsUrl(siteId, nameof(ModalChannelImport), new NameValueCollection
                 {
-                    {"PublishmentSystemID", publishmentSystemId.ToString()},
-                    {"NodeID", nodeId.ToString()}
+                    {"channelId", channelId.ToString()}
                 }), 600, 300);
         }
 
@@ -33,39 +32,39 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            var nodeId = Body.GetQueryInt("NodeID", PublishmentSystemId);
-            var nodeIdList = DataProvider.NodeDao.GetNodeIdListByPublishmentSystemId(PublishmentSystemId);
-            var nodeCount = nodeIdList.Count;
+            var channelId = AuthRequest.GetQueryInt("channelId", SiteId);
+            var channelIdList = ChannelManager.GetChannelIdList(SiteId);
+            var nodeCount = channelIdList.Count;
             _isLastNodeArray = new bool[nodeCount];
-            foreach (var theNodeId in nodeIdList)
+            foreach (var theChannelId in channelIdList)
             {
-                var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, theNodeId);
-                var itemNodeId = nodeInfo.NodeId;
-                var nodeName = nodeInfo.NodeName;
+                var nodeInfo = ChannelManager.GetChannelInfo(SiteId, theChannelId);
+                var itemChannelId = nodeInfo.Id;
+                var nodeName = nodeInfo.ChannelName;
                 var parentsCount = nodeInfo.ParentsCount;
                 var isLastNode = nodeInfo.IsLastNode;
-                var value = IsOwningNodeId(itemNodeId) ? itemNodeId.ToString() : string.Empty;
+                var value = IsOwningChannelId(itemChannelId) ? itemChannelId.ToString() : string.Empty;
                 value = (nodeInfo.Additional.IsChannelAddable) ? value : string.Empty;
                 if (!string.IsNullOrEmpty(value))
                 {
-                    if (!HasChannelPermissions(theNodeId, AppManager.Permissions.Channel.ChannelAdd))
+                    if (!HasChannelPermissions(theChannelId, ConfigManager.ChannelPermissions.ChannelAdd))
                     {
                         value = string.Empty;
                     }
                 }
-                var listitem = new ListItem(GetTitle(itemNodeId, nodeName, parentsCount, isLastNode), value);
-                if (itemNodeId == nodeId)
+                var listitem = new ListItem(GetTitle(itemChannelId, nodeName, parentsCount, isLastNode), value);
+                if (itemChannelId == channelId)
                 {
                     listitem.Selected = true;
                 }
-                DdlParentNodeId.Items.Add(listitem);
+                DdlParentChannelId.Items.Add(listitem);
             }
         }
 
-        public string GetTitle(int nodeId, string nodeName, int parentsCount, bool isLastNode)
+        public string GetTitle(int channelId, string nodeName, int parentsCount, bool isLastNode)
         {
             var str = "";
-            if (nodeId == PublishmentSystemId)
+            if (channelId == SiteId)
             {
                 isLastNode = true;
             }
@@ -103,12 +102,12 @@ namespace SiteServer.BackgroundPages.Cms
 
                     HifFile.PostedFile.SaveAs(localFilePath);
 
-					var importObject = new ImportObject(PublishmentSystemId);
-                    importObject.ImportChannelsAndContentsByZipFile(TranslateUtils.ToInt(DdlParentNodeId.SelectedValue), localFilePath, TranslateUtils.ToBool(DdlIsOverride.SelectedValue));
+					var importObject = new ImportObject(SiteId, AuthRequest.AdminName);
+                    importObject.ImportChannelsAndContentsByZipFile(TranslateUtils.ToInt(DdlParentChannelId.SelectedValue), localFilePath, TranslateUtils.ToBool(DdlIsOverride.SelectedValue));
 
-                    Body.AddSiteLog(PublishmentSystemId, "导入栏目");
+                    AuthRequest.AddSiteLog(SiteId, "导入栏目");
 
-                    PageUtils.CloseModalPage(Page);
+                    LayerUtils.Close(Page);
 				}
 				catch(Exception ex)
 				{

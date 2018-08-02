@@ -3,19 +3,19 @@ using System.Collections.Generic;
 using System.Data;
 using System.Web.UI.WebControls;
 using System.Xml;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Model.Enumerations;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
-    [Stl(Usage = "翻页数据库列表", Description = "通过 stl:pageSqlContents 标签在模板中显示能够翻页的数据库列表")]
+    [StlClass(Usage = "翻页数据库列表", Description = "通过 stl:pageSqlContents 标签在模板中显示能够翻页的数据库列表")]
     public class StlPageSqlContents : StlSqlContents
     {
         public new const string ElementName = "stl:pageSqlContents";
 
-        public const string AttributePageNum = "pageNum";
+        private static readonly Attr PageNum = new Attr("pageNum", "每页显示的内容数目");
 
         private readonly string _stlPageSqlContentsElement;
         private readonly XmlNode _node;
@@ -24,48 +24,15 @@ namespace SiteServer.CMS.StlParser.StlElement
         private readonly ContextInfo _contextInfo;
         private DataSet _dataSet;
 
-        public new static SortedList<string, string> AttributeList
-        {
-            get
-            {
-                var attributes = StlSqlContents.AttributeList;
-                attributes.Add(AttributePageNum, "每页显示的内容数目");
-                return attributes;
-            }
-        }
-
         public StlPageSqlContents(string stlPageSqlContentsElement, PageInfo pageInfo, ContextInfo contextInfo, bool isXmlContent, bool isLoadData)
         {
             _stlPageSqlContentsElement = stlPageSqlContentsElement;
             _pageInfo = pageInfo;
             try
             {
-                var xmlDocument = StlParserUtility.GetXmlDocument(_stlPageSqlContentsElement, isXmlContent);
-                _node = xmlDocument.DocumentElement;
-                _node = _node?.FirstChild;
+                var stlElementInfo = StlParserUtility.ParseStlElement(_stlPageSqlContentsElement);
 
-                var attributes = new Dictionary<string, string>();
-                var ie = _node?.Attributes?.GetEnumerator();
-                if (ie != null)
-                {
-                    while (ie.MoveNext())
-                    {
-                        var attr = (XmlAttribute)ie.Current;
-
-                        var key = attr.Name;
-                        if (!string.IsNullOrEmpty(key))
-                        {
-                            var value = attr.Value;
-                            if (string.IsNullOrEmpty(value))
-                            {
-                                value = string.Empty;
-                            }
-                            attributes[key] = value;
-                        }
-                    }
-                }
-
-                _contextInfo = contextInfo.Clone(stlPageSqlContentsElement, attributes, _node?.InnerXml, _node?.ChildNodes);
+                _contextInfo = contextInfo.Clone(stlPageSqlContentsElement, stlElementInfo.InnerHtml, stlElementInfo.Attributes);
 
                 _listInfo = ListInfo.GetListInfoByXmlNode(_pageInfo, _contextInfo, EContextType.SqlContent);
                 if (isLoadData)
@@ -84,32 +51,9 @@ namespace SiteServer.CMS.StlParser.StlElement
             _pageInfo = pageInfo;
             try
             {
-                var xmlDocument = StlParserUtility.GetXmlDocument(stlPageSqlContentsElement, isXmlContent);
-                _node = xmlDocument.DocumentElement;
-                _node = _node?.FirstChild;
+                var stlElementInfo = StlParserUtility.ParseStlElement(stlPageSqlContentsElement);
 
-                var attributes = new Dictionary<string, string>();
-                var ie = _node?.Attributes?.GetEnumerator();
-                if (ie != null)
-                {
-                    while (ie.MoveNext())
-                    {
-                        var attr = (XmlAttribute)ie.Current;
-
-                        var key = attr.Name;
-                        if (!string.IsNullOrEmpty(key))
-                        {
-                            var value = attr.Value;
-                            if (string.IsNullOrEmpty(value))
-                            {
-                                value = string.Empty;
-                            }
-                            attributes[key] = value;
-                        }
-                    }
-                }
-
-                _contextInfo = contextInfo.Clone(stlPageSqlContentsElement, attributes, _node?.InnerXml, _node?.ChildNodes);
+                _contextInfo = contextInfo.Clone(stlPageSqlContentsElement, stlElementInfo.InnerHtml, stlElementInfo.Attributes);
 
                 _listInfo = ListInfo.GetListInfoByXmlNode(_pageInfo, _contextInfo, EContextType.SqlContent);
                 _dataSet = StlDataUtility.GetPageSqlContentsDataSet(_listInfo.ConnectionString, _listInfo.QueryString, _listInfo.StartNum, _listInfo.TotalNum, _listInfo.OrderByString);
@@ -248,7 +192,7 @@ namespace SiteServer.CMS.StlParser.StlElement
             //还原翻页为0，使得其他列表能够正确解析ItemIndex
             _contextInfo.PageItemIndex = 0;
 
-            return StlParserUtility.GetBackHtml(parsedContent, _pageInfo);
+            return parsedContent;
         }
 
     }

@@ -1,33 +1,38 @@
 ﻿<%@ Page Language="C#" Trace="false" Inherits="SiteServer.BackgroundPages.Settings.ModalUserExport" %>
+  <%@ Register TagPrefix="ctrl" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
+    <!DOCTYPE html>
+    <html class="modalPage">
 
-<%@ Register TagPrefix="bairong" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
+    <head>
+      <meta charset="utf-8">
+      <!--#include file="../inc/head.html"-->
+    </head>
 
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<!--#include file="../inc/header.aspx"-->
-</head>
+    <body>
+      <form runat="server">
+        <ctrl:alerts text="在此导出用户数据至Excel中" runat="server" />
 
-<body>
-<!--#include file="../inc/openWindow.html"-->
-<form class="form-inline" runat="server">
-<asp:Button id="btnSubmit" useSubmitBehavior="false" OnClick="Submit_OnClick" runat="server" style="display:none" />
-<bairong:alerts text="在此导出用户数据至Excel中" runat="server"></bairong:alerts>
+        <asp:PlaceHolder ID="PhExport" runat="server">
+          <div class="form-group form-row">
+            <label class="col-3 text-right col-form-label">用户类型</label>
+            <div class="col-7">
+              <asp:DropDownList ID="DdlCheckedState" runat="server" class="form-control"></asp:DropDownList>
+            </div>
+            <div class="col-2">
 
-  <asp:PlaceHolder ID="PhExport" runat="server">
-    <table class="table table-noborder table-hover">
-      <tr>
-        <td class="center" valign="top" ><table class="center" width="95%">
-            <tr>
-              <td>用户类型：</td>
-              <td><asp:RadioButtonList ID="RblCheckedState" runat="server" RepeatDirection="Horizontal"></asp:RadioButtonList></td>
-            </tr>
-          </table></td>
-      </tr>
-    </table>
-  </asp:PlaceHolder>
+            </div>
+          </div>
+        </asp:PlaceHolder>
 
-</form>
-</body>
-</html>
+        <hr />
+
+        <div class="text-right mr-1">
+          <asp:Button id="BtnSubmit" class="btn btn-primary m-l-5" text="确 定" runat="server" onClick="Submit_OnClick" />
+          <button type="button" class="btn btn-default m-l-5" onclick="window.parent.layer.closeAll()">取 消</button>
+        </div>
+
+      </form>
+    </body>
+
+    </html>
+    <!--#include file="../inc/foot.html"-->

@@ -1,45 +1,48 @@
 ﻿<%@ Page Language="C#" validateRequest="false" Inherits="SiteServer.BackgroundPages.Cms.ModalRelatedFieldItemEdit" Trace="false"%>
-<%@ Register TagPrefix="bairong" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<!--#include file="../inc/header.aspx"-->
-</head>
+  <%@ Register TagPrefix="ctrl" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
+    <!DOCTYPE html>
+    <html class="modalPage">
 
-<body>
-<!--#include file="../inc/openWindow.html"-->
-<form class="form-inline" runat="server">
-<asp:Button id="btnSubmit" useSubmitBehavior="false" OnClick="Submit_OnClick" runat="server" style="display:none" />
-<bairong:alerts runat="server"></bairong:alerts>
+    <head>
+      <meta charset="utf-8">
+      <!--#include file="../inc/head.html"-->
+    </head>
 
-  <table class="table table-noborder table-hover">
-    <tr>
-      <td><nobr>
-        <bairong:help HelpText="字段项名称" Text="字段项名：" runat="server" ></bairong:help>
-        </nobr></td>
-      <td>
-        <asp:TextBox Width="160" id="ItemName" runat="server"/>
-        <asp:RequiredFieldValidator
-          ControlToValidate="ItemName"
-          errorMessage=" *" foreColor="red" 
-          Display="Dynamic"
-          runat="server"/></td>
-    </tr>
-    <tr>
-      <td><nobr>
-        <bairong:help HelpText="字段项值" Text="字段项值：" runat="server" ></bairong:help>
-        </nobr></td>
-      <td>
-        <asp:TextBox Width="160" id="ItemValue" runat="server"/>
-        <asp:RequiredFieldValidator
-          ControlToValidate="ItemValue"
-          errorMessage=" *" foreColor="red" 
-          Display="Dynamic"
-          runat="server"/></td>
-    </tr>
-  </table>
+    <body>
+      <form runat="server">
+        <ctrl:alerts runat="server" />
 
-</form>
-</body>
-</html>
+        <div class="form-group form-row">
+            <label class="col-3 text-right col-form-label">字段项名</label>
+            <div class="col-8">
+              <asp:TextBox class="form-control" id="TbItemName" runat="server" />
+            </div>
+            <div class="col-1">
+              <asp:RequiredFieldValidator ControlToValidate="TbItemName" errorMessage=" *" foreColor="red" Display="Dynamic" runat="server"
+              />
+            </div>
+          </div>
+
+          <div class="form-group form-row">
+            <label class="col-3 text-right col-form-label">字段项值</label>
+            <div class="col-8">
+              <asp:TextBox class="form-control" id="TbItemValue" runat="server" />
+            </div>
+            <div class="col-1">
+              <asp:RequiredFieldValidator ControlToValidate="TbItemValue" errorMessage=" *" foreColor="red" Display="Dynamic" runat="server"
+              />
+            </div>
+          </div>
+
+          <hr />
+
+          <div class="text-right mr-1">
+            <asp:Button class="btn btn-primary m-l-5" text="确 定" runat="server" onClick="Submit_OnClick" />
+            <button type="button" class="btn btn-default m-l-5" onclick="window.parent.layer.closeAll()">取 消</button>
+          </div>
+
+      </form>
+    </body>
+
+    </html>
+    <!--#include file="../inc/foot.html"-->

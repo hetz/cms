@@ -1,134 +1,183 @@
 ﻿<%@ Page Language="C#" Trace="false" Inherits="SiteServer.BackgroundPages.Cms.ModalUploadWord" %>
-<%@ Register TagPrefix="bairong" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<!--#include file="../inc/header.aspx"-->
-</head>
+	<%@ Register TagPrefix="ctrl" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
+		<!DOCTYPE html>
+		<html class="modalPage">
 
-<body>
-<!--#include file="../inc/openWindow.html"-->
-<form class="form-inline" runat="server">
-<asp:Button id="btnSubmit" useSubmitBehavior="false" OnClick="Submit_OnClick" runat="server" style="display:none" />
-<bairong:alerts runat="server"></bairong:alerts>
+		<head>
+			<meta charset="utf-8">
+			<!--#include file="../inc/head.html"-->
 
-	<script type="text/javascript" src="../assets/swfUpload/swfupload.js"></script>
-	<script type="text/javascript" src="../assets/swfUpload/handlers.js"></script>
-	<script type="text/javascript">
-	function add_form(){
-		var $count = $('#File_Count');
-		var count = parseInt($count.val());
-		count = count + 1;
-		var $el = $("<div id='File_" + count + "'>" + $('#File_0').html().replace(/_0/g, '_' + count) + "</div>");
-		$el.insertBefore($count);	
-		$('#File_Count').val(count);
-	}
+			<script type="text/javascript">
+				$(document).ready(function () {
+					$('#CbIsFirstLineTitle').click(function (e) {
+						if (!$("#CbIsFirstLineTitle").attr("checked")) {
+							$("#CbIsFirstLineRemove").removeAttr("checked");
+						};
+					});
+				});
+			</script>
+		</head>
 
-	function remove_form(divID){
-		$(divID).remove();
-	}
+		<body>
+			<form runat="server">
+				<ctrl:alerts runat="server" />
 
-	function uploadSuccess(file, response) {
-		try {
-			if (response) {
-				 response = eval("(" + response + ")");
-				 
-				 if (response.success == 'true') {
-					add_form();
-					var $count = $('#File_Count');
-					var index = parseInt($count.val());
-					 $("#fileName_" + index).val(response.fileName);
-					 $("#divFileName_" + index).html(response.fileName);
-				 } else {
-					 alert(response.message);
-				 }
-			 }
-		} catch (ex) {
-			this.debug(ex);
-		}
-	}
+				<input id="HihFileNames" type="hidden" runat="server" />
 
-	var swfu;
-	$(document).ready(function(){
-		swfu = new SWFUpload({
-			// Backend Settings
-			upload_url: "<%=GetUploadWordMultipleUrl()%>",
+				<div id="drop-area" style="height: 200px; line-height: 200px; text-align: center; font-size: 18px; color: #777; border: 2px dashed #0000004d;
+						background: #fff;	border-radius: 6px; cursor: pointer; margin-bottom: 20px">
+					点击批量上传Word文件或者将Word文件拖拽到此区域
+				</div>
 
-			// File Upload Settings
-			file_size_limit : "20 MB",
-			file_types : "*.doc;*.docx",
-			file_types_description : "Word Files",
-			file_upload_limit : 0,    // Zero means unlimited
+				<div id="main" class="row">
 
-			// Event Handler Settings - these functions as defined in Handlers.js
-			//  The handlers are not part of SWFUpload but are part of my website and control how
-			//  my website reacts to the SWFUpload events.
-			swfupload_preload_handler : preLoad,
-			swfupload_load_failed_handler : loadFailed,
-			file_queue_error_handler : fileQueueError,
-			file_dialog_complete_handler : fileDialogComplete,
-			upload_error_handler : uploadError,
-			upload_success_handler : uploadSuccess,
-			upload_complete_handler : uploadComplete,
+					<div class="col-sm-4 col-lg-3 col-xs-12" v-for="(file, index) in files">
 
-			// Button settings
-			button_image_url : "../assets/swfUpload/button.png",
-			button_placeholder_id : "swfUploadPlaceholder",
-			button_width: 114,
-			button_height: 22,
-			button_text : '» 批量导入Word',
-			button_text_top_padding: 1,
-			button_text_left_padding: 10,
+						<div class="card m-b-20">
 
-			// Flash Settings
-			flash_url : "../assets/swfUpload/swfupload.swf",	// Relative to this file
-			flash9_url : "../assets/swfUpload/swfupload_FP9.swf",	// Relative to this file
+							<div class="card-body">
+								<p class="card-text">
+									{{ file.fileName }}
+									<br /> 大小：{{ Math.round(file.length/1024) + ' KB' }}
+								</p>
+								<a @click="del(file)" href="javascript:;" class="card-link text-danger">删 除</a>
+							</div>
 
-			// Debug Settings
-			debug: false
-		});
-		
-		$('#cbIsFirstLineTitle').click(function(e) {
-			if(!$("#cbIsFirstLineTitle").attr("checked")){
-				$("#cbIsFirstLineRemove").removeAttr("checked");
+						</div>
+
+					</div>
+
+				</div>
+
+				<div class="form-group form-row">
+					<label class="col-1 text-right col-form-label">设置</label>
+					<div class="col-10">
+						<div class="checkbox checkbox-primary">
+							<asp:CheckBox ID="CbIsFirstLineTitle" Checked="true" runat="server" Text="将第一行作为标题" />
+							<asp:CheckBox ID="CbIsFirstLineRemove" Checked="true" runat="server" Text="内容正文删除标题" />
+							<asp:CheckBox id="CbIsClearFormat" Checked="true" runat="server" Text="清除格式" />
+							<br />
+							<asp:CheckBox id="CbIsFirstLineIndent" Checked="true" runat="server" Text="首行缩进" />
+							<asp:CheckBox id="CbIsClearFontSize" Checked="true" runat="server" Text="清除字号" />
+							<asp:CheckBox id="CbIsClearFontFamily" Checked="true" runat="server" Text="清除字体" />
+							<asp:CheckBox id="CbIsClearImages" runat="server" Text="清除图片" />
+						</div>
+					</div>
+					<div class="col-1 help-block"></div>
+				</div>
+
+				<div class="form-group form-row">
+					<label class="col-1 text-right col-form-label">状态</label>
+					<div class="col-10">
+						<asp:DropDownList ID="DdlContentLevel" class="form-control" runat="server" />
+					</div>
+					<div class="col-1 help-block"></div>
+				</div>
+
+				<hr />
+
+				<div class="text-right mr-1">
+					<asp:Button class="btn btn-primary m-l-5" text="确 定" runat="server" onClick="Submit_OnClick" />
+					<button type="button" class="btn btn-default m-l-5" onclick="window.parent.layer.closeAll()">取 消</button>
+				</div>
+
+			</form>
+		</body>
+
+		</html>
+		<!--#include file="../inc/foot.html"-->
+
+		<script type="text/javascript" src="../assets/vue/vue.min.js"></script>
+		<script type="text/javascript" src="../assets/web-uploader/js/Q.js"></script>
+		<script type="text/javascript" src="../assets/web-uploader/js/Q.Uploader.js"></script>
+		<script type="text/javascript">
+			var data = {
+				op: '',
+				file: null,
+				indexOld: 0,
+				indexNew: 0,
+				files: []
 			};
-		});
-	});
-	</script>
 
-  <input id="File_Count" type="hidden" name="File_Count" value="0" />
-  <table class="table noborder table-hover">
-    <tr>
-      <td colspan="2" align="right" style="text-align:right"><span id="swfUploadPlaceholder"></span></td>
-    </tr>
-    <tr>
-      <td align="right">选项：</td>
-      <td><asp:CheckBox CssClass="checkbox inline" ID="cbIsFirstLineTitle" Checked="true" runat="server" Text="将第一行作为标题"/>
-      <asp:CheckBox CssClass="checkbox inline" ID="cbIsFirstLineRemove" Checked="true" runat="server" Text="内容正文删除标题"/>
-        <asp:CheckBox CssClass="checkbox inline" id="cbIsClearFormat" Checked="true" runat="server" Text="清除格式"/>
-        <br />
-    <asp:CheckBox CssClass="checkbox inline" id="cbIsFirstLineIndent" Checked="true" runat="server" Text="首行缩进"/>
-    <asp:CheckBox CssClass="checkbox inline" id="cbIsClearFontSize" Checked="true" runat="server" Text="清除字号"/>
-    <asp:CheckBox CssClass="checkbox inline" id="cbIsClearFontFamily" Checked="true" runat="server" Text="清除字体"/>
-    <asp:CheckBox CssClass="checkbox inline" id="cbIsClearImages" runat="server" Text="清除图片"/></td>
-    </tr>
-    <tr>
-      <td align="right">状态：</td>
-      <td><asp:RadioButtonList class="radiobuttonlist" ID="rblContentLevel" RepeatDirection="Horizontal" runat="server"/></td>
-    </tr>
-  </table>
+			var $vue = new Vue({
+				el: '#main',
+				data: data,
+				methods: {
+					upload: function (file) {
+						if (file && file.fileName) {
+							this.files.push(file);
+						}
+						$('#HihFileNames').val(this.getFileNames().join(','));
+					},
+					del: function (file) {
+						this.files.splice(this.files.indexOf(file), 1);
+						$('#HihFileNames').val(this.getFileNames().join(','));
+					},
+					getFileNames: function () {
+						var arr = [];
+						for (var i = 0; i < this.files.length; i++) {
+							arr.push(this.files[i].fileName);
+						}
+						return arr;
+					}
+				}
+			});
 
-	<div id="File_0" style="display:none">
-	  <input type="hidden" id="fileName_0" name="fileName_0" value="" />
-	  <table cellSpacing="3" width="100%" style="border-bottom:#c5daf0 1px dashed" cellpadding="3">
-	    <tr>
-	      <td><div id="divFileName_0"></div></td>
-	      <td width="60" class="center"><a href="javascript:void(0);" onClick="remove_form('#File_0');">删除</a></td>
-	    </tr>
-	  </table>
-	</div>
+			var E = Q.event,
+				Uploader = Q.Uploader;
 
-</form>
-</body>
-</html>
+			var boxDropArea = document.getElementById("drop-area");
+
+			var uploader = new Uploader({
+				url: '<%=UploadUrl%>',
+				target: document.getElementById("drop-area"),
+				allows: ".doc,.docx",
+				on: {
+					add: function (task) {
+						if (task.disabled) {
+							return swal({
+								title: "允许上传的文件格式为：" + this.ops.allows,
+								icon: 'warning',
+								button: '关 闭'
+							});
+						}
+					},
+					complete: function (task) {
+						var json = task.json;
+						if (!json || json.ret != 1) {
+							return swal({
+								title: "上传失败！",
+								icon: 'warning',
+								button: '关 闭'
+							});
+						}
+
+						$vue.upload(json);
+					}
+				}
+			});
+
+			function set_drag_drop() {
+				//若浏览器不支持html5上传，则禁止拖拽上传
+				if (!Uploader.support.html5 || !uploader.html5) {
+					boxDropArea.innerHTML = "点击批量上传Word文件";
+					return;
+				}
+
+				//阻止浏览器默认拖放行为
+				E.add(boxDropArea, "dragleave", E.stop);
+				E.add(boxDropArea, "dragenter", E.stop);
+				E.add(boxDropArea, "dragover", E.stop);
+
+				E.add(boxDropArea, "drop", function (e) {
+					E.stop(e);
+
+					//获取文件对象
+					var files = e.dataTransfer.files;
+
+					uploader.addList(files);
+				});
+			}
+
+			set_drag_drop();
+		</script>

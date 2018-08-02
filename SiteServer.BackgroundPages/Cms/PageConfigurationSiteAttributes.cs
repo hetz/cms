@@ -1,82 +1,121 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Text;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
-using SiteServer.BackgroundPages.Controls;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using BaiRong.Core.AuxiliaryTable;
 using SiteServer.BackgroundPages.Core;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.Plugin;
 
 namespace SiteServer.BackgroundPages.Cms
 {
 	public class PageConfigurationSiteAttributes : BasePageCms
     {
-		public TextBox TbPublishmentSystemName;
-        public AuxiliaryControl AcAttributes;
-        public Literal LtlSettings;
+		public TextBox TbSiteName;
+        public Literal LtlAttributes;
         public Button BtnSubmit;
 
-        private List<int> _relatedIdentities;
+        private List<TableStyleInfo> _styleInfoList;
 
-        public static string GetRedirectUrl(int publishmentSystemId)
+        public static string GetRedirectUrl(int siteId)
         {
-            return PageUtils.GetCmsUrl(nameof(PageConfigurationSiteAttributes), new NameValueCollection
-            {
-                {"PublishmentSystemID", publishmentSystemId.ToString()}
-            });
+            return PageUtils.GetCmsUrl(siteId, nameof(PageConfigurationSiteAttributes), null);
         }
 
 		public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID");
+            PageUtils.CheckRequestParameter("siteId");
 
-            _relatedIdentities = RelatedIdentities.GetRelatedIdentities(ETableStyle.Site, PublishmentSystemId, PublishmentSystemId);
+            var relatedIdentities = RelatedIdentities.GetRelatedIdentities(SiteId, SiteId);
+            _styleInfoList = TableStyleManager.GetTableStyleInfoList(DataProvider.SiteDao.TableName, relatedIdentities);
 
-			if (!IsPostBack)
+            if (!IsPostBack)
 			{
-                BreadCrumb(AppManager.Cms.LeftMenu.IdConfigration, "站点属性设置", AppManager.Permissions.WebSite.Configration);
+                VerifySitePermissions(ConfigManager.WebSitePermissions.Configration);
 
-                TbPublishmentSystemName.Text = PublishmentSystemInfo.PublishmentSystemName;
+                TbSiteName.Text = SiteInfo.SiteName;
 
-                LtlSettings.Text =
-                    $@"<a class=""btn btn-success"" href=""{PageTableStyle.GetRedirectUrl(PublishmentSystemId,
-                        ETableStyle.Site, DataProvider.PublishmentSystemDao.TableName, PublishmentSystemId)}"">设置站点属性</a>";
+			    var nameValueCollection = TranslateUtils.DictionaryToNameValueCollection(SiteInfo.Additional.ToDictionary());
 
-                AcAttributes.SetParameters(PublishmentSystemInfo.Additional.ToNameValueCollection(), PublishmentSystemInfo, 0, _relatedIdentities, ETableStyle.Site, DataProvider.PublishmentSystemDao.TableName, true, IsPostBack);
+                LtlAttributes.Text = GetAttributesHtml(nameValueCollection);
 
                 BtnSubmit.Attributes.Add("onclick", InputParserUtils.GetValidateSubmitOnClickScript("myForm"));
             }
             else
             {
-                AcAttributes.SetParameters(Request.Form, PublishmentSystemInfo, 0, _relatedIdentities, ETableStyle.Site, DataProvider.PublishmentSystemDao.TableName, true, IsPostBack);
+                LtlAttributes.Text = GetAttributesHtml(Request.Form);
             }
 		}
 
+        private string GetAttributesHtml(NameValueCollection formCollection)
+        {
+            if (formCollection == null)
+            {
+                formCollection = Request.Form.Count > 0 ? Request.Form : new NameValueCollection();
+            }
+
+            var pageScripts = new NameValueCollection();
+
+            if (_styleInfoList == null) return string.Empty;
+
+            var attributes = new ExtendedAttributes(formCollection);
+
+            var builder = new StringBuilder();
+            foreach (var styleInfo in _styleInfoList)
+            {
+                string extra;
+                var value = BackgroundInputTypeParser.Parse(SiteInfo, 0, styleInfo, attributes, pageScripts, out extra);
+                if (string.IsNullOrEmpty(value) && string.IsNullOrEmpty(extra)) continue;
+
+                if (InputTypeUtils.Equals(styleInfo.InputType, InputType.TextEditor))
+                {
+                    var commands = WebUtils.GetTextEditorCommands(SiteInfo, styleInfo.AttributeName);
+                    builder.Append($@"
+<div class=""form-group"">
+    <label class=""control-label"">{styleInfo.DisplayName}</label>
+    {commands}
+    <hr />
+    {value}
+    {extra}
+</div>");
+                }
+                else
+                {
+                    builder.Append($@"
+<div class=""form-group"">
+    <label class=""control-label"">{styleInfo.DisplayName}</label>
+    {value}
+    {extra}
+</div>");
+                }
+            }
+
+            foreach (string key in pageScripts.Keys)
+            {
+                builder.Append(pageScripts[key]);
+            }
+
+            return builder.ToString();
+        }
+
         public override void Submit_OnClick(object sender, EventArgs e)
 		{
-			if (Page.IsPostBack && Page.IsValid)
-			{
-				PublishmentSystemInfo.PublishmentSystemName = TbPublishmentSystemName.Text;
-                
-				try
-				{
-                    BackgroundInputTypeParser.AddValuesToAttributes(ETableStyle.Site, DataProvider.PublishmentSystemDao.TableName, PublishmentSystemInfo, _relatedIdentities, Page.Request.Form, PublishmentSystemInfo.Additional.ToNameValueCollection(), null);
+		    if (!Page.IsPostBack || !Page.IsValid) return;
 
-                    DataProvider.PublishmentSystemDao.Update(PublishmentSystemInfo);
+		    SiteInfo.SiteName = TbSiteName.Text;
 
-                    Body.AddSiteLog(PublishmentSystemId, "修改站点设置");
+            BackgroundInputTypeParser.SaveAttributes(SiteInfo.Additional, SiteInfo, _styleInfoList, Page.Request.Form, null);
 
-					SuccessMessage("站点设置修改成功！");
-				}
-				catch(Exception ex)
-				{
-                    FailMessage(ex, "站点设置修改失败！");
-				}
-			}
-		}
+            DataProvider.SiteDao.Update(SiteInfo);
+
+            AuthRequest.AddSiteLog(SiteId, "修改站点设置");
+
+            SuccessMessage("站点设置修改成功！");
+        }
 	}
 }

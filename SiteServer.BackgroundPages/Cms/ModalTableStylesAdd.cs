@@ -4,50 +4,41 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.AuxiliaryTable;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.Model;
+using SiteServer.Utils;
 using SiteServer.Plugin;
-using SiteServer.Plugin.Models;
 
 namespace SiteServer.BackgroundPages.Cms
 {
 	public class ModalTableStylesAdd : BasePageCms
     {
-        public TextBox AttributeNames;
-        public RadioButtonList IsVisible;
-        public RadioButtonList IsSingleLine;
+        public TextBox TbAttributeNames;
         public DropDownList DdlInputType;
-        public TextBox DefaultValue;
-        public Control DateTip;
-        public DropDownList IsHorizontal;
-        public TextBox Columns;
-        public TextBox Height;
-        public TextBox Width;
+        public Control SpDateTip;
+        public PlaceHolder PhRepeat;
+        public DropDownList DdlIsHorizontal;
+        public TextBox TbColumns;
+        public PlaceHolder PhWidth;
+        public TextBox TbWidth;
+        public PlaceHolder PhHeight;
+        public TextBox TbHeight;
+        public PlaceHolder PhDefaultValue;
+        public TextBox TbDefaultValue;
 
-        public TextBox ItemCount;
-        public Repeater MyRepeater;
-
-        public Control RowDefaultValue;
-        public Control RowRepeat;
-        public Control RowHeightAndWidth;
-        public Control RowItemCount;
-        public Control RowSetItems;
+        public PlaceHolder PhIsSelectField;
+        public TextBox TbRapidValues;
 
         private List<int> _relatedIdentities;
         private string _tableName;
         private string _redirectUrl;
-        private ETableStyle _tableStyle;
 
-        public static string GetOpenWindowString(int publishmentSystemId, List<int> relatedIdentities, string tableName, ETableStyle tableStyle, string redirectUrl)
+        public static string GetOpenWindowString(int siteId, List<int> relatedIdentities, string tableName, string redirectUrl)
         {
-            return PageUtils.GetOpenWindowString("批量添加显示样式", PageUtils.GetCmsUrl(nameof(ModalTableStylesAdd), new NameValueCollection
+            return LayerUtils.GetOpenScript("批量添加显示样式", PageUtils.GetCmsUrl(siteId, nameof(ModalTableStylesAdd), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"RelatedIdentities", TranslateUtils.ObjectCollectionToString(relatedIdentities)},
                 {"TableName", tableName},
-                {"TableStyle", ETableStyleUtils.GetValue(tableStyle)},
                 {"RedirectUrl", StringUtils.ValueToUrl(redirectUrl)}
             }));
         }
@@ -56,43 +47,41 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            _relatedIdentities = TranslateUtils.StringCollectionToIntList(Body.GetQueryString("RelatedIdentities"));
+            _relatedIdentities = TranslateUtils.StringCollectionToIntList(AuthRequest.GetQueryString("RelatedIdentities"));
             if (_relatedIdentities.Count == 0)
             {
                 _relatedIdentities.Add(0);
             }
-            _tableName = Body.GetQueryString("TableName");
-            _tableStyle = ETableStyleUtils.GetEnumType(Body.GetQueryString("TableStyle"));
-            _redirectUrl = StringUtils.ValueFromUrl(Body.GetQueryString("RedirectUrl"));
+            _tableName = AuthRequest.GetQueryString("TableName");
+            _redirectUrl = StringUtils.ValueFromUrl(AuthRequest.GetQueryString("RedirectUrl"));
 
             if (!IsPostBack)
             {
-                IsVisible.Items[0].Value = true.ToString();
-                IsVisible.Items[1].Value = false.ToString();
+                DdlIsHorizontal.Items[0].Value = true.ToString();
+                DdlIsHorizontal.Items[1].Value = false.ToString();
 
-                IsSingleLine.Items[0].Value = true.ToString();
-                IsSingleLine.Items[1].Value = false.ToString();
+                DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.Text, false));
+                DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.TextArea, false));
+                DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.TextEditor, false));
+                DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.CheckBox, false));
+                DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.Radio, false));
+                DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.SelectOne, false));
+                DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.SelectMultiple, false));
+                DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.Date, false));
+                DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.DateTime, false));
+                DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.Image, false));
+                DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.Video, false));
+                DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.File, false));
 
-                IsHorizontal.Items[0].Value = true.ToString();
-                IsHorizontal.Items[1].Value = false.ToString();
+                var styleInfo = TableStyleManager.GetTableStyleInfo(_tableName, string.Empty, _relatedIdentities);
 
-                InputTypeUtils.AddListItems(DdlInputType);
+                ControlUtils.SelectSingleItem(DdlInputType, styleInfo.InputType.Value);
+                TbDefaultValue.Text = styleInfo.DefaultValue;
+                DdlIsHorizontal.SelectedValue = styleInfo.IsHorizontal.ToString();
+                TbColumns.Text = styleInfo.Additional.Columns.ToString();
 
-                var styleInfo = TableStyleManager.GetTableStyleInfo(_tableStyle, _tableName, string.Empty, _relatedIdentities);
-
-                ControlUtils.SelectListItems(DdlInputType, InputTypeUtils.GetValue(InputTypeUtils.GetEnumType(styleInfo.InputType)));
-                ControlUtils.SelectListItems(IsVisible, styleInfo.IsVisible.ToString());
-                ControlUtils.SelectListItems(IsSingleLine, styleInfo.IsSingleLine.ToString());
-                DefaultValue.Text = styleInfo.DefaultValue;
-                IsHorizontal.SelectedValue = styleInfo.IsHorizontal.ToString();
-                Columns.Text = styleInfo.Additional.Columns.ToString();
-
-                Height.Text = styleInfo.Additional.Height.ToString();
-                Width.Text = styleInfo.Additional.Width;
-
-                ItemCount.Text = "0";
-
-                
+                TbHeight.Text = styleInfo.Additional.Height == 0 ? string.Empty : styleInfo.Additional.Height.ToString();
+                TbWidth.Text = styleInfo.Additional.Width;
             }
 
             ReFresh(null, EventArgs.Empty);
@@ -100,77 +89,47 @@ namespace SiteServer.BackgroundPages.Cms
 
         public void ReFresh(object sender, EventArgs e)
         {
-            RowDefaultValue.Visible = RowHeightAndWidth.Visible = DateTip.Visible = RowItemCount.Visible = RowSetItems.Visible = RowRepeat.Visible = false;
-            Height.Enabled = true;
+            PhDefaultValue.Visible = PhWidth.Visible = PhHeight.Visible = SpDateTip.Visible = PhIsSelectField.Visible = PhRepeat.Visible = false;
 
-            DefaultValue.TextMode = TextBoxMode.MultiLine;
+            TbDefaultValue.TextMode = TextBoxMode.MultiLine;
             var inputType = InputTypeUtils.GetEnumType(DdlInputType.SelectedValue);
             if (inputType == InputType.CheckBox || inputType == InputType.Radio || inputType == InputType.SelectMultiple || inputType == InputType.SelectOne)
             {
-                RowItemCount.Visible = RowSetItems.Visible = true;
+                PhIsSelectField.Visible = true;
                 if (inputType == InputType.CheckBox || inputType == InputType.Radio)
                 {
-                    RowRepeat.Visible = true;
+                    PhRepeat.Visible = true;
                 }
             }
             else if (inputType == InputType.TextEditor)
             {
-                RowDefaultValue.Visible = RowHeightAndWidth.Visible = true;
+                PhDefaultValue.Visible = PhWidth.Visible = PhHeight.Visible = true;
             }
             else if (inputType == InputType.TextArea)
             {
-                RowDefaultValue.Visible = RowHeightAndWidth.Visible = true;
+                PhDefaultValue.Visible = PhWidth.Visible = PhHeight.Visible = true;
             }
             else if (inputType == InputType.Text)
             {
-                RowDefaultValue.Visible = RowHeightAndWidth.Visible = true;
-                Height.Enabled = false;
-                DefaultValue.TextMode = TextBoxMode.SingleLine;
+                PhDefaultValue.Visible = PhWidth.Visible = true;
+                TbDefaultValue.TextMode = TextBoxMode.SingleLine;
             }
             else if (inputType == InputType.Date || inputType == InputType.DateTime)
             {
-                DateTip.Visible = RowDefaultValue.Visible = true;
-                DefaultValue.TextMode = TextBoxMode.SingleLine;
+                SpDateTip.Visible = PhDefaultValue.Visible = true;
+                TbDefaultValue.TextMode = TextBoxMode.SingleLine;
             }
         }
-
-        public void SetCount_OnClick(object sender, EventArgs e)
-        {
-            if (Page.IsPostBack)
-            {
-                var count = TranslateUtils.ToInt(ItemCount.Text);
-                if (count != 0)
-                {
-                    MyRepeater.DataSource = TableStyleManager.GetStyleItemDataSet(count, null);
-                    MyRepeater.DataBind();
-                }
-                else
-                {
-                    FailMessage("选项数目必须为大于0的数字！");
-                }
-            }
-        }
-
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
             var inputType = InputTypeUtils.GetEnumType(DdlInputType.SelectedValue);
 
-            if (inputType == InputType.CheckBox || inputType == InputType.Radio || inputType == InputType.SelectMultiple || inputType == InputType.SelectOne)
-            {
-                var itemCount = TranslateUtils.ToInt(ItemCount.Text);
-                if (itemCount == 0)
-                {
-                    FailMessage("操作失败，选项数目不能为0！");
-                    return;
-                }
-            }
-
             var isChanged = InsertTableStyleInfo(inputType);
 
             if (isChanged)
             {
-                PageUtils.CloseModalPageAndRedirect(Page, _redirectUrl);
+                LayerUtils.CloseAndRedirect(Page, _redirectUrl);
             }
 		}
 
@@ -178,84 +137,64 @@ namespace SiteServer.BackgroundPages.Cms
         {
             var isChanged = false;
 
-            var attributeNameArray = AttributeNames.Text.Split('\n');
+            var attributeNameArray = TbAttributeNames.Text.Split('\n');
 
             var relatedIdentity = _relatedIdentities[0];
             var styleInfoArrayList = new ArrayList();
 
             foreach (var itemString in attributeNameArray)
             {
-                if (!string.IsNullOrEmpty(itemString))
+                if (string.IsNullOrEmpty(itemString)) continue;
+
+                var attributeName = itemString;
+                var displayName = string.Empty;
+
+                if (StringUtils.Contains(itemString, "(") && StringUtils.Contains(itemString, ")"))
                 {
-                    var attributeName = itemString;
-                    var displayName = string.Empty;
-
-                    if (StringUtils.Contains(itemString, "(") && StringUtils.Contains(itemString, ")"))
+                    var length = itemString.IndexOf(')') - itemString.IndexOf('(');
+                    if (length > 0)
                     {
-                        var length = itemString.IndexOf(')') - itemString.IndexOf('(');
-                        if (length > 0)
-                        {
-                            displayName = itemString.Substring(itemString.IndexOf('(') + 1, length);
-                            attributeName = itemString.Substring(0, itemString.IndexOf('('));
-                        }
+                        displayName = itemString.Substring(itemString.IndexOf('(') + 1, length);
+                        attributeName = itemString.Substring(0, itemString.IndexOf('('));
                     }
-                    attributeName = attributeName.Trim();
-                    displayName = displayName.Trim(' ', '(', ')');
-                    if (string.IsNullOrEmpty(displayName))
-                    {
-                        displayName = attributeName;
-                    }
-
-                    if (_tableStyle == ETableStyle.Site)
-                    {
-                        if (string.IsNullOrEmpty(attributeName))
-                        {
-                            FailMessage("操作失败，字段名不能为空！");
-                            return false;
-                        }
-                        else if (StringUtils.StartsWithIgnoreCase(attributeName, "Site"))
-                        {
-                            FailMessage("操作失败，字段名不能以site开始！");
-                            return false;
-                        }
-                    }
-
-                    if (TableStyleManager.IsExists(relatedIdentity, _tableName, attributeName) || TableStyleManager.IsExistsInParents(_relatedIdentities, _tableName, attributeName))
-                    {
-                        FailMessage($@"显示样式添加失败：字段名""{attributeName}""已存在");
-                        return false;
-                    }
-
-                    var styleInfo = new TableStyleInfo(0, relatedIdentity, _tableName, attributeName, 0, displayName, string.Empty, TranslateUtils.ToBool(IsVisible.SelectedValue), false, TranslateUtils.ToBool(IsSingleLine.SelectedValue), InputTypeUtils.GetValue(inputType), DefaultValue.Text, TranslateUtils.ToBool(IsHorizontal.SelectedValue), string.Empty);
-                    styleInfo.Additional.Columns = TranslateUtils.ToInt(Columns.Text);
-                    styleInfo.Additional.Height = TranslateUtils.ToInt(Height.Text);
-                    styleInfo.Additional.Width = Width.Text;
-
-                    if (inputType == InputType.CheckBox || inputType == InputType.Radio || inputType == InputType.SelectMultiple || inputType == InputType.SelectOne)
-                    {
-                        styleInfo.StyleItems = new List<TableStyleItemInfo>();
-
-                        var isHasSelected = false;
-                        foreach (RepeaterItem item in MyRepeater.Items)
-                        {
-                            var itemTitle = (TextBox)item.FindControl("ItemTitle");
-                            var itemValue = (TextBox)item.FindControl("ItemValue");
-                            var isSelected = (CheckBox)item.FindControl("IsSelected");
-
-                            if ((inputType != InputType.SelectMultiple && inputType != InputType.CheckBox) && isHasSelected && isSelected.Checked)
-                            {
-                                FailMessage("操作失败，只能有一个初始化时选定项！");
-                                return false;
-                            }
-                            if (isSelected.Checked) isHasSelected = true;
-
-                            var itemInfo = new TableStyleItemInfo(0, 0, itemTitle.Text, itemValue.Text, isSelected.Checked);
-                            styleInfo.StyleItems.Add(itemInfo);
-                        }
-                    }
-
-                    styleInfoArrayList.Add(styleInfo);
                 }
+                attributeName = attributeName.Trim();
+                displayName = displayName.Trim(' ', '(', ')');
+                if (string.IsNullOrEmpty(displayName))
+                {
+                    displayName = attributeName;
+                }
+
+                if (string.IsNullOrEmpty(attributeName))
+                {
+                    FailMessage("操作失败，字段名不能为空！");
+                    return false;
+                }
+
+                if (TableStyleManager.IsExists(relatedIdentity, _tableName, attributeName))
+                {
+                    FailMessage($@"显示样式添加失败：字段名""{attributeName}""已存在");
+                    return false;
+                }
+
+                var styleInfo = new TableStyleInfo(0, relatedIdentity, _tableName, attributeName, 0, displayName, string.Empty, false, inputType, TbDefaultValue.Text, TranslateUtils.ToBool(DdlIsHorizontal.SelectedValue), string.Empty);
+                styleInfo.Additional.Columns = TranslateUtils.ToInt(TbColumns.Text);
+                styleInfo.Additional.Height = TranslateUtils.ToInt(TbHeight.Text);
+                styleInfo.Additional.Width = TbWidth.Text;
+
+                if (inputType == InputType.CheckBox || inputType == InputType.Radio || inputType == InputType.SelectMultiple || inputType == InputType.SelectOne)
+                {
+                    styleInfo.StyleItems = new List<TableStyleItemInfo>();
+
+                    var rapidValues = TranslateUtils.StringCollectionToStringList(TbRapidValues.Text);
+                    foreach (var rapidValue in rapidValues)
+                    {
+                        var itemInfo = new TableStyleItemInfo(0, styleInfo.Id, rapidValue, rapidValue, false);
+                        styleInfo.StyleItems.Add(itemInfo);
+                    }
+                }
+
+                styleInfoArrayList.Add(styleInfo);
             }
 
             try
@@ -264,9 +203,19 @@ namespace SiteServer.BackgroundPages.Cms
                 foreach (TableStyleInfo styleInfo in styleInfoArrayList)
                 {
                     attributeNames.Add(styleInfo.AttributeName);
-                    TableStyleManager.Insert(styleInfo, _tableStyle);
+                    TableStyleManager.Insert(styleInfo);
                 }
-                Body.AddSiteLog(PublishmentSystemId, "批量添加表单显示样式", $"类型:{ETableStyleUtils.GetText(_tableStyle)},字段名: {TranslateUtils.ObjectCollectionToString(attributeNames)}");
+                
+
+                if (SiteId > 0)
+                {
+                    AuthRequest.AddSiteLog(SiteId, "批量添加表单显示样式", $"字段名: {TranslateUtils.ObjectCollectionToString(attributeNames)}");
+                }
+                else
+                {
+                    AuthRequest.AddAdminLog("批量添加表单显示样式", $"字段名: {TranslateUtils.ObjectCollectionToString(attributeNames)}");
+                }
+
                 isChanged = true;
             }
             catch (Exception ex)

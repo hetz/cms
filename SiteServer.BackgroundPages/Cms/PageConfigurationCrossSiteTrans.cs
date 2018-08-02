@@ -1,27 +1,25 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Core;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class PageConfigurationCrossSiteTrans : BasePageCms
     {
-        public Repeater rptContents;
-        public RadioButtonList IsCrossSiteTransChecked;
+        public RadioButtonList RblIsCrossSiteTransChecked;
 
-        private int _currentNodeId;
+        private int _currentChannelId;
 
-        public static string GetRedirectUrl(int publishmentSystemId, int currentNodeId)
+        public static string GetRedirectUrl(int siteId, int currentChannelId)
         {
-            return PageUtils.GetCmsUrl(nameof(PageConfigurationCrossSiteTrans), new NameValueCollection
+            return PageUtils.GetCmsUrl(siteId, nameof(PageConfigurationCrossSiteTrans), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
-                {"CurrentNodeID", currentNodeId.ToString()}
+                {"CurrentChannelId", currentChannelId.ToString()}
             });
         }
 
@@ -29,77 +27,46 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-			PageUtils.CheckRequestParameter("PublishmentSystemID");
+			PageUtils.CheckRequestParameter("siteId");
 
-			if (!IsPostBack)
+            if (IsPostBack) return;
+
+            VerifySitePermissions(ConfigManager.WebSitePermissions.Configration);
+
+            ClientScriptRegisterClientScriptBlock("NodeTreeScript", ChannelLoading.GetScript(SiteInfo, string.Empty, ELoadingType.ConfigurationCrossSiteTrans, null));
+
+            if (AuthRequest.IsQueryExists("CurrentChannelId"))
             {
-                BreadCrumb(AppManager.Cms.LeftMenu.IdConfigration, "跨站转发设置", AppManager.Permissions.WebSite.Configration);
-
-                ClientScriptRegisterClientScriptBlock("NodeTreeScript", ChannelLoading.GetScript(PublishmentSystemInfo, ELoadingType.ConfigurationCrossSiteTrans, null));
-
-                if (Body.IsQueryExists("CurrentNodeID"))
+                _currentChannelId = AuthRequest.GetQueryInt("CurrentChannelId");
+                var onLoadScript = ChannelLoading.GetScriptOnLoad(SiteId, _currentChannelId);
+                if (!string.IsNullOrEmpty(onLoadScript))
                 {
-                    _currentNodeId = Body.GetQueryInt("CurrentNodeID");
-                    var onLoadScript = ChannelLoading.GetScriptOnLoad(PublishmentSystemId, _currentNodeId);
-                    if (!string.IsNullOrEmpty(onLoadScript))
-                    {
-                        ClientScriptRegisterClientScriptBlock("NodeTreeScriptOnLoad", onLoadScript);
-                    }
+                    ClientScriptRegisterClientScriptBlock("NodeTreeScriptOnLoad", onLoadScript);
                 }
-
-                BindGrid();
-
-                EBooleanUtils.AddListItems(IsCrossSiteTransChecked, "无需审核", "需要审核");
-                ControlUtils.SelectListItems(IsCrossSiteTransChecked, PublishmentSystemInfo.Additional.IsCrossSiteTransChecked.ToString());
-			}
-		}
-
-        public void BindGrid()
-        {
-            try
-            {
-                rptContents.DataSource = DataProvider.NodeDao.GetNodeIdListByParentId(PublishmentSystemId, 0);
-                rptContents.ItemDataBound += rptContents_ItemDataBound;
-                rptContents.DataBind();
             }
-            catch (Exception ex)
-            {
-                PageUtils.RedirectToErrorPage(ex.Message);
-            }
-        }
 
-        void rptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
-        {
-            var nodeID = (int)e.Item.DataItem;
-            var enabled = (IsOwningNodeId(nodeID)) ? true : false;
-            if (!enabled)
-            {
-                if (!IsHasChildOwningNodeId(nodeID)) e.Item.Visible = false;
-            }
-            var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, nodeID);
-            var ltlHtml = e.Item.FindControl("ltlHtml") as Literal;
-            ltlHtml.Text = ChannelLoading.GetChannelRowHtml(PublishmentSystemInfo, nodeInfo, enabled, ELoadingType.ConfigurationCrossSiteTrans, null, Body.AdminName);
+            EBooleanUtils.AddListItems(RblIsCrossSiteTransChecked, "无需审核", "需要审核");
+            ControlUtils.SelectSingleItem(RblIsCrossSiteTransChecked, SiteInfo.Additional.IsCrossSiteTransChecked.ToString());
         }
 
         public override void Submit_OnClick(object sender, EventArgs e)
 		{
-			if (Page.IsPostBack && Page.IsValid)
-			{
-                PublishmentSystemInfo.Additional.IsCrossSiteTransChecked = TranslateUtils.ToBool(IsCrossSiteTransChecked.SelectedValue);
+		    if (!Page.IsPostBack || !Page.IsValid) return;
+
+		    SiteInfo.Additional.IsCrossSiteTransChecked = TranslateUtils.ToBool(RblIsCrossSiteTransChecked.SelectedValue);
 				
-				try
-				{
-                    DataProvider.PublishmentSystemDao.Update(PublishmentSystemInfo);
+		    try
+		    {
+		        DataProvider.SiteDao.Update(SiteInfo);
 
-                    Body.AddSiteLog(PublishmentSystemId, "修改默认跨站转发设置");
+		        AuthRequest.AddSiteLog(SiteId, "修改默认跨站转发设置");
 
-                    SuccessMessage("默认跨站转发设置修改成功！");
-				}
-				catch(Exception ex)
-				{
-                    FailMessage(ex, "默认跨站转发设置修改失败！");
-				}
-			}
+		        SuccessMessage("默认跨站转发设置修改成功！");
+		    }
+		    catch(Exception ex)
+		    {
+		        FailMessage(ex, "默认跨站转发设置修改失败！");
+		    }
 		}
 	}
 }

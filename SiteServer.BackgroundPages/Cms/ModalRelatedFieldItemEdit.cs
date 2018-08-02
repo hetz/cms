@@ -1,26 +1,25 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class ModalRelatedFieldItemEdit : BasePageCms
     {
-        protected TextBox ItemName;
-        protected TextBox ItemValue;
+        public TextBox TbItemName;
+        public TextBox TbItemValue;
 
         private int _relatedFieldId;
         private int _parentId;
         private int _level;
         private int _id;
 
-        public static string GetOpenWindowString(int publishmentSystemId, int relatedFieldId, int parentId, int level, int id)
+        public static string GetOpenWindowString(int siteId, int relatedFieldId, int parentId, int level, int id)
         {
-            return PageUtils.GetOpenWindowString("编辑字段项", PageUtils.GetCmsUrl(nameof(ModalRelatedFieldItemEdit), new NameValueCollection
+            return LayerUtils.GetOpenScript("编辑字段项", PageUtils.GetCmsUrl(siteId, nameof(ModalRelatedFieldItemEdit), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"RelatedFieldID", relatedFieldId.ToString()},
                 {"ParentID", parentId.ToString()},
                 {"Level", level.ToString()},
@@ -32,17 +31,16 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            _relatedFieldId = Body.GetQueryInt("RelatedFieldID");
-            _parentId = Body.GetQueryInt("ParentID");
-            _level = Body.GetQueryInt("Level");
-            _id = Body.GetQueryInt("ID");
+            _relatedFieldId = AuthRequest.GetQueryInt("RelatedFieldID");
+            _parentId = AuthRequest.GetQueryInt("ParentID");
+            _level = AuthRequest.GetQueryInt("Level");
+            _id = AuthRequest.GetQueryInt("ID");
 
-            if (!IsPostBack)
-            {
-                var itemInfo = DataProvider.RelatedFieldItemDao.GetRelatedFieldItemInfo(_id);
-                ItemName.Text = itemInfo.ItemName;
-                ItemValue.Text = itemInfo.ItemValue;
-            }
+            if (IsPostBack) return;
+
+            var itemInfo = DataProvider.RelatedFieldItemDao.GetRelatedFieldItemInfo(_id);
+            TbItemName.Text = itemInfo.ItemName;
+            TbItemValue.Text = itemInfo.ItemValue;
         }
 
         public override void Submit_OnClick(object sender, EventArgs e)
@@ -52,8 +50,8 @@ namespace SiteServer.BackgroundPages.Cms
             try
             {
                 var itemInfo = DataProvider.RelatedFieldItemDao.GetRelatedFieldItemInfo(_id);
-                itemInfo.ItemName = ItemName.Text;
-                itemInfo.ItemValue = ItemValue.Text;
+                itemInfo.ItemName = TbItemName.Text;
+                itemInfo.ItemValue = TbItemValue.Text;
                 DataProvider.RelatedFieldItemDao.Update(itemInfo);
 
                 isChanged = true;
@@ -66,7 +64,7 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (isChanged)
             {
-                PageUtils.CloseModalPageAndRedirect(Page, PageRelatedFieldItem.GetRedirectUrl(PublishmentSystemId, _relatedFieldId, _parentId, _level));
+                LayerUtils.CloseAndRedirect(Page, PageRelatedFieldItem.GetRedirectUrl(SiteId, _relatedFieldId, _parentId, _level));
             }
         }
     }

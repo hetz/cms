@@ -3,9 +3,10 @@ using System.Collections;
 using System.Collections.Specialized;
 using System.Text;
 using System.Web.UI;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Core;
 using SiteServer.BackgroundPages.Settings;
+using SiteServer.CMS.Core;
 
 namespace SiteServer.BackgroundPages.Ajax
 {
@@ -78,7 +79,7 @@ namespace SiteServer.BackgroundPages.Ajax
 
             var eLoadingType = EDepartmentLoadingTypeUtils.GetEnumType(loadingType);
 
-            var departmentIdList = BaiRongDataProvider.DepartmentDao.GetDepartmentIdListByParentId(parentId);
+            var departmentIdList = DataProvider.DepartmentDao.GetIdListByParentId(parentId);
             var nameValueCollection = TranslateUtils.ToNameValueCollection(TranslateUtils.DecryptStringBySecretKey(additional));
             if (!string.IsNullOrEmpty(nameValueCollection["DepartmentIDCollection"]))
             {
@@ -89,7 +90,7 @@ namespace SiteServer.BackgroundPages.Ajax
                     var departmentInfo = DepartmentManager.GetDepartmentInfo(departmentId);
                     if (departmentInfo.ParentId != 0 || allDepartmentIdArrayList.Contains(departmentId))
                     {
-                        arraylist.Add(PageDepartment.GetDepartmentRowHtml(departmentInfo, eLoadingType, nameValueCollection));
+                        arraylist.Add(PageAdminDepartment.GetDepartmentRowHtml(departmentInfo, eLoadingType, nameValueCollection));
                     }
                 }
             }
@@ -98,7 +99,7 @@ namespace SiteServer.BackgroundPages.Ajax
                 foreach (var departmentId in departmentIdList)
                 {
                     var departmentInfo = DepartmentManager.GetDepartmentInfo(departmentId);
-                    arraylist.Add(PageDepartment.GetDepartmentRowHtml(departmentInfo, eLoadingType, nameValueCollection));
+                    arraylist.Add(PageAdminDepartment.GetDepartmentRowHtml(departmentInfo, eLoadingType, nameValueCollection));
                 }
             }
 
@@ -116,7 +117,7 @@ namespace SiteServer.BackgroundPages.Ajax
 
             var eLoadingType = EAreaLoadingTypeUtils.GetEnumType(loadingType);
 
-            var areaIdList = BaiRongDataProvider.AreaDao.GetAreaIdListByParentId(parentId);
+            var areaIdList = DataProvider.AreaDao.GetIdListByParentId(parentId);
             var nameValueCollection = TranslateUtils.ToNameValueCollection(TranslateUtils.DecryptStringBySecretKey(additional));
             if (!string.IsNullOrEmpty(nameValueCollection["AreaIDCollection"]))
             {
@@ -127,7 +128,7 @@ namespace SiteServer.BackgroundPages.Ajax
                     var areaInfo = AreaManager.GetAreaInfo(areaId);
                     if (areaInfo.ParentId != 0 || allAreaIdArrayList.Contains(areaId))
                     {
-                        arraylist.Add(PageArea.GetAreaRowHtml(areaInfo, eLoadingType, nameValueCollection));
+                        arraylist.Add(PageAdminArea.GetAreaRowHtml(areaInfo, eLoadingType, nameValueCollection));
                     }
                 }
             }
@@ -136,7 +137,7 @@ namespace SiteServer.BackgroundPages.Ajax
                 foreach (var areaId in areaIdList)
                 {
                     var areaInfo = AreaManager.GetAreaInfo(areaId);
-                    arraylist.Add(PageArea.GetAreaRowHtml(areaInfo, eLoadingType, nameValueCollection));
+                    arraylist.Add(PageAdminArea.GetAreaRowHtml(areaInfo, eLoadingType, nameValueCollection));
                 }
             }
 

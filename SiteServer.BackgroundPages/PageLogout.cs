@@ -1,5 +1,5 @@
 ﻿using System;
-using BaiRong.Core;
+using SiteServer.Utils;
 
 namespace SiteServer.BackgroundPages
 {
@@ -11,10 +11,8 @@ namespace SiteServer.BackgroundPages
         {
             if (IsForbidden) return;
 
-            var redirectUrl = PageUtils.GetAdminDirectoryUrl("login.aspx");
-
-            Body.AdminLogout();
-            PageUtils.Redirect(PageUtils.ParseNavigationUrl(redirectUrl));
+            AuthRequest.AdminLogout();
+            PageUtils.Redirect(PageUtils.GetLoginUrl());
         }
     }
 }

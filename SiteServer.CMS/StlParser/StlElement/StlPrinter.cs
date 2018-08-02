@@ -1,31 +1,22 @@
-﻿using System.Collections.Generic;
-using System.Text;
+﻿using System.Text;
 using System.Web.UI.HtmlControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
-    [Stl(Usage = "打印", Description = "通过 stl:printer 标签在模板中实现打印功能")]
+    [StlClass(Usage = "打印", Description = "通过 stl:printer 标签在模板中实现打印功能")]
     public class StlPrinter
 	{
         private StlPrinter() { }
         public const string ElementName = "stl:printer";
 
-        public const string AttributeTitleId = "titleId";
-        public const string AttributeBodyId = "bodyId";
-        public const string AttributeLogoId = "logoId";
-        public const string AttributeLocationId = "locationId";
-
-	    public static SortedList<string, string> AttributeList => new SortedList<string, string>
-	    {
-	        {AttributeTitleId, "页面HTML中打印标题的ID属性"},
-	        {AttributeBodyId, "页面HTML中打印正文的ID属性"},
-	        {AttributeLogoId, "页面LOGO的ID属性"},
-	        {AttributeLocationId, "页面当前位置的ID属性"}
-	    };
+        private static readonly Attr TitleId = new Attr("titleId", "页面HTML中打印标题的ID属性");
+        private static readonly Attr BodyId = new Attr("bodyId", "页面HTML中打印正文的ID属性");
+        private static readonly Attr LogoId = new Attr("logoId", "页面LOGO的ID属性");
+        private static readonly Attr LocationId = new Attr("locationId", "页面当前位置的ID属性");
 
         public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
 		{
@@ -35,23 +26,23 @@ namespace SiteServer.CMS.StlParser.StlElement
             var locationId = string.Empty;
             var stlAnchor = new HtmlAnchor();
 
-            foreach (var name in contextInfo.Attributes.Keys)
+            foreach (var name in contextInfo.Attributes.AllKeys)
             {
                 var value = contextInfo.Attributes[name];
 
-                if (StringUtils.EqualsIgnoreCase(name, AttributeTitleId))
+                if (StringUtils.EqualsIgnoreCase(name, TitleId.Name))
                 {
                     titleId = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeBodyId))
+                else if (StringUtils.EqualsIgnoreCase(name, BodyId.Name))
                 {
                     bodyId = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeLogoId))
+                else if (StringUtils.EqualsIgnoreCase(name, LogoId.Name))
                 {
                     logoId = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeLocationId))
+                else if (StringUtils.EqualsIgnoreCase(name, LocationId.Name))
                 {
                     locationId = value;
                 }
@@ -69,7 +60,9 @@ namespace SiteServer.CMS.StlParser.StlElement
             var jsUrl = SiteFilesAssets.GetUrl(pageInfo.ApiUrl, pageInfo.TemplateInfo.Charset == ECharset.gb2312 ? SiteFilesAssets.Print.JsGb2312 : SiteFilesAssets.Print.JsUtf8);
 
             var iconUrl = SiteFilesAssets.GetUrl(pageInfo.ApiUrl, SiteFilesAssets.Print.IconUrl);
-            pageInfo.AddPageScriptsIfNotExists(PageInfo.Const.JsAfStlPrinter, $@"
+            if (!pageInfo.BodyCodes.ContainsKey(PageInfo.Const.JsAfStlPrinter))
+            {
+                pageInfo.BodyCodes.Add(PageInfo.Const.JsAfStlPrinter, $@"
 <script language=""JavaScript"" type=""text/javascript"">
 function stlLoadPrintJsCallBack()
 {{
@@ -134,14 +127,15 @@ function stlLoadPrintJs()
 }}	
 </script>
 ");
+            }
 
-            if (string.IsNullOrEmpty(contextInfo.InnerXml))
+            if (string.IsNullOrEmpty(contextInfo.InnerHtml))
             {
                 stlAnchor.InnerHtml = "打印";
             }
             else
             {
-                var innerBuilder = new StringBuilder(contextInfo.InnerXml);
+                var innerBuilder = new StringBuilder(contextInfo.InnerHtml);
                 StlParserManager.ParseInnerContent(innerBuilder, pageInfo, contextInfo);
                 stlAnchor.InnerHtml = innerBuilder.ToString();
             }

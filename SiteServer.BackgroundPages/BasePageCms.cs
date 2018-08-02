@@ -1,89 +1,80 @@
 ﻿using System.Collections.Specialized;
-using BaiRong.Core;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Core.Security;
 using SiteServer.CMS.Model;
+using SiteServer.Utils;
 
 namespace SiteServer.BackgroundPages
 {
     public class BasePageCms : BasePage
 	{
-        public bool HasChannelPermissions(int nodeId, params string[] channelPermissionArray)
+        public bool HasChannelPermissions(int channelId, params string[] channelPermissionArray)
         {
-            return AdminUtility.HasChannelPermissions(Body.AdminName, PublishmentSystemId, nodeId, channelPermissionArray);
+            return AuthRequest.AdminPermissions.HasChannelPermissions(SiteId, channelId, channelPermissionArray);
         }
 
-        public bool HasChannelPermissionsIgnoreNodeId(params string[] channelPermissionArray)
+        public bool HasChannelPermissionsIgnoreChannelId(params string[] channelPermissionArray)
         {
-            return AdminUtility.HasChannelPermissionsIgnoreNodeId(Body.AdminName, channelPermissionArray);
+            return AuthRequest.AdminPermissions.HasChannelPermissionsIgnoreChannelId(channelPermissionArray);
         }
 
-        public bool HasWebsitePermissions(params string[] websitePermissionArray)
+        public bool HasSitePermissions(params string[] websitePermissionArray)
         {
-            return AdminUtility.HasWebsitePermissions(Body.AdminName, PublishmentSystemId, websitePermissionArray);
+            return AuthRequest.AdminPermissions.HasSitePermissions(SiteId, websitePermissionArray);
         }
 
-        public bool IsOwningNodeId(int nodeId)
+        public bool IsOwningChannelId(int channelId)
         {
-            return AdminUtility.IsOwningNodeId(Body.AdminName, nodeId);
+            return AuthRequest.AdminPermissions.IsOwningChannelId(channelId);
         }
 
-        public bool IsHasChildOwningNodeId(int nodeId)
+        public bool IsDescendantOwningChannelId(int channelId)
         {
-            return AdminUtility.IsHasChildOwningNodeId(Body.AdminName, nodeId);
+            return AuthRequest.AdminPermissions.IsDescendantOwningChannelId(SiteId, channelId);
         }
 
-        private int _publishmentSystemId = -1;
-        public virtual int PublishmentSystemId
+        private int _siteId = -1;
+        public virtual int SiteId
         {
             get
             {
-                if (_publishmentSystemId == -1)
+                if (_siteId == -1)
                 {
-                    _publishmentSystemId = Body.GetQueryInt("publishmentSystemId");
+                    _siteId = AuthRequest.GetQueryInt("siteId");
                 }
-                return _publishmentSystemId;
+                return _siteId;
             }
         }
 
-        private PublishmentSystemInfo _publishmentSystemInfo;
+        private SiteInfo _siteInfo;
 
-	    public PublishmentSystemInfo PublishmentSystemInfo
+	    public SiteInfo SiteInfo
 	    {
 	        get
 	        {
-	            if (_publishmentSystemInfo != null) return _publishmentSystemInfo;
-	            _publishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(PublishmentSystemId);
-	            return _publishmentSystemInfo;
+	            if (_siteInfo != null) return _siteInfo;
+	            _siteInfo = SiteManager.GetSiteInfo(SiteId);
+	            return _siteInfo;
 	        }
 	    }
 
-        public void BreadCrumb(string leftMenuId, string pageTitle, string permission)
+        public void VerifySitePermissions(params string[] sitePermissions)
         {
-            if (LtlBreadCrumb != null)
+            if (AuthRequest.AdminPermissions.HasSitePermissions(SiteId, sitePermissions))
             {
-                var pageUrl = PathUtils.GetFileName(Request.FilePath);
-                LtlBreadCrumb.Text = StringUtils.GetBreadCrumbHtml(AppManager.IdSite, pageUrl, pageTitle, string.Empty);
+                return;
             }
-
-            if (!string.IsNullOrEmpty(permission))
-            {
-                AdminUtility.VerifyWebsitePermissions(Body.AdminName, PublishmentSystemId, permission);
-            }
+            AuthRequest.AdminLogout();
+            PageUtils.Redirect(PageUtils.GetAdminDirectoryUrl(string.Empty));
         }
 
-        public void BreadCrumbWithTitle(string leftMenuId, string pageTitle, string itemTitle, string permission)
+        public void VerifyChannelPermissions(int channelId, params string[] channelPermissions)
         {
-            if (LtlBreadCrumb != null)
+            if (HasChannelPermissions(channelId, channelPermissions))
             {
-                var pageUrl = PathUtils.GetFileName(Request.FilePath);
-                LtlBreadCrumb.Text = StringUtils.GetBreadCrumbHtml(AppManager.IdSite, pageUrl, pageTitle, itemTitle);
+                return;
             }
-
-            if (!string.IsNullOrEmpty(permission))
-            {
-                AdminUtility.VerifyWebsitePermissions(Body.AdminName, PublishmentSystemId, permission);
-            }
+            AuthRequest.AdminLogout();
+            PageUtils.Redirect(PageUtils.GetAdminDirectoryUrl(string.Empty));
         }
 
         private NameValueCollection _attributes;

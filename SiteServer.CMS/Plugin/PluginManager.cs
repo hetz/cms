@@ -2,19 +2,15 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Threading;
-using System.Threading.Tasks;
-using BaiRong.Core;
-using BaiRong.Core.AuxiliaryTable;
-using BaiRong.Core.Data;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Enumerations;
-using BaiRong.Core.Net;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.Packaging;
 using SiteServer.CMS.Plugin.Apis;
+using SiteServer.CMS.Plugin.Model;
 using SiteServer.Plugin;
-using SiteServer.Plugin.Features;
-using SiteServer.Plugin.Models;
 
 namespace SiteServer.CMS.Plugin
 {
@@ -23,326 +19,729 @@ namespace SiteServer.CMS.Plugin
     /// </summary>
     public static class PluginManager
     {
-        public static PluginEnvironment Environment { get; private set; }
-
-        private static FileSystemWatcher _watcher;
-
-        public static void Load(PluginEnvironment environment)
+        private static class PluginManagerCache
         {
-            Environment = environment;
+            private static readonly object LockObject = new object();
+            private const string CacheKey = "SiteServer.CMS.Plugin.PluginCache";
 
-            try
+            private static SortedList<string, PluginInstance> Load()
             {
-                var pluginsPath = PathUtils.GetPluginsPath();
-                if (!Directory.Exists(pluginsPath))
+                Environment = new EnvironmentImpl(WebConfigUtils.DatabaseType, WebConfigUtils.ConnectionString, WebConfigUtils.AdminDirectory, WebConfigUtils.PhysicalApplicationPath);
+                var dict = new SortedList<string, PluginInstance>();
+
+                Thread.Sleep(2000);
+
+                try
                 {
-                    Directory.CreateDirectory(pluginsPath);
-                }
-
-                Parallel.ForEach(DirectoryUtils.GetDirectoryPaths(pluginsPath), PluginUtils.ActivePlugin);
-
-                _watcher = new FileSystemWatcher
-                {
-                    Path = pluginsPath,
-                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName,
-                    IncludeSubdirectories = true
-                };
-                _watcher.Created += Watcher_EventHandler;
-                _watcher.Changed += Watcher_EventHandler;
-                _watcher.Deleted += Watcher_EventHandlerDelete;
-                _watcher.Renamed += Watcher_EventHandler;
-                _watcher.EnableRaisingEvents = true;
-            }
-            catch (Exception ex)
-            {
-                LogUtils.AddSystemErrorLog(ex, "载入插件时报错");
-            }
-        }
-
-        private static void Watcher_EventHandler(object sender, FileSystemEventArgs e)
-        {
-            var fullPath = e.FullPath.ToLower();
-            if (!fullPath.Contains("-") || !fullPath.EndsWith(PluginUtils.PluginConfigName) && !fullPath.EndsWith(".dll")) return;
-
-            try
-            {
-                _watcher.EnableRaisingEvents = false;
-                PluginUtils.OnConfigOrDllChanged(sender, e);
-            }
-            finally
-            {
-                _watcher.EnableRaisingEvents = true;
-            }
-        }
-
-        private static void Watcher_EventHandlerDelete(object sender, FileSystemEventArgs e)
-        {
-            if (!PathUtils.IsDirectoryPath(e.FullPath)) return;
-
-            try
-            {
-                _watcher.EnableRaisingEvents = false;
-                PluginUtils.OnDirectoryDeleted(sender, e);
-            }
-            finally
-            {
-                _watcher.EnableRaisingEvents = true;
-            }
-        }
-
-        public static void DeactiveAndRemove(PluginPair pluginPair)
-        {
-            pluginPair.Plugin.OnPluginDeactive?.Invoke(pluginPair.Context);
-            PluginCache.Remove(pluginPair.Metadata.Id);
-        }
-
-        public static bool ActiveAndAdd(PluginMetadata metadata, IPlugin plugin)
-        {
-            if (metadata == null || plugin == null) return false;
-            
-            var s = Stopwatch.StartNew();
-
-            var context = new PluginContext
-            {
-                Environment = Environment,
-                Metadata = metadata,
-                AdminApi = AdminApi.Instance,
-                ConfigApi = new ConfigApi(metadata),
-                ContentApi = ContentApi.Instance,
-                DataApi = new DataApi(metadata),
-                FilesApi = new FilesApi(metadata),
-                MenuApi = new MenuApi(metadata),
-                NodeApi = NodeApi.Instance,
-                ParseApi = ParseApi.Instance,
-                PaymentApi = PaymentApi.Instance,
-                PublishmentSystemApi = PublishmentSystemApi.Instance,
-                SmsApi = SmsApi.Instance,
-                UserApi = UserApi.Instance
-            };
-            plugin.OnPluginActive?.Invoke(context);
-
-            var contentTable = plugin as IContentTable;
-            if (!string.IsNullOrEmpty(contentTable?.ContentTableName) && contentTable.ContentTableColumns != null && contentTable.ContentTableColumns.Count > 0)
-            {
-                var tableName = contentTable.ContentTableName;
-
-                if (!BaiRongDataProvider.TableCollectionDao.IsExists(tableName))
-                {
-                    BaiRongDataProvider.TableCollectionDao.Delete(tableName);
-                    BaiRongDataProvider.TableMetadataDao.Delete(tableName);
-                    BaiRongDataProvider.TableStyleDao.Delete(tableName);
-
-                    BaiRongDataProvider.TableCollectionDao.Insert(new AuxiliaryTableInfo(tableName,
-                        $"插件内容表：{metadata.DisplayName}", 0,
-                        EAuxiliaryTableType.Custom, false, false, false, string.Empty));
-
-                    var tableMetadataInfoList = new List<TableMetadataInfo>();
-                    foreach (var tableColumn in contentTable.ContentTableColumns)
+                    var pluginsPath = PathUtils.PluginsPath;
+                    if (!Directory.Exists(pluginsPath))
                     {
-                        if (string.IsNullOrEmpty(tableColumn.AttributeName) ||
-                            ContentAttribute.AllAttributes.Contains(tableColumn.AttributeName.ToLower())) continue;
-
-                        tableMetadataInfoList.Add(new TableMetadataInfo(0, tableName, tableColumn.AttributeName,
-                            DataTypeUtils.GetEnumType(tableColumn.DataType), tableColumn.DataLength, 0, true));
+                        return dict;
                     }
 
-                    tableMetadataInfoList.Reverse();
-                    foreach (var tableMetadataInfo in tableMetadataInfoList)
+                    var directoryNames = DirectoryUtils.GetDirectoryNames(pluginsPath);
+                    foreach (var directoryName in directoryNames)
                     {
-                        BaiRongDataProvider.TableMetadataDao.Insert(tableMetadataInfo);
+                        if (StringUtils.StartsWith(directoryName, ".") || StringUtils.EqualsIgnoreCase(directoryName, "packages")) continue;
+                        
+                        var pluginInfo = ActivePlugin(directoryName);
+                        if (pluginInfo != null)
+                        {
+                            dict[directoryName] = pluginInfo;
+                        }
+                    }
+
+#if DEBUG
+                    PluginDebugger.Instance.Run();
+#endif
+                }
+                catch (Exception ex)
+                {
+                    LogUtils.AddErrorLog(ex, "载入插件时报错");
+                }
+
+                return dict;
+            }
+
+            private static PluginInstance ActivePlugin(string directoryName)
+            {
+                PackageMetadata metadata = null;
+                string errorMessage;
+
+                try
+                {
+                    metadata = PackageUtils.GetPackageMetadataFromPlugins(directoryName, out errorMessage);
+
+                    var dllDirectoryPath = PathUtils.GetPluginDllDirectoryPath(directoryName);
+                    if (string.IsNullOrEmpty(dllDirectoryPath))
+                    {
+                        throw new Exception($"插件可执行文件 {directoryName}.dll 不存在");
+                    }
+
+                    //foreach (var filePath in DirectoryUtils.GetFilePaths(DirectoryUtils.GetDirectoryPath(metadata.ExecuteFilePath)))
+                    //{
+
+                    //    if (!StringUtils.EqualsIgnoreCase(PathUtils.GetExtension(filePath), ".dll")) continue;
+                    //    var fileName = PathUtils.GetFileName(filePath);
+                    //    if (StringUtils.EqualsIgnoreCase(fileName, PathUtils.GetFileName(metadata.ExecuteFilePath))) continue;
+                    //    if (FileUtils.IsFileExists(PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, "Bin", fileName))) continue;
+                    //    Assembly.Load(File.ReadAllBytes(filePath));
+                    //}
+                    //var assembly = Assembly.Load(File.ReadAllBytes(metadata.ExecuteFilePath));
+
+                    //metadata.GetDependencyGroups()
+
+                    CopyDllsToBin(metadata.Id, dllDirectoryPath);
+
+                    //var assembly = Assembly.Load(File.ReadAllBytes(PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, "Bin", PathUtils.GetFileName(metadata.ExecuteFilePath))));
+                    var assembly = Assembly.Load(metadata.Id);  // load the dll from bin directory
+
+                    var type = assembly.GetTypes().First(o => o.IsClass && !o.IsAbstract && o.IsSubclassOf(typeof(PluginBase)));
+
+                    return ActiveAndAdd(metadata, type);
+                }
+                catch (Exception ex)
+                {
+                    errorMessage = ex.Message;
+                    LogUtils.AddErrorLog(ex, $"插件加载：{directoryName}");
+                }
+
+                return new PluginInstance(directoryName, metadata, errorMessage);
+            }
+
+            private static void CopyDllsToBin(string pluginId, string pluginDllDirectoryPath)
+            {
+                foreach (var filePath in DirectoryUtils.GetFilePaths(pluginDllDirectoryPath))
+                {
+                    if (!StringUtils.EqualsIgnoreCase(PathUtils.GetExtension(filePath), ".dll")) continue;
+
+                    var fileName = PathUtils.GetFileName(filePath);
+                    var binFilePath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, "Bin", fileName);
+
+                    if (!FileUtils.IsFileExists(binFilePath))
+                    {
+                        FileUtils.MoveFile(filePath, binFilePath, false);
+                    }
+                    else if (StringUtils.EqualsIgnoreCase(fileName, pluginId + ".dll"))
+                    {
+                        if (FileUtils.ComputeHash(filePath) != FileUtils.ComputeHash(binFilePath))
+                        {
+                            FileUtils.MoveFile(filePath, binFilePath, true);
+                        }
+                    }
+                }
+            }
+
+            private static PluginInstance ActiveAndAdd(PackageMetadata metadata, Type type)
+            {
+                if (metadata == null || type == null) return null;
+
+                var s = Stopwatch.StartNew();
+
+                //var plugin = (IPlugin)Activator.CreateInstance(type);
+
+                var plugin = (PluginBase)Activator.CreateInstance(type);
+                plugin.Initialize(metadata, Environment, new ApiCollectionImpl
+                {
+                    AdminApi = AdminApi.Instance,
+                    ConfigApi = new ConfigApi(metadata),
+                    ContentApi = ContentApi.Instance,
+                    DatabaseApi = DataProvider.DatabaseApi,
+                    ChannelApi = ChannelApi.Instance,
+                    ParseApi = ParseApi.Instance,
+                    PluginApi = new PluginApi(metadata),
+                    SiteApi = SiteApi.Instance,
+                    UserApi = UserApi.Instance,
+                    UtilsApi = UtilsApi.Instance
+                });
+
+                var service = new ServiceImpl(metadata);
+
+                plugin.Startup(service);
+
+                PluginContentTableManager.SyncContentTable(service);
+                PluginDatabaseTableManager.SyncTable(service);
+
+                return new PluginInstance(metadata, service, plugin, s.ElapsedMilliseconds);
+            }
+
+            public static void Clear()
+            {
+                CacheUtils.Remove(CacheKey);
+            }
+
+            public static SortedList<string, PluginInstance> GetPluginSortedList()
+            {
+                var retval = CacheUtils.Get<SortedList<string, PluginInstance>>(CacheKey);
+                if (retval != null) return retval;
+
+                lock (LockObject)
+                {
+                    retval = CacheUtils.Get<SortedList<string, PluginInstance>>(CacheKey);
+                    if (retval == null)
+                    {
+                        retval = Load();
+                        CacheUtils.InsertHours(CacheKey, retval, 24);
                     }
                 }
 
-                if (!BaiRongDataProvider.DatabaseDao.IsTableExists(tableName))
+                return retval;
+            }
+        }
+
+        public static EnvironmentImpl Environment { get; private set; }
+
+        private static List<PluginInstance> _pluginInfoListRunnable;
+
+        public static void LoadPlugins(string applicationPhysicalPath)
+        {
+            WebConfigUtils.Load(applicationPhysicalPath);
+            _pluginInfoListRunnable = PluginInfoListRunnable;
+        }
+
+        public static void ClearCache()
+        {
+            PluginManagerCache.Clear();
+        }
+
+        public static IMetadata GetMetadata(string pluginId)
+        {
+            var dict = PluginManagerCache.GetPluginSortedList();
+            PluginInstance pluginInfo;
+            if (dict.TryGetValue(pluginId, out pluginInfo))
+            {
+                return pluginInfo.Plugin;
+            }
+            return null;
+        }
+
+        public static bool IsExists(string pluginId)
+        {
+            if (string.IsNullOrEmpty(pluginId)) return false;
+
+            var dict = PluginManagerCache.GetPluginSortedList();
+
+            return dict.ContainsKey(pluginId);
+        }
+
+        public static List<PluginInstance> PluginInfoListRunnable
+        {
+            get
+            {
+                var dict = PluginManagerCache.GetPluginSortedList();
+                return dict.Values.Where(pluginInfo => pluginInfo.Plugin != null).ToList();
+            }
+        }
+
+        public static List<PluginInstance> AllPluginInfoList
+        {
+            get
+            {
+                var dict = PluginManagerCache.GetPluginSortedList();
+                return dict.Values.ToList();
+            }
+        }
+
+        public static List<PluginInstance> GetEnabledPluginInfoList<T>() where T : PluginBase
+        {
+            var dict = PluginManagerCache.GetPluginSortedList();
+            return
+                    dict.Values.Where(
+                            pluginInfo =>
+                                pluginInfo.Plugin != null && !pluginInfo.IsDisabled &&
+                                pluginInfo.Plugin is T
+                        )
+                        .ToList();
+        }
+
+        public static List<ServiceImpl> Services
+        {
+            get
+            {
+                var dict = PluginManagerCache.GetPluginSortedList();
+
+                return dict.Values.Where(
+                            pluginInfo =>
+                                pluginInfo.Plugin != null && !pluginInfo.IsDisabled
+                        ).Select(pluginInfo => pluginInfo.Service).ToList();
+            }
+        }
+
+        public static PluginInstance GetPluginInfo(string pluginId)
+        {
+            if (string.IsNullOrEmpty(pluginId)) return null;
+
+            var dict = PluginManagerCache.GetPluginSortedList();
+
+            PluginInstance pluginInfo;
+            if (dict.TryGetValue(pluginId, out pluginInfo))
+            {
+                return pluginInfo;
+            }
+            return null;
+        }
+
+        public static Dictionary<string, string> GetPluginIdAndVersionDict()
+        {
+            var dict = PluginManagerCache.GetPluginSortedList();
+
+            var retval = new Dictionary<string, string>();
+
+            foreach (var pluginId in dict.Keys)
+            {
+                var pluginInfo = dict[pluginId];
+                if (pluginInfo.Metadata != null)
                 {
-                    BaiRongDataProvider.TableMetadataDao.CreateAuxiliaryTable(tableName);
+                    retval[pluginId] = pluginInfo.Metadata.Version;
                 }
                 else
                 {
-                    var columnNameList = BaiRongDataProvider.DatabaseDao.GetLowercaseTableColumnNameList(tableName);
-                    foreach (var tableColumn in contentTable.ContentTableColumns)
-                    {
-                        if (columnNameList.Contains(tableColumn.AttributeName.ToLower())) continue;
-
-                        var tableMetadataInfo = new TableMetadataInfo(0, tableName, tableColumn.AttributeName,
-                            DataTypeUtils.GetEnumType(tableColumn.DataType), tableColumn.DataLength, 0, true);
-                        BaiRongDataProvider.TableMetadataDao.Insert(tableMetadataInfo);
-
-                        var columnSqlString = SqlUtils.GetColumnSqlString(DataTypeUtils.GetEnumType(tableColumn.DataType), tableColumn.AttributeName, tableColumn.DataLength);
-                        var sqlString = SqlUtils.GetAddColumnsSqlString(tableName, columnSqlString);
-
-                        try
-                        {
-                            BaiRongDataProvider.DatabaseDao.ExecuteSql(sqlString);
-                        }
-                        catch (Exception ex)
-                        {
-                            LogUtils.AddPluginErrorLog(metadata.Id, ex, sqlString);
-                        }
-                    }
-
-                    BaiRongDataProvider.TableCollectionDao.UpdateIsChangedAfterCreatedInDb(false, tableName);
-                }
-
-                var tableStyleInfoList = new List<TableStyleInfo>();
-                foreach (var tableColumn in contentTable.ContentTableColumns)
-                {
-                    var tableStyleInfo = TableStyleManager.GetTableStyleInfo(ETableStyle.Custom, tableName,
-                            tableColumn.AttributeName, new List<int> { 0 });
-                    tableStyleInfo.DisplayName = tableColumn.DisplayName;
-                    tableStyleInfo.InputType = tableColumn.InputType;
-                    tableStyleInfo.DefaultValue = tableColumn.DefaultValue;
-                    tableStyleInfo.IsVisible = tableColumn.IsVisibleInEdit;
-                    tableStyleInfo.IsVisibleInList = tableColumn.IsVisibleInList;
-                    tableStyleInfo.Additional.IsValidate = true;
-                    tableStyleInfo.Additional.IsRequired = tableColumn.IsRequired;
-                    tableStyleInfo.Additional.ValidateType = ValidateTypeUtils.GetEnumType(tableColumn.ValidateType);
-                    tableStyleInfo.Additional.MinNum = tableColumn.MinNum;
-                    tableStyleInfo.Additional.MaxNum = tableColumn.MaxNum;
-                    tableStyleInfo.Additional.RegExp = tableColumn.RegExp;
-                    tableStyleInfo.Additional.Width = tableColumn.Width;
-                    tableStyleInfoList.Add(tableStyleInfo);
-                }
-
-                tableStyleInfoList.Reverse();
-                foreach (var tableStyleInfo in tableStyleInfoList)
-                {
-                    TableStyleManager.InsertOrUpdate(tableStyleInfo, ETableStyle.Custom);
+                    retval[pluginId] = string.Empty;
                 }
             }
 
-            var table = plugin as ITable;
-            if (table?.Tables != null)
-            {
-                foreach (var tableName in table.Tables.Keys)
-                {
-                    var tableColumns = table.Tables[tableName];
-                    if (tableColumns == null || tableColumns.Count <= 0) continue;
-
-                    if (!BaiRongDataProvider.DatabaseDao.IsTableExists(tableName))
-                    {
-                        BaiRongDataProvider.DatabaseDao.CreatePluginTable(metadata.Id, tableName, tableColumns);
-                    }
-                    else
-                    {
-                        BaiRongDataProvider.DatabaseDao.AlterPluginTable(metadata.Id, tableName, tableColumns);
-                    }
-                }
-            }
-
-            var milliseconds = s.ElapsedMilliseconds;
-
-            metadata.InitTime = milliseconds;
-
-            var pair = new PluginPair(context, plugin);
-
-            PluginCache.Set(metadata.Id, pair);
-            return true;
+            return retval;
         }
 
-        public static bool Install(string pluginId, string version, out string errorMessage)
+        public static List<string> PackagesIdAndVersionList
         {
-            errorMessage = string.Empty;
-            if (string.IsNullOrEmpty(pluginId)) return false;
-
-            try
+            get
             {
-                if (PluginCache.IsExists(pluginId))
+                var packagesPath = PathUtils.GetPackagesPath();
+                DirectoryUtils.CreateDirectoryIfNotExists(packagesPath);
+                return DirectoryUtils.GetDirectoryNames(packagesPath).ToList();
+            }
+        }
+
+        public static PluginBase GetPlugin(string pluginId)
+        {
+            if (string.IsNullOrEmpty(pluginId)) return null;
+
+            var dict = PluginManagerCache.GetPluginSortedList();
+
+            PluginInstance pluginInfo;
+            if (dict.TryGetValue(pluginId, out pluginInfo))
+            {
+                return pluginInfo.Plugin;
+            }
+            return null;
+        }
+
+        public static PluginInstance GetEnabledPluginInfo<T>(string pluginId) where T : PluginBase
+        {
+            if (string.IsNullOrEmpty(pluginId)) return null;
+
+            var dict = PluginManagerCache.GetPluginSortedList();
+
+            PluginInstance pluginInfo;
+            var isGet = dict.TryGetValue(pluginId, out pluginInfo);
+            if (isGet && pluginInfo.Plugin != null && !pluginInfo.IsDisabled &&
+                pluginInfo.Plugin is T)
+            {
+                return pluginInfo;
+            }
+            return null;
+        }
+
+        public static List<PluginInstance> GetEnabledPluginInfoList<T1, T2>()
+        {
+            var dict = PluginManagerCache.GetPluginSortedList();
+
+            return dict.Values.Where(
+                            pluginInfo =>
+                                pluginInfo.Plugin != null && !pluginInfo.IsDisabled &&
+                                (pluginInfo.Plugin is T1 || pluginInfo.Plugin is T2)
+                        )
+                        .ToList();
+        }
+
+        public static List<PluginBase> GetEnabledPluginMetadatas<T>() where T : PluginBase
+        {
+            var dict = PluginManagerCache.GetPluginSortedList();
+
+            return dict.Values.Where(
+                        pluginInfo =>
+                            pluginInfo.Plugin != null && !pluginInfo.IsDisabled &&
+                            pluginInfo.Plugin is T
+                    ).Select(pluginInfo => pluginInfo.Plugin).ToList();
+        }
+
+        public static IMetadata GetEnabledPluginMetadata<T>(string pluginId) where T : PluginBase
+        {
+            if (string.IsNullOrEmpty(pluginId)) return null;
+
+            var dict = PluginManagerCache.GetPluginSortedList();
+
+            PluginInstance pluginInfo;
+            var isGet = dict.TryGetValue(pluginId, out pluginInfo);
+            if (isGet && pluginInfo.Plugin != null && !pluginInfo.IsDisabled &&
+                pluginInfo.Plugin is T)
+            {
+                return pluginInfo.Plugin;
+            }
+            return null;
+        }
+
+        public static T GetEnabledFeature<T>(string pluginId) where T : PluginBase
+        {
+            if (string.IsNullOrEmpty(pluginId)) return default(T);
+
+            var dict = PluginManagerCache.GetPluginSortedList();
+
+            PluginInstance pluginInfo;
+            var isGet = dict.TryGetValue(pluginId, out pluginInfo);
+            if (isGet && pluginInfo.Plugin != null && !pluginInfo.IsDisabled &&
+                pluginInfo.Plugin is T)
+            {
+                return (T)pluginInfo.Plugin;
+            }
+            return default(T);
+        }
+
+        public static List<T> GetEnabledFeatures<T>() where T : PluginBase
+        {
+            var dict = PluginManagerCache.GetPluginSortedList();
+
+            var pluginInfos = dict.Values.Where(
+                        pluginInfo =>
+                            pluginInfo.Plugin != null && !pluginInfo.IsDisabled &&
+                            pluginInfo.Plugin is T
+                    )
+                    .ToList();
+            return pluginInfos.Select(pluginInfo => (T)pluginInfo.Plugin).ToList();
+        }
+
+        public static ServiceImpl GetService(string pluginId)
+        {
+            if (string.IsNullOrEmpty(pluginId)) return null;
+
+            foreach (var service in Services)
+            {
+                if (StringUtils.EqualsIgnoreCase(service.PluginId, pluginId))
                 {
-                    errorMessage = "插件已存在";
-                    return false;
+                    return service;
                 }
-                var directoryPath = PathUtils.GetPluginsPath(pluginId);
-                DirectoryUtils.DeleteDirectoryIfExists(directoryPath);
+            }
 
-                var zipFilePath = PathUtility.GetTemporaryFilesPath(pluginId + ".zip");
-                FileUtils.DeleteFileIfExists(zipFilePath);
+            return null;
+        }
 
-                var downloadUrl = PluginUtils.GetDownloadUrl(pluginId, version);
-                WebClientUtils.SaveRemoteFileToLocal(downloadUrl, zipFilePath);
+
+
+        //public static List<ContentModelInfo> GetAllContentModels(SiteInfo siteInfo)
+        //{
+        //    var cacheName = nameof(GetAllContentModels) + siteInfo.Id;
+        //    var contentModels = GetCache<List<ContentModelInfo>>(cacheName);
+        //    if (contentModels != null) return contentModels;
+
+        //    contentModels = new List<ContentModelInfo>();
+
+        //    foreach (var pluginInfo in GetEnabledPluginInfoLists<IContentModel>())
+        //    {
+        //        var model = pluginInfo.Plugin as IContentModel;
+
+        //        if (model == null) continue;
+
+        //        var tableName = siteInfo.AuxiliaryTableForContent;
+        //        var tableType = EAuxiliaryTableType.BackgroundContent;
+        //        if (model.ContentTableColumns != null && model.ContentTableColumns.Count > 0)
+        //        {
+        //            tableName = pluginInfo.Id;
+        //            tableType = EAuxiliaryTableType.Custom;
+        //        }
+
+        //        contentModels.Add(new ContentModelInfo(
+        //            pluginInfo.Id,
+        //            pluginInfo.Id,
+        //            $"插件：{pluginInfo.Metadata.DisplayName}",
+        //            tableName,
+        //            tableType,
+        //            PageUtils.GetPluginDirectoryUrl(pluginInfo.Id, pluginInfo.Metadata.Icon))
+        //        );
+        //    }
+
+        //    SetCache(cacheName, contentModels);
+
+        //    return contentModels;
+        //}
+
+
+
+        //public static List<ContentModelInfo> GetAllContentModels(SiteInfo siteInfo)
+        //{
+        //    var cacheName = nameof(GetAllContentModels) + siteInfo.Id;
+        //    var contentModels = GetCache<List<ContentModelInfo>>(cacheName);
+        //    if (contentModels != null) return contentModels;
+
+        //    contentModels = new List<ContentModelInfo>();
+
+        //    foreach (var pluginInfo in GetEnabledPluginInfoLists<IContentModel>())
+        //    {
+        //        var model = pluginInfo.Plugin as IContentModel;
+
+        //        if (model == null) continue;
+
+        //        var links = new List<PluginContentLink>();
+        //        if (model.ContentLinks != null)
+        //        {
+        //            links.AddRange(model.ContentLinks.Select(link => new PluginContentLink
+        //            {
+        //                Text = link.Text,
+        //                Href = PageUtils.GetPluginDirectoryUrl(pluginInfo.Id, link.Href),
+        //                Target = link.Target
+        //            }));
+        //        }
+        //        var tableName = siteInfo.AuxiliaryTableForContent;
+        //        var tableType = EAuxiliaryTableType.BackgroundContent;
+        //        if (model.IsCustomContentTable && model.CustomContentTableColumns != null && model.CustomContentTableColumns.Count > 0)
+        //        {
+        //            tableName = pluginInfo.Id;
+        //            tableType = EAuxiliaryTableType.Custom;
+        //        }
+
+        //        contentModels.Add(new ContentModelInfo(
+        //            pluginInfo.Id,
+        //            pluginInfo.Id,
+        //            $"插件：{pluginInfo.Metadata.DisplayName}",
+        //            tableName,
+        //            tableType,
+        //            PageUtils.GetPluginDirectoryUrl(pluginInfo.Id, pluginInfo.Metadata.Icon),
+        //            links)
+        //        );
+        //    }
+
+        //    SetCache(cacheName, contentModels);
+
+        //    return contentModels;
+        //}
+
+
+
+        //public static Dictionary<string, Func<PluginRenderContext, string>> GetRenders()
+        //{
+        //    var renders = new Dictionary<string, Func<PluginRenderContext, string>>();
+
+        //    var pluginInfoList = GetEnabledPluginInfoList<IRender>();
+        //    if (pluginInfoList != null && pluginInfoList.Count > 0)
+        //    {
+        //        foreach (var pluginInfo in pluginInfoList)
+        //        {
+        //            var plugin = pluginInfo.Plugin as IRender;
+        //            if (plugin?.Render != null)
+        //            {
+        //                renders.Add(pluginInfo.Metadata.Id, plugin.Render);
+        //            }
+        //            //if (!(pluginInfo.Plugin is IRender plugin)) continue;
+
+        //            //if (plugin.Render != null)
+        //            //{
+        //            //    renders.Add(pluginInfo.Metadata.Id, plugin.Render);
+        //            //}
+        //        }
+        //    }
+
+        //    return renders;
+        //}
+
+        //public static List<Action<object, FileSystemEventArgs>> GetFileSystemChangedActions()
+        //{
+        //    var actions = new List<Action<object, FileSystemEventArgs>>();
+
+        //    var plugins = GetEnabledFeatures<IFileSystem>();
+        //    if (plugins != null && plugins.Count > 0)
+        //    {
+        //        foreach (var plugin in plugins)
+        //        {
+        //            if (plugin.FileSystemChanged != null)
+        //            {
+        //                actions.Add(plugin.FileSystemChanged);
+        //            }
+        //        }
+        //    }
+
+        //    return actions;
+        //}
+
+        
+
+        //public static bool Install(string pluginId, string version, out string errorMessage)
+        //{
+        //    errorMessage = string.Empty;
+        //    if (string.IsNullOrEmpty(pluginId)) return false;
+
+        //    try
+        //    {
+        //        if (IsExists(pluginId))
+        //        {
+        //            errorMessage = $"插件 {pluginId} 已存在";
+        //            return false;
+        //        }
+        //        var directoryPath = PathUtils.GetPluginPath(pluginId);
+        //        DirectoryUtils.DeleteDirectoryIfExists(directoryPath);
+
+        //        var zipFilePath = PathUtility.GetTemporaryFilesPath(pluginId + ".zip");
+        //        FileUtils.DeleteFileIfExists(zipFilePath);
+
+        //        var downloadUrl = $"http://download.siteserver.cn/plugins/{pluginId}/{version}/{pluginId}.zip";
+        //        WebClientUtils.SaveRemoteFileToLocal(downloadUrl, zipFilePath);
                 
-                ZipUtils.UnpackFiles(zipFilePath, directoryPath);
-                FileUtils.DeleteFileIfExists(zipFilePath);
+        //        ZipUtils.UnpackFiles(zipFilePath, directoryPath);
+        //        FileUtils.DeleteFileIfExists(zipFilePath);
 
-                var jsonPath = PathUtils.Combine(directoryPath, PluginUtils.PluginConfigName);
-                if (!FileUtils.IsFileExists(jsonPath))
-                {
-                    errorMessage = $"插件配置文件{PluginUtils.PluginConfigName}不存在";
-                    return false;
-                }
+        //        string dllDirectoryPath;
+        //        var metadata = GetPluginMetadata(pluginId, out dllDirectoryPath, out errorMessage);
+        //        if (metadata == null)
+        //        {
+        //            return false;
+        //        }
 
-                var metadata = PluginUtils.GetMetadataFromJson(directoryPath);
-                if (metadata == null)
-                {
-                    errorMessage = "插件配置文件不正确";
-                    return false;
-                }
+        //        //SaveMetadataToJson(metadata);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        errorMessage = ex.Message;
+        //        return false;
+        //    }
 
-                metadata.Disabled = false;
-                metadata.DatabaseType = string.Empty;
-                metadata.ConnectionString = string.Empty;
+        //    return true;
+        //}
 
-                Update(metadata);
-            }
-            catch (Exception e)
-            {
-                errorMessage = e.Message;
-                return false;
-            }
-
-            return true;
+        public static void Delete(string pluginId)
+        {
+            DirectoryUtils.DeleteDirectoryIfExists(PathUtils.GetPluginPath(pluginId));
+            ClearCache();
         }
 
-        public static PluginMetadata Delete(string pluginId)
+        public static void UpdateDisabled(string pluginId, bool isDisabled)
         {
-            var metadata = PluginCache.GetMetadata(pluginId);
-            if (metadata != null)
+            var pluginInfo = GetPluginInfo(pluginId);
+            if (pluginInfo != null)
             {
-                if (DirectoryUtils.DeleteDirectoryIfExists(metadata.DirectoryPath))
-                {
-                    PluginCache.Remove(pluginId);
-                }
+                pluginInfo.IsDisabled = isDisabled;
+                DataProvider.PluginDao.UpdateIsDisabled(pluginId, isDisabled);
+                ClearCache();
             }
-            Thread.Sleep(1200);
-            return metadata;
         }
 
-        public static PluginMetadata UpdateDisabled(string pluginId, bool isDisabled)
+        public static void UpdateTaxis(string pluginId, int taxis)
         {
-            var metadata = PluginCache.GetMetadata(pluginId);
-            if (metadata != null)
+            var pluginInfo = GetPluginInfo(pluginId);
+            if (pluginInfo != null)
             {
-                metadata.Disabled = isDisabled;
-                Update(metadata);
+                pluginInfo.Taxis = taxis;
+                DataProvider.PluginDao.UpdateTaxis(pluginId, taxis);
+                ClearCache();
             }
-            return metadata;
         }
 
-        public static PluginMetadata UpdateDatabase(string pluginId, string databaseType, string connectionString)
+        //public static PluginMetadata UpdateDatabase(string pluginId, string databaseType, string connectionString)
+        //{
+        //    var metadata = GetMetadata(pluginId);
+        //    if (metadata != null)
+        //    {
+        //        if (WebConfigUtils.IsProtectData && !string.IsNullOrEmpty(databaseType))
+        //        {
+        //            databaseType = TranslateUtils.EncryptStringBySecretKey(databaseType);
+        //        }
+        //        if (WebConfigUtils.IsProtectData && !string.IsNullOrEmpty(connectionString))
+        //        {
+        //            connectionString = TranslateUtils.EncryptStringBySecretKey(connectionString);
+        //        }
+        //        metadata.DatabaseType = databaseType;
+        //        metadata.ConnectionString = connectionString;
+        //        SaveMetadataToJson(metadata);
+        //    }
+        //    return metadata;
+        //}
+
+        /// <summary>
+        /// Parse plugin metadata in giving directories
+        /// </summary>
+        /// <returns></returns>
+        //internal static PluginMetadata GetMetadataFromJson(string directoryPath)
+        //{
+        //    var configPath = Path.Combine(directoryPath, PluginConfigName);
+        //    if (!File.Exists(configPath))
+        //    {
+        //        return null;
+        //    }
+
+        //    PluginMetadata metadata;
+        //    try
+        //    {
+        //        metadata = JsonConvert.DeserializeObject<PluginMetadata>(File.ReadAllText(configPath));
+        //        metadata.DirectoryPath = directoryPath;
+        //    }
+        //    catch
+        //    {
+        //        return null;
+        //    }
+
+        //    if (string.IsNullOrEmpty(metadata.Id))
+        //    {
+        //        return null;
+        //    }
+
+        //    return metadata;
+        //}
+
+        //private static PackageMetadata GetPluginMetadata(string directoryName, out string dllDirectoryPath, out string errorMessage)
+        //{
+        //    dllDirectoryPath = string.Empty;
+        //    var nuspecPath = PathUtils.GetPluginNuspecPath(directoryName);
+        //    if (!File.Exists(nuspecPath))
+        //    {
+        //        errorMessage = $"插件配置文件 {directoryName}.nuspec 不存在";
+        //        return null;
+        //    }
+        //    dllDirectoryPath = PathUtils.GetPluginDllDirectoryPath(directoryName);
+        //    if (string.IsNullOrEmpty(dllDirectoryPath))
+        //    {
+        //        errorMessage = $"插件可执行文件 {directoryName}.dll 不存在";
+        //        return null;
+        //    }
+
+        //    PackageMetadata metadata;
+        //    try
+        //    {
+        //        metadata = PackageUtils.GetPackageMetadata(nuspecPath);
+        //    }
+        //    catch(Exception ex)
+        //    {
+        //        errorMessage = ex.Message;
+        //        return null;
+        //    }
+
+        //    if (string.IsNullOrEmpty(metadata.Id))
+        //    {
+        //        errorMessage = "插件配置文件不正确";
+        //        return null;
+        //    }
+
+        //    errorMessage = string.Empty;
+        //    return metadata;
+        //}
+
+        public static string GetPluginIconUrl(string pluginId)
         {
-            var metadata = PluginCache.GetMetadata(pluginId);
-            if (metadata != null)
+            foreach (var service in Services)
             {
-                if (WebConfigUtils.IsProtectData && !string.IsNullOrEmpty(databaseType))
+                if (service.PluginId == pluginId)
                 {
-                    databaseType = TranslateUtils.EncryptStringBySecretKey(databaseType);
+                    return GetPluginIconUrl(service);
                 }
-                if (WebConfigUtils.IsProtectData && !string.IsNullOrEmpty(connectionString))
-                {
-                    connectionString = TranslateUtils.EncryptStringBySecretKey(connectionString);
-                }
-                metadata.DatabaseType = databaseType;
-                metadata.ConnectionString = connectionString;
-                Update(metadata);
             }
-            return metadata;
+            return string.Empty;
         }
 
-        private static void Update(PluginMetadata metadata)
+        public static string GetPluginIconUrl(ServiceImpl service)
         {
-            PluginCache.SetMetadata(metadata);
-            PluginUtils.SaveMetadataToJson(metadata);
-            Thread.Sleep(1200);
+            var url = string.Empty;
+            if (service.Metadata.IconUrl != null)
+            {
+                url = service.Metadata.IconUrl.ToString();
+            }
+            return url;
         }
     }
 }

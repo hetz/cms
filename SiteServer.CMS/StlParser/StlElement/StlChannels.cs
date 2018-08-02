@@ -1,112 +1,60 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.CMS.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.Model.Enumerations;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
-    [Stl(Usage = "栏目列表", Description = "通过 stl:channels 标签在模板中显示栏目列表")]
-    public class StlChannels
+    [StlClass(Usage = "栏目列表", Description = "通过 stl:channels 标签在模板中显示栏目列表")]
+    public class StlChannels : StlListBase
     {
         public const string ElementName = "stl:channels";
 
-        public const string AttributeChannelIndex = "channelIndex";			    //栏目索引
-        public const string AttributeChannelName = "channelName";				//栏目名称
-        public const string AttributeUpLevel = "upLevel";						//上级栏目的级别
-        public const string AttributeTopLevel = "topLevel";					    //从首页向下的栏目级别
-        public const string AttributeIsTotal = "isTotal";						//是否从所有栏目中选择（包括首页）
-        public const string AttributeIsAllChildren = "isAllChildren";			//是否显示所有级别的子栏目
-        public const string AttributeGroupChannel = "groupChannel";		        //指定显示的栏目组
-        public const string AttributeGroupChannelNot = "groupChannelNot";	    //指定不显示的栏目组
-        public const string AttributeTotalNum = "totalNum";					    //显示栏目数目
-        public const string AttributeStartNum = "startNum";					    //从第几条信息开始显示
-        public const string AttributeOrder = "order";						    //排序
-        public const string AttributeIsImage = "isImage";					    //仅显示图片栏目
-        public const string AttributeWhere = "where";                           //获取栏目列表的条件判断
-        public const string AttributeCellPadding = "cellPadding";
-        public const string AttributeCellSpacing = "cellSpacing";
-        public const string AttributeClass = "class";
-        public const string AttributeColumns = "columns";
-        public const string AttributeDirection = "direction";
-        public const string AttributeHeight = "height";
-        public const string AttributeWidth = "width";
-        public const string AttributeAlign = "align";
-        public const string AttributeLayout = "layout";
-        public const string AttributeItemHeight = "itemHeight";
-        public const string AttributeItemWidth = "itemWidth";
-        public const string AttributeItemAlign = "itemAlign";
-        public const string AttributeItemVerticalAlign = "itemVerticalAlign";
-        public const string AttributeItemClass = "itemClass";
+        
+        protected static readonly Attr IsTotal = new Attr("isTotal", "是否从所有栏目中选择", AttrType.Boolean);						//是否从所有栏目中选择（包括首页）
+        protected static readonly Attr IsAllChildren = new Attr("isAllChildren", "是否显示所有级别的子栏目", AttrType.Boolean);			//是否显示所有级别的子栏目
 
-        public static SortedList<string, string> AttributeList => new SortedList<string, string>
+        public static object Parse(PageInfo pageInfo, ContextInfo contextInfo)
         {
-            {AttributeChannelIndex, "栏目索引"},
-            {AttributeChannelName, "栏目名称"},
-            {AttributeUpLevel, "上级栏目的级别"},
-            {AttributeTopLevel, "从首页向下的栏目级别"},
-            {AttributeIsTotal, "是否从所有栏目中选择"},
-            {AttributeIsAllChildren, "是否显示所有级别的子栏目"},
-            {AttributeGroupChannel, "指定显示的栏目组"},
-            {AttributeGroupChannelNot, "指定不显示的栏目组"},
-            {AttributeTotalNum, "显示栏目数目"},
-            {AttributeStartNum, "从第几条信息开始显示"},
-            {AttributeOrder, "排序"},
-            {AttributeIsImage, "仅显示图片栏目"},
-            {AttributeWhere, "获取栏目列表的条件判断"},
-            {AttributeCellPadding, "填充"},
-            {AttributeCellSpacing, "间距"},
-            {AttributeClass, "Css类"},
-            {AttributeColumns, "列数"},
-            {AttributeDirection, "方向"},
-            {AttributeHeight, "整体高度"},
-            {AttributeWidth, "整体宽度"},
-            {AttributeAlign, "整体对齐"},
-            {AttributeLayout, "指定列表布局方式"},
-            {AttributeItemHeight, "项高度"},
-            {AttributeItemWidth, "项宽度"},
-            {AttributeItemAlign, "项水平对齐"},
-            {AttributeItemVerticalAlign, "项垂直对齐"},
-            {AttributeItemClass, "项Css类"},
-        };
-
-        public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
-        {
-            // 如果是实体标签则返回空
-            if(contextInfo.IsCurlyBrace)
-            {
-                return string.Empty;
-            }
             var listInfo = ListInfo.GetListInfoByXmlNode(pageInfo, contextInfo, EContextType.Channel);
 
-            return ParseImpl(pageInfo, contextInfo, listInfo);
+            var dataSource = GetDataSource(pageInfo, contextInfo, listInfo);
+
+            if (contextInfo.IsStlEntity)
+            {
+                return ParseEntity(pageInfo, dataSource);
+            }
+
+            return ParseElement(pageInfo, contextInfo, listInfo, dataSource);
         }
 
         public static DataSet GetDataSource(PageInfo pageInfo, ContextInfo contextInfo, ListInfo listInfo)
         {
-            var channelId = StlDataUtility.GetNodeIdByLevel(pageInfo.PublishmentSystemId, contextInfo.ChannelId, listInfo.UpLevel, listInfo.TopLevel);
+            var channelId = StlDataUtility.GetChannelIdByLevel(pageInfo.SiteId, contextInfo.ChannelId, listInfo.UpLevel, listInfo.TopLevel);
 
-            channelId = StlDataUtility.GetNodeIdByChannelIdOrChannelIndexOrChannelName(pageInfo.PublishmentSystemId, channelId, listInfo.ChannelIndex, listInfo.ChannelName);
+            channelId = StlDataUtility.GetChannelIdByChannelIdOrChannelIndexOrChannelName(pageInfo.SiteId, channelId, listInfo.ChannelIndex, listInfo.ChannelName);
 
-            var isTotal = TranslateUtils.ToBool(listInfo.Others.Get(AttributeIsTotal));
+            var isTotal = TranslateUtils.ToBool(listInfo.Others.Get(IsTotal.Name));
 
-            if (TranslateUtils.ToBool(listInfo.Others.Get(AttributeIsAllChildren)))
+            if (TranslateUtils.ToBool(listInfo.Others.Get(IsAllChildren.Name)))
             {
                 listInfo.Scope = EScopeType.Descendant;
             }
 
-            return StlDataUtility.GetChannelsDataSource(pageInfo.PublishmentSystemId, channelId, listInfo.GroupChannel, listInfo.GroupChannelNot, listInfo.IsImageExists, listInfo.IsImage, listInfo.StartNum, listInfo.TotalNum, listInfo.OrderByString, listInfo.Scope, isTotal, listInfo.Where);
+            return StlDataUtility.GetChannelsDataSource(pageInfo.SiteId, channelId, listInfo.GroupChannel, listInfo.GroupChannelNot, listInfo.IsImageExists, listInfo.IsImage, listInfo.StartNum, listInfo.TotalNum, listInfo.OrderByString, listInfo.Scope, isTotal, listInfo.Where);
         }
 
-        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, ListInfo listInfo)
+        private static string ParseElement(PageInfo pageInfo, ContextInfo contextInfo, ListInfo listInfo, DataSet dataSource)
         {
             var parsedContent = string.Empty;
-
-            var dataSource = GetDataSource(pageInfo, contextInfo, listInfo);
 
             if (listInfo.Layout == ELayout.None)
             {
@@ -168,7 +116,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
 
                 pdlContents.DataSource = dataSource;
-                pdlContents.DataKeyField = NodeAttribute.NodeId;
+                pdlContents.DataKeyField = ChannelAttribute.Id;
                 pdlContents.DataBind();
 
                 if (pdlContents.Items.Count > 0)
@@ -178,6 +126,24 @@ namespace SiteServer.CMS.StlParser.StlElement
             }
 
             return parsedContent;
+        }
+
+        private static object ParseEntity(PageInfo pageInfo, DataSet dataSource)
+        {
+            var channelInfoList = new List<ChannelInfo>();
+            var table = dataSource.Tables[0];
+            foreach (DataRow row in table.Rows)
+            {
+                var channelId = Convert.ToInt32(row[nameof(ContentAttribute.Id)]);
+
+                var channelInfo = ChannelManager.GetChannelInfo(pageInfo.SiteId, channelId);
+                if (channelInfo != null)
+                {
+                    channelInfoList.Add(channelInfo);
+                }
+            }
+
+            return channelInfoList;
         }
     }
 }

@@ -1,29 +1,21 @@
 ﻿using System.Collections.Generic;
 using System.Text;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
-    [Stl(Usage = "无间隔滚动", Description = "通过 stl:marquee 标签在模板中创建一个能够无间隔滚动的内容块")]
+    [StlClass(Usage = "无间隔滚动", Description = "通过 stl:marquee 标签在模板中创建一个能够无间隔滚动的内容块")]
     public class StlMarquee
 	{
 		private StlMarquee(){}
 		public const string ElementName = "stl:marquee";
 
-		public const string AttributeScrollDelay = "scrollDelay";
-		public const string AttributeDirection = "direction";
-		public const string AttributeWidth = "width";
-		public const string AttributeHeight = "height";
-
-        public static SortedList<string, string> AttributeList => new SortedList<string, string>
-        {
-            {AttributeScrollDelay, "滚动延迟时间（毫秒）"},
-            {AttributeDirection, StringUtils.SortedListToAttributeValueString("滚动方向", DirectionList)},
-            {AttributeWidth, "宽度"},
-            {AttributeHeight, "高度"}
-        };
+		private static readonly Attr ScrollDelay = new Attr("scrollDelay", "滚动延迟时间（毫秒）");
+		private static readonly Attr Direction = new Attr("direction", "滚动方向");
+		private static readonly Attr Width = new Attr("width", "宽度");
+		private static readonly Attr Height = new Attr("height", "高度");
 
         public const string DirectionVertical = "vertical";         //垂直
         public const string DirectionHorizontal = "horizontal";		//水平
@@ -36,9 +28,9 @@ namespace SiteServer.CMS.StlParser.StlElement
 
         internal static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
 		{
-            if (string.IsNullOrEmpty(contextInfo.InnerXml)) return string.Empty;
+            if (string.IsNullOrEmpty(contextInfo.InnerHtml)) return string.Empty;
 
-            var innerBuilder = new StringBuilder(contextInfo.InnerXml);
+            var innerBuilder = new StringBuilder(contextInfo.InnerHtml);
             StlParserManager.ParseInnerContent(innerBuilder, pageInfo, contextInfo);
             var scrollHtml = innerBuilder.ToString();
 
@@ -47,22 +39,22 @@ namespace SiteServer.CMS.StlParser.StlElement
             var width = "width:100%;";
             var height = string.Empty;
 
-            foreach (var name in contextInfo.Attributes.Keys)
+            foreach (var name in contextInfo.Attributes.AllKeys)
             {
                 var value = contextInfo.Attributes[name];
 
-                if (StringUtils.EqualsIgnoreCase(name, AttributeScrollDelay))
+                if (StringUtils.EqualsIgnoreCase(name, ScrollDelay.Name))
                 {
                     scrollDelay = TranslateUtils.ToInt(value, 40);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeDirection))
+                else if (StringUtils.EqualsIgnoreCase(name, Direction.Name))
                 {
                     if (value.ToLower().Equals(DirectionHorizontal.ToLower()))
                     {
                         direction = DirectionHorizontal;
                     }
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeWidth))
+                else if (StringUtils.EqualsIgnoreCase(name, Width.Name))
                 {
                     value = value.Trim();
                     if (!string.IsNullOrEmpty(value))
@@ -77,7 +69,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                         }
                     }
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeHeight))
+                else if (StringUtils.EqualsIgnoreCase(name, Height.Name))
                 {
                     value = value.Trim();
                     if (!string.IsNullOrEmpty(value))
@@ -180,7 +172,10 @@ if (uniqueID_isMar){{
 </script>";
             }
 
-            pageInfo.AddPageEndScriptsIfNotExists(ElementName + uniqueId, scripts.Replace("uniqueID", uniqueId));
+            if (!pageInfo.FootCodes.ContainsKey(ElementName + uniqueId))
+            {
+                pageInfo.FootCodes.Add(ElementName + uniqueId, scripts.Replace("uniqueID", uniqueId));
+            }
 
             return topHtml.Replace("uniqueID", uniqueId) + scrollHtml + bottomHtml.Replace("uniqueID", uniqueId);
         }

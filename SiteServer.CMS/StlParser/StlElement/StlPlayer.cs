@@ -1,52 +1,34 @@
 ﻿using System.Collections.Generic;
 using System.Text;
-using BaiRong.Core;
-using BaiRong.Core.Model.Attributes;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.StlParser.Cache;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Parsers;
 using SiteServer.CMS.StlParser.Utility;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
-    [Stl(Usage = "播放视频", Description = "通过 stl:player 标签在模板中播放视频")]
+    [StlClass(Usage = "播放视频", Description = "通过 stl:player 标签在模板中播放视频")]
     public class StlPlayer
 	{
         private StlPlayer() { }
 		public const string ElementName = "stl:player";
 
-		public const string AttributeChannelIndex = "channelIndex";
-		public const string AttributeChannelName = "channelName";
-		public const string AttributeParent = "parent";
-		public const string AttributeUpLevel = "upLevel";
-        public const string AttributeTopLevel = "topLevel";
-        public const string AttributeType = "type";
-		public const string AttributePlayUrl = "playUrl";
-        public const string AttributeImageUrl = "imageUrl";
-        public const string AttributePlayBy = "playBy";
-        public const string AttributeStretching = "stretching";
-		public const string AttributeWidth = "width";
-		public const string AttributeHeight = "height";
-        public const string AttributeIsAutoPlay = "isAutoPlay";
-
-        public static SortedList<string, string> AttributeList => new SortedList<string, string>
-        {
-            {AttributeChannelIndex, "栏目索引"},
-            {AttributeChannelName, "栏目名称"},
-            {AttributeParent, "显示父栏目"},
-            {AttributeUpLevel, "上级栏目的级别"},
-            {AttributeTopLevel, "从首页向下的栏目级别"},
-            {AttributeType, "指定存储媒体的字段"},
-            {AttributePlayUrl, "视频地址"},
-            {AttributeImageUrl, "图片地址"},
-            {AttributePlayBy, StringUtils.SortedListToAttributeValueString("指定播放器", PlayByList)},
-            {AttributeStretching, "拉伸"},
-            {AttributeWidth, "宽度"},
-            {AttributeHeight, "高度"},
-            {AttributeIsAutoPlay, "是否自动播放"}
-        };
+		private static readonly Attr ChannelIndex = new Attr("channelIndex", "栏目索引");
+		private static readonly Attr ChannelName = new Attr("channelName", "栏目名称");
+		private static readonly Attr Parent = new Attr("parent", "显示父栏目");
+		private static readonly Attr UpLevel = new Attr("upLevel", "上级栏目的级别");
+        private static readonly Attr TopLevel = new Attr("topLevel", "从首页向下的栏目级别");
+        private static readonly Attr Type = new Attr("type", "指定存储媒体的字段");
+		private static readonly Attr PlayUrl = new Attr("playUrl", "视频地址");
+        private static readonly Attr ImageUrl = new Attr("imageUrl", "图片地址");
+        private static readonly Attr PlayBy = new Attr("playBy", "指定播放器");
+		private static readonly Attr Width = new Attr("width", "宽度");
+		private static readonly Attr Height = new Attr("height", "高度");
+        private static readonly Attr IsAutoPlay = new Attr("isAutoPlay", "是否自动播放");
 
         public const string PlayByBrPlayer = "BRPlayer";
         public const string PlayByFlowPlayer = "FlowPlayer";
@@ -68,18 +50,17 @@ namespace SiteServer.CMS.StlParser.StlElement
             var topLevel = -1;
             var type = BackgroundContentAttribute.VideoUrl;
             var playUrl = string.Empty;
-            var stretching = string.Empty;
             var imageUrl = string.Empty;
             var playBy = string.Empty;
             var width = 450;
             var height = 350;
             var isAutoPlay = true;
 
-            foreach (var name in contextInfo.Attributes.Keys)
+            foreach (var name in contextInfo.Attributes.AllKeys)
             {
                 var value = contextInfo.Attributes[name];
 
-                if (StringUtils.EqualsIgnoreCase(name, AttributeChannelIndex))
+                if (StringUtils.EqualsIgnoreCase(name, ChannelIndex.Name))
                 {
                     channelIndex = StlEntityParser.ReplaceStlEntitiesForAttributeValue(value, pageInfo, contextInfo);
                     if (!string.IsNullOrEmpty(channelIndex))
@@ -87,7 +68,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                         isGetPicUrlFromAttribute = true;
                     }
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeChannelName))
+                else if (StringUtils.EqualsIgnoreCase(name, ChannelName.Name))
                 {
                     channelName = StlEntityParser.ReplaceStlEntitiesForAttributeValue(value, pageInfo, contextInfo);
                     if (!string.IsNullOrEmpty(channelName))
@@ -95,7 +76,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                         isGetPicUrlFromAttribute = true;
                     }
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeParent))
+                else if (StringUtils.EqualsIgnoreCase(name, Parent.Name))
                 {
                     if (TranslateUtils.ToBool(value))
                     {
@@ -103,7 +84,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                         isGetPicUrlFromAttribute = true;
                     }
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeUpLevel))
+                else if (StringUtils.EqualsIgnoreCase(name, UpLevel.Name))
                 {
                     upLevel = TranslateUtils.ToInt(value);
                     if (upLevel > 0)
@@ -111,7 +92,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                         isGetPicUrlFromAttribute = true;
                     }
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeTopLevel))
+                else if (StringUtils.EqualsIgnoreCase(name, TopLevel.Name))
                 {
                     topLevel = TranslateUtils.ToInt(value);
                     if (topLevel >= 0)
@@ -119,44 +100,40 @@ namespace SiteServer.CMS.StlParser.StlElement
                         isGetPicUrlFromAttribute = true;
                     }
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeType))
+                else if (StringUtils.EqualsIgnoreCase(name, Type.Name))
                 {
                     type = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributePlayUrl))
+                else if (StringUtils.EqualsIgnoreCase(name, PlayUrl.Name) || StringUtils.EqualsIgnoreCase(name, "src"))
                 {
                     playUrl = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeImageUrl))
+                else if (StringUtils.EqualsIgnoreCase(name, ImageUrl.Name))
                 {
                     imageUrl = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributePlayBy))
+                else if (StringUtils.EqualsIgnoreCase(name, PlayBy.Name))
                 {
                     playBy = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeStretching))
-                {
-                    stretching = value;
-                }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeWidth))
+                else if (StringUtils.EqualsIgnoreCase(name, Width.Name))
                 {
                     width = TranslateUtils.ToInt(value, width);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeHeight))
+                else if (StringUtils.EqualsIgnoreCase(name, Height.Name))
                 {
                     height = TranslateUtils.ToInt(value, height);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeIsAutoPlay))
+                else if (StringUtils.EqualsIgnoreCase(name, IsAutoPlay.Name) || StringUtils.EqualsIgnoreCase(name, "play"))
                 {
                     isAutoPlay = TranslateUtils.ToBool(value, true);
                 }
             }
 
-            return ParseImpl(pageInfo, contextInfo, isGetPicUrlFromAttribute, channelIndex, channelName, upLevel, topLevel, playUrl, imageUrl, playBy, stretching, width, height, type, isAutoPlay);
+            return ParseImpl(pageInfo, contextInfo, isGetPicUrlFromAttribute, channelIndex, channelName, upLevel, topLevel, playUrl, imageUrl, playBy, width, height, type, isAutoPlay);
 		}
 
-        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, bool isGetPicUrlFromAttribute, string channelIndex, string channelName, int upLevel, int topLevel, string playUrl, string imageUrl, string playBy, string stretching, int width, int height, string type, bool isAutoPlay)
+        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, bool isGetPicUrlFromAttribute, string channelIndex, string channelName, int upLevel, int topLevel, string playUrl, string imageUrl, string playBy, int width, int height, string type, bool isAutoPlay)
         {
             var parsedContent = string.Empty;
 
@@ -173,24 +150,24 @@ namespace SiteServer.CMS.StlParser.StlElement
                 {
                     if (contextInfo.ContentInfo == null)
                     {
-                        //playUrl = BaiRongDataProvider.ContentDao.GetValue(pageInfo.PublishmentSystemInfo.AuxiliaryTableForContent, contentId, type);
-                        playUrl = Content.GetValue(pageInfo.PublishmentSystemInfo.AuxiliaryTableForContent, contentId, type);
+                        //playUrl = DataProvider.ContentDao.GetValue(pageInfo.SiteInfo.AuxiliaryTableForContent, contentId, type);
+                        playUrl = Content.GetValue(pageInfo.SiteInfo.TableName, contentId, type);
                         if (string.IsNullOrEmpty(playUrl))
                         {
                             if (!StringUtils.EqualsIgnoreCase(type, BackgroundContentAttribute.VideoUrl))
                             {
-                                //playUrl = BaiRongDataProvider.ContentDao.GetValue(pageInfo.PublishmentSystemInfo.AuxiliaryTableForContent, contentId, BackgroundContentAttribute.VideoUrl);
-                                playUrl = Content.GetValue(pageInfo.PublishmentSystemInfo.AuxiliaryTableForContent, contentId, BackgroundContentAttribute.VideoUrl);
+                                //playUrl = DataProvider.ContentDao.GetValue(pageInfo.SiteInfo.AuxiliaryTableForContent, contentId, BackgroundContentAttribute.VideoUrl);
+                                playUrl = Content.GetValue(pageInfo.SiteInfo.TableName, contentId, BackgroundContentAttribute.VideoUrl);
                             }
                         }
-                        if (string.IsNullOrEmpty(playUrl))
-                        {
-                            if (!StringUtils.EqualsIgnoreCase(type, BackgroundContentAttribute.FileUrl))
-                            {
-                                //playUrl = BaiRongDataProvider.ContentDao.GetValue(pageInfo.PublishmentSystemInfo.AuxiliaryTableForContent, contentId, BackgroundContentAttribute.FileUrl);
-                                playUrl = Content.GetValue(pageInfo.PublishmentSystemInfo.AuxiliaryTableForContent, contentId, BackgroundContentAttribute.FileUrl);
-                            }
-                        }
+                        //if (string.IsNullOrEmpty(playUrl))
+                        //{
+                        //    if (!StringUtils.EqualsIgnoreCase(type, BackgroundContentAttribute.FileUrl))
+                        //    {
+                        //        //playUrl = DataProvider.ContentDao.GetValue(pageInfo.SiteInfo.AuxiliaryTableForContent, contentId, BackgroundContentAttribute.FileUrl);
+                        //        playUrl = Content.GetValue(pageInfo.SiteInfo.TableName, contentId, BackgroundContentAttribute.FileUrl);
+                        //    }
+                        //}
                     }
                     else
                     {
@@ -199,10 +176,10 @@ namespace SiteServer.CMS.StlParser.StlElement
                         {
                             playUrl = contextInfo.ContentInfo.GetString(BackgroundContentAttribute.VideoUrl);
                         }
-                        if (string.IsNullOrEmpty(playUrl))
-                        {
-                            playUrl = contextInfo.ContentInfo.GetString(BackgroundContentAttribute.FileUrl);
-                        }
+                        //if (string.IsNullOrEmpty(playUrl))
+                        //{
+                        //    playUrl = contextInfo.ContentInfo.GetString(BackgroundContentAttribute.FileUrl);
+                        //}
                     }
                 }
             }
@@ -211,15 +188,15 @@ namespace SiteServer.CMS.StlParser.StlElement
             {
                 if (contentId != 0)
                 {
-                    //imageUrl = contextInfo.ContentInfo == null ? BaiRongDataProvider.ContentDao.GetValue(pageInfo.PublishmentSystemInfo.AuxiliaryTableForContent, contentId, BackgroundContentAttribute.ImageUrl) : contextInfo.ContentInfo.GetString(BackgroundContentAttribute.ImageUrl);
-                    imageUrl = contextInfo.ContentInfo == null ? Content.GetValue(pageInfo.PublishmentSystemInfo.AuxiliaryTableForContent, contentId, BackgroundContentAttribute.ImageUrl) : contextInfo.ContentInfo.GetString(BackgroundContentAttribute.ImageUrl);
+                    //imageUrl = contextInfo.ContentInfo == null ? DataProvider.ContentDao.GetValue(pageInfo.SiteInfo.AuxiliaryTableForContent, contentId, BackgroundContentAttribute.ImageUrl) : contextInfo.ContentInfo.GetString(BackgroundContentAttribute.ImageUrl);
+                    imageUrl = contextInfo.ContentInfo == null ? Content.GetValue(pageInfo.SiteInfo.TableName, contentId, BackgroundContentAttribute.ImageUrl) : contextInfo.ContentInfo.GetString(BackgroundContentAttribute.ImageUrl);
                 }
             }
             if (string.IsNullOrEmpty(imageUrl))
             {
-                var channelId = StlDataUtility.GetNodeIdByLevel(pageInfo.PublishmentSystemId, contextInfo.ChannelId, upLevel, topLevel);
-                channelId = StlDataUtility.GetNodeIdByChannelIdOrChannelIndexOrChannelName(pageInfo.PublishmentSystemId, channelId, channelIndex, channelName);
-                var channel = NodeManager.GetNodeInfo(pageInfo.PublishmentSystemId, channelId);
+                var channelId = StlDataUtility.GetChannelIdByLevel(pageInfo.SiteId, contextInfo.ChannelId, upLevel, topLevel);
+                channelId = StlDataUtility.GetChannelIdByChannelIdOrChannelIndexOrChannelName(pageInfo.SiteId, channelId, channelIndex, channelName);
+                var channel = ChannelManager.GetChannelInfo(pageInfo.SiteId, channelId);
                 imageUrl = channel.ImageUrl;
             }
 
@@ -237,8 +214,8 @@ namespace SiteServer.CMS.StlParser.StlElement
                 else
                 {
                     var uniqueId = pageInfo.UniqueId;
-                    playUrl = PageUtility.ParseNavigationUrl(pageInfo.PublishmentSystemInfo, playUrl, pageInfo.IsLocal);
-                    imageUrl = PageUtility.ParseNavigationUrl(pageInfo.PublishmentSystemInfo, imageUrl, pageInfo.IsLocal);
+                    playUrl = PageUtility.ParseNavigationUrl(pageInfo.SiteInfo, playUrl, pageInfo.IsLocal);
+                    imageUrl = PageUtility.ParseNavigationUrl(pageInfo.SiteInfo, imageUrl, pageInfo.IsLocal);
 
                     var fileType = EFileSystemTypeUtils.GetEnumType(extension);
                     if (fileType == EFileSystemType.Avi)
@@ -387,32 +364,32 @@ namespace SiteServer.CMS.StlParser.StlElement
                     }
                     else if (fileType == EFileSystemType.Rm || fileType == EFileSystemType.Rmb || fileType == EFileSystemType.Rmvb)
                     {
-                        if (!contextInfo.Attributes.ContainsKey("ShowDisplay"))
+                        if (string.IsNullOrEmpty(contextInfo.Attributes["ShowDisplay"]))
                         {
                             contextInfo.Attributes["ShowDisplay"] = "0";
                         }
-                        if (!contextInfo.Attributes.ContainsKey("ShowControls"))
+                        if (string.IsNullOrEmpty(contextInfo.Attributes["ShowControls"]))
                         {
                             contextInfo.Attributes["ShowControls"] = "1";
                         }
                         contextInfo.Attributes["AutoStart"] = isAutoPlay ? "1" : "0";
-                        if (!contextInfo.Attributes.ContainsKey("AutoRewind"))
+                        if (string.IsNullOrEmpty(contextInfo.Attributes["AutoRewind"]))
                         {
                             contextInfo.Attributes["AutoRewind"] = "0";
                         }
-                        if (!contextInfo.Attributes.ContainsKey("PlayCount"))
+                        if (string.IsNullOrEmpty(contextInfo.Attributes["PlayCount"]))
                         {
                             contextInfo.Attributes["PlayCount"] = "0";
                         }
-                        if (!contextInfo.Attributes.ContainsKey("Appearance"))
+                        if (string.IsNullOrEmpty(contextInfo.Attributes["Appearance"]))
                         {
                             contextInfo.Attributes["Appearance"] = "0";
                         }
-                        if (!contextInfo.Attributes.ContainsKey("BorderStyle"))
+                        if (string.IsNullOrEmpty(contextInfo.Attributes["BorderStyle"]))
                         {
                             contextInfo.Attributes["BorderStyle"] = "0";
                         }
-                        if (!contextInfo.Attributes.ContainsKey("Controls"))
+                        if (string.IsNullOrEmpty(contextInfo.Attributes["Controls"]))
                         {
                             contextInfo.Attributes["ImageWindow"] = "0";
                         }
@@ -439,26 +416,9 @@ namespace SiteServer.CMS.StlParser.StlElement
                     }
                     else
                     {
-                        if (StringUtils.EqualsIgnoreCase(playBy, PlayByFlowPlayer))
+                        if (StringUtils.EqualsIgnoreCase(playBy, PlayByJwPlayer))
                         {
-                            var ajaxElementId = StlParserUtility.GetAjaxDivId(pageInfo.UniqueId);
-                            pageInfo.AddPageScriptsIfNotExists(PageInfo.Const.JsAcFlowPlayer);
-
-                            var swfUrl = SiteFilesAssets.GetUrl(pageInfo.ApiUrl, SiteFilesAssets.FlowPlayer.Swf);
-                            parsedContent = $@"
-<a href=""{playUrl}"" style=""display:block;width:{width}px;height:{height}px;"" id=""player_{ajaxElementId}""></a>
-<script language=""javascript"">
-    flowplayer(""player_{ajaxElementId}"", ""{swfUrl}"", {{
-        clip:  {{
-            autoPlay: {isAutoPlay.ToString().ToLower()}
-        }}
-    }});
-</script>
-";
-                        }
-                        else if (StringUtils.EqualsIgnoreCase(playBy, PlayByJwPlayer))
-                        {
-                            pageInfo.AddPageScriptsIfNotExists(PageInfo.Const.JsAcJwPlayer6);
+                            pageInfo.AddPageBodyCodeIfNotExists(PageInfo.Const.JsAcJwPlayer6);
                             var ajaxElementId = StlParserUtility.GetAjaxDivId(pageInfo.UniqueId);
                             parsedContent = $@"
 <div id='{ajaxElementId}'></div>
@@ -475,13 +435,19 @@ namespace SiteServer.CMS.StlParser.StlElement
                         }
                         else
                         {
-                            var additional = string.Empty;
-                            if (!string.IsNullOrEmpty(stretching))
-                            {
-                                additional = "&stretching=" + stretching;
-                            }
+                            var ajaxElementId = StlParserUtility.GetAjaxDivId(pageInfo.UniqueId);
+                            pageInfo.AddPageBodyCodeIfNotExists(PageInfo.Const.JsAcFlowPlayer);
+
+                            var swfUrl = SiteFilesAssets.GetUrl(pageInfo.ApiUrl, SiteFilesAssets.FlowPlayer.Swf);
                             parsedContent = $@"
-<embed src=""{SiteFilesAssets.GetUrl(pageInfo.ApiUrl, SiteFilesAssets.BrPlayer.Swf)}"" allowfullscreen=""true"" flashvars=""controlbar=over{additional}&autostart={isAutoPlay.ToString().ToLower()}&image={imageUrl}&file={playUrl}"" width=""{width}"" height=""{height}""/>
+<a href=""{playUrl}"" style=""display:block;width:{width}px;height:{height}px;"" id=""player_{ajaxElementId}""></a>
+<script language=""javascript"">
+    flowplayer(""player_{ajaxElementId}"", ""{swfUrl}"", {{
+        clip:  {{
+            autoPlay: {isAutoPlay.ToString().ToLower()}
+        }}
+    }});
+</script>
 ";
                         }
                     }

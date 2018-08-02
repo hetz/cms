@@ -1,21 +1,13 @@
 ﻿using System;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Model;
 using System.Collections;
-using System.Collections.Generic;
-using System.IO;
-using SiteServer.CMS.Model.Enumerations;
 
 namespace SiteServer.CMS.Core
 {
-    public class DirectoryUtility
+    public static class DirectoryUtility
     {
-        public static string GetIndexesDirectoryPath(string siteFilesDirectoryPath)
-        {
-            return PathUtils.Combine(siteFilesDirectoryPath, "Indexes");
-        }
-
-        public static void ChangePublishmentSystemDir(string parentPsPath, string oldPsDir, string newPsDir)
+        public static void ChangeSiteDir(string parentPsPath, string oldPsDir, string newPsDir)
         {
             var oldPsPath = PathUtils.Combine(parentPsPath, oldPsDir);
             var newPsPath = PathUtils.Combine(parentPsPath, newPsDir);
@@ -33,13 +25,13 @@ namespace SiteServer.CMS.Core
             }
         }
 
-        public static void DeletePublishmentSystemFiles(PublishmentSystemInfo publishmentSystemInfo)
+        public static void DeleteSiteFiles(SiteInfo siteInfo)
         {
-            var publishmentSystemPath = PathUtility.GetPublishmentSystemPath(publishmentSystemInfo);
+            var sitePath = PathUtility.GetSitePath(siteInfo);
 
-            if (publishmentSystemInfo.IsHeadquarters)
+            if (siteInfo.IsRoot)
             {
-                var filePaths = DirectoryUtils.GetFilePaths(publishmentSystemPath);
+                var filePaths = DirectoryUtils.GetFilePaths(sitePath);
                 foreach (var filePath in filePaths)
                 {
                     var fileName = PathUtils.GetFileName(filePath);
@@ -49,13 +41,13 @@ namespace SiteServer.CMS.Core
                     }
                 }
 
-                var publishmentSystemDirList = DataProvider.PublishmentSystemDao.GetLowerPublishmentSystemDirListThatNotIsHeadquarters();
+                var siteDirList = DataProvider.SiteDao.GetLowerSiteDirListThatNotIsRoot();
 
-                var directoryPaths = DirectoryUtils.GetDirectoryPaths(publishmentSystemPath);
+                var directoryPaths = DirectoryUtils.GetDirectoryPaths(sitePath);
                 foreach (var subDirectoryPath in directoryPaths)
                 {
-                    var directoryName = PathUtils.GetDirectoryName(subDirectoryPath);
-                    if (!DirectoryUtils.IsSystemDirectory(directoryName) && !publishmentSystemDirList.Contains(directoryName.ToLower()))
+                    var directoryName = PathUtils.GetDirectoryName(subDirectoryPath, false);
+                    if (!DirectoryUtils.IsSystemDirectory(directoryName) && !siteDirList.Contains(directoryName.ToLower()))
                     {
                         DirectoryUtils.DeleteDirectoryIfExists(subDirectoryPath);
                     }
@@ -63,16 +55,16 @@ namespace SiteServer.CMS.Core
             }
             else
             {
-                var direcotryPath = publishmentSystemPath;
+                var direcotryPath = sitePath;
                 DirectoryUtils.DeleteDirectoryIfExists(direcotryPath);
             }
         }
 
-        public static void ImportPublishmentSystemFiles(PublishmentSystemInfo publishmentSystemInfo, string siteTemplatePath, bool isOverride)
+        public static void ImportSiteFiles(SiteInfo siteInfo, string siteTemplatePath, bool isOverride)
         {
-            var publishmentSystemPath = PathUtility.GetPublishmentSystemPath(publishmentSystemInfo);
+            var sitePath = PathUtility.GetSitePath(siteInfo);
 
-            if (publishmentSystemInfo.IsHeadquarters)
+            if (siteInfo.IsRoot)
             {
                 var filePaths = DirectoryUtils.GetFilePaths(siteTemplatePath);
                 foreach (var filePath in filePaths)
@@ -80,59 +72,59 @@ namespace SiteServer.CMS.Core
                     var fileName = PathUtils.GetFileName(filePath);
                     if (!PathUtility.IsSystemFile(fileName))
                     {
-                        var destFilePath = PathUtils.Combine(publishmentSystemPath, fileName);
+                        var destFilePath = PathUtils.Combine(sitePath, fileName);
                         FileUtils.MoveFile(filePath, destFilePath, isOverride);
                     }
                 }
 
-                var publishmentSystemDirList = DataProvider.PublishmentSystemDao.GetLowerPublishmentSystemDirListThatNotIsHeadquarters();
+                var siteDirList = DataProvider.SiteDao.GetLowerSiteDirListThatNotIsRoot();
 
                 var directoryPaths = DirectoryUtils.GetDirectoryPaths(siteTemplatePath);
                 foreach (var subDirectoryPath in directoryPaths)
                 {
-                    var directoryName = PathUtils.GetDirectoryName(subDirectoryPath);
-                    if (!DirectoryUtils.IsSystemDirectory(directoryName) && !publishmentSystemDirList.Contains(directoryName.ToLower()))
+                    var directoryName = PathUtils.GetDirectoryName(subDirectoryPath, false);
+                    if (!DirectoryUtils.IsSystemDirectory(directoryName) && !siteDirList.Contains(directoryName.ToLower()))
                     {
-                        var destDirectoryPath = PathUtils.Combine(publishmentSystemPath, directoryName);
+                        var destDirectoryPath = PathUtils.Combine(sitePath, directoryName);
                         DirectoryUtils.MoveDirectory(subDirectoryPath, destDirectoryPath, isOverride);
                     }
                 }
             }
             else
             {
-                DirectoryUtils.MoveDirectory(siteTemplatePath, publishmentSystemPath, isOverride);
+                DirectoryUtils.MoveDirectory(siteTemplatePath, sitePath, isOverride);
             }
-            var siteTemplateMetadataPath = PathUtils.Combine(publishmentSystemPath, DirectoryUtils.SiteTemplates.SiteTemplateMetadata);
+            var siteTemplateMetadataPath = PathUtils.Combine(sitePath, DirectoryUtils.SiteTemplates.SiteTemplateMetadata);
             DirectoryUtils.DeleteDirectoryIfExists(siteTemplateMetadataPath);
         }
 
-        public static void ChangeParentPublishmentSystem(int oldParentPublishmentSystemId, int newParentPublishmentSystemId, int publishmentSystemId, string publishmentSystemDir)
+        public static void ChangeParentSite(int oldParentSiteId, int newParentSiteId, int siteId, string siteDir)
         {
-            if (oldParentPublishmentSystemId == newParentPublishmentSystemId) return;
+            if (oldParentSiteId == newParentSiteId) return;
 
             string oldPsPath;
-            if (oldParentPublishmentSystemId != 0)
+            if (oldParentSiteId != 0)
             {
-                var oldPublishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(oldParentPublishmentSystemId);
+                var oldSiteInfo = SiteManager.GetSiteInfo(oldParentSiteId);
 
-                oldPsPath = PathUtils.Combine(PathUtility.GetPublishmentSystemPath(oldPublishmentSystemInfo), publishmentSystemDir);
+                oldPsPath = PathUtils.Combine(PathUtility.GetSitePath(oldSiteInfo), siteDir);
             }
             else
             {
-                var publishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(publishmentSystemId);
-                oldPsPath = PathUtility.GetPublishmentSystemPath(publishmentSystemInfo);
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                oldPsPath = PathUtility.GetSitePath(siteInfo);
             }
 
             string newPsPath;
-            if (newParentPublishmentSystemId != 0)
+            if (newParentSiteId != 0)
             {
-                var newPublishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(newParentPublishmentSystemId);
+                var newSiteInfo = SiteManager.GetSiteInfo(newParentSiteId);
 
-                newPsPath = PathUtils.Combine(PathUtility.GetPublishmentSystemPath(newPublishmentSystemInfo), publishmentSystemDir);
+                newPsPath = PathUtils.Combine(PathUtility.GetSitePath(newSiteInfo), siteDir);
             }
             else
             {
-                newPsPath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, publishmentSystemDir);
+                newPsPath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, siteDir);
             }
 
             if (DirectoryUtils.IsDirectoryExists(newPsPath))
@@ -149,129 +141,34 @@ namespace SiteServer.CMS.Core
             }
         }
 
-        public static void DeleteContentsByPage(PublishmentSystemInfo publishmentSystemInfo, List<int> nodeIdList)
+        public static void ChangeToHeadquarters(SiteInfo siteInfo, bool isMoveFiles)
         {
-            foreach (var nodeId in nodeIdList)
+            if (siteInfo.IsRoot == false)
             {
-                var tableName = NodeManager.GetTableName(publishmentSystemInfo, nodeId);
-                var contentIdList = BaiRongDataProvider.ContentDao.GetContentIdList(tableName, nodeId);
-                if (contentIdList.Count > 0)
-                {
-                    foreach (var contentId in contentIdList)
-                    {
-                        var filePath = PathUtility.GetContentPageFilePath(publishmentSystemInfo, nodeId, contentId, 0);
-                        FileUtils.DeleteFileIfExists(filePath);
-                        DeletePagingFiles(filePath);
-                        DirectoryUtils.DeleteEmptyDirectory(DirectoryUtils.GetDirectoryPath(filePath));
-                    }
-                }
-            }
-        }
+                var sitePath = PathUtility.GetSitePath(siteInfo);
 
-        public static void DeleteContents(PublishmentSystemInfo publishmentSystemInfo, int nodeId, List<int> contentIdList)
-        {
-            foreach (var contentId in contentIdList)
-            {
-                var filePath = PathUtility.GetContentPageFilePath(publishmentSystemInfo, nodeId, contentId, 0);
-                FileUtils.DeleteFileIfExists(filePath);
-            }
-        }
+                DataProvider.SiteDao.UpdateParentIdToZero(siteInfo.Id);
 
-        public static void DeleteChannels(PublishmentSystemInfo publishmentSystemInfo, List<int> nodeIdList)
-        {
-            foreach (var nodeId in nodeIdList)
-            {
-                var filePath = PathUtility.GetChannelPageFilePath(publishmentSystemInfo, nodeId, 0);
+                siteInfo.IsRoot = true;
+                siteInfo.SiteDir = string.Empty;
 
-                FileUtils.DeleteFileIfExists(filePath);
-
-                var tableName = NodeManager.GetTableName(publishmentSystemInfo, nodeId);
-                var contentIdList = BaiRongDataProvider.ContentDao.GetContentIdList(tableName, nodeId);
-                if (contentIdList.Count > 0)
-                {
-                    DeleteContents(publishmentSystemInfo, nodeId, contentIdList);
-                }
-            }
-        }
-
-        public static void DeleteChannelsByPage(PublishmentSystemInfo publishmentSystemInfo, List<int> nodeIdList)
-        {
-            foreach (var nodeId in nodeIdList)
-            {
-                if (nodeId != publishmentSystemInfo.PublishmentSystemId)
-                {
-                    var filePath = PathUtility.GetChannelPageFilePath(publishmentSystemInfo, nodeId, 0);
-                    FileUtils.DeleteFileIfExists(filePath);
-                    DeletePagingFiles(filePath);
-                    DirectoryUtils.DeleteEmptyDirectory(DirectoryUtils.GetDirectoryPath(filePath));
-                }
-            }
-        }
-
-        public static void DeletePagingFiles(string filePath)
-        {
-            var fileName = (new FileInfo(filePath)).Name;
-            fileName = fileName.Substring(0, fileName.IndexOf('.'));
-            var filesPath = DirectoryUtils.GetFilePaths(DirectoryUtils.GetDirectoryPath(filePath));
-            foreach (var otherFilePath in filesPath)
-            {
-                var otherFileName = (new FileInfo(otherFilePath)).Name;
-                otherFileName = otherFileName.Substring(0, otherFileName.IndexOf('.'));
-                if (otherFileName.Contains(fileName + "_"))
-                {
-                    var isNum = otherFileName.Replace(fileName + "_", string.Empty);
-                    if (ConvertHelper.GetInteger(isNum) > 0)
-                    {
-                        FileUtils.DeleteFileIfExists(otherFilePath);
-                    }
-                }
-            }
-        }
-
-        public static void DeleteFiles(PublishmentSystemInfo publishmentSystemInfo, List<int> templateIdList)
-        {
-            foreach (var templateId in templateIdList)
-            {
-                var templateInfo = TemplateManager.GetTemplateInfo(publishmentSystemInfo.PublishmentSystemId, templateId);
-                if (templateInfo == null || templateInfo.TemplateType != ETemplateType.FileTemplate)
-                {
-                    return;
-                }
-
-                var filePath = PathUtility.MapPath(publishmentSystemInfo, templateInfo.CreatedFileFullName);
-
-                FileUtils.DeleteFileIfExists(filePath);
-            }
-        }
-
-        public static void ChangeToHeadquarters(PublishmentSystemInfo publishmentSystemInfo, bool isMoveFiles)
-        {
-            if (publishmentSystemInfo.IsHeadquarters == false)
-            {
-                var publishmentSystemPath = PathUtility.GetPublishmentSystemPath(publishmentSystemInfo);
-
-                DataProvider.PublishmentSystemDao.UpdateParentPublishmentSystemIdToZero(publishmentSystemInfo.PublishmentSystemId);
-
-                publishmentSystemInfo.IsHeadquarters = true;
-                publishmentSystemInfo.PublishmentSystemDir = string.Empty;
-
-                DataProvider.PublishmentSystemDao.Update(publishmentSystemInfo);
+                DataProvider.SiteDao.Update(siteInfo);
                 if (isMoveFiles)
                 {
-                    DirectoryUtils.MoveDirectory(publishmentSystemPath, WebConfigUtils.PhysicalApplicationPath, false);
-                    DirectoryUtils.DeleteDirectoryIfExists(publishmentSystemPath);
+                    DirectoryUtils.MoveDirectory(sitePath, WebConfigUtils.PhysicalApplicationPath, false);
+                    DirectoryUtils.DeleteDirectoryIfExists(sitePath);
                 }
             }
         }
 
-        public static void ChangeToSubSite(PublishmentSystemInfo publishmentSystemInfo, string psDir, ArrayList fileSystemNameArrayList)
+        public static void ChangeToSubSite(SiteInfo siteInfo, string psDir, ArrayList fileSystemNameArrayList)
         {
-            if (publishmentSystemInfo.IsHeadquarters)
+            if (siteInfo.IsRoot)
             {
-                publishmentSystemInfo.IsHeadquarters = false;
-                publishmentSystemInfo.PublishmentSystemDir = psDir.Trim();
+                siteInfo.IsRoot = false;
+                siteInfo.SiteDir = psDir.Trim();
 
-                DataProvider.PublishmentSystemDao.Update(publishmentSystemInfo);
+                DataProvider.SiteDao.Update(siteInfo);
 
                 var psPath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, psDir);
                 DirectoryUtils.CreateDirectoryIfNotExists(psPath);

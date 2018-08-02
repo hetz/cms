@@ -1,48 +1,54 @@
-﻿using System;
-using System.Collections.Specialized;
-using System.Web.UI.WebControls;
-using BaiRong.Core;
-using SiteServer.CMS.Core;
+﻿using System.Collections.Specialized;
+using SiteServer.CMS.Api;
+using SiteServer.Utils;
 
 namespace SiteServer.BackgroundPages.Settings
 {
     public class PageCreateStatus : BasePageCms
     {
-        public PlaceHolder PhRunService;
-
-        public static string GetRedirectUrl(int publishmentSystemId)
+        public static string GetRedirectUrl(int siteId)
         {
             return PageUtils.GetSettingsUrl(nameof(PageCreateStatus), new NameValueCollection
             {
-                {"publishmentSystemID", publishmentSystemId.ToString()}
+                {"siteId", siteId.ToString()}
             });
         }
 
-        public static void Redirect(int publishmentSystemId)
+        public static string GetOpenLayerString(int siteId)
+        {
+            return LayerUtils.GetOpenScript("页面生成进度",
+                PageUtils.GetSettingsUrl(nameof(PageCreateStatus), new NameValueCollection
+                {
+                    {"siteId", siteId.ToString()}
+                }));
+        }
+
+        public static void Redirect(int siteId)
         {
             var pageUrl = PageUtils.GetSettingsUrl(nameof(PageCreateStatus), new NameValueCollection
             {
-                {"publishmentSystemID", publishmentSystemId.ToString()}
+                {"siteId", siteId.ToString()}
             });
             PageUtils.Redirect(pageUrl);
         }
 
-        public string SiteUrl => PageRedirect.GetRedirectUrl(PublishmentSystemId);
+        public string RedirectUrl => PageRedirect.GetRedirectUrl(SiteId);
 
-        public void Page_Load(object sender, EventArgs e)
-        {
-            if (IsForbidden) return;
+        public string SignalrHubsUrl = ApiManager.SignalrHubsUrl;
 
-            if (!IsPostBack)
-            {
-                PhRunService.Visible = PublishmentSystemId > 0 && !ServiceManager.IsServiceOnline;
-                //base.BreadCrumb(AppManager.LeftMenu.ID_Utility, "生成队列", AppManager.Permission.Platform_Utility);
-            }
+        //public void Page_Load(object sender, EventArgs e)
+        //{
+        //    if (IsForbidden) return;
 
-            //if (!string.IsNullOrEmpty(base.Body.GetQueryString("Cancel")))
-            //{
-            //    DataProvider.CreateTaskDAO.DeleteAll(base.PublishmentSystemID);
-            //}
-        }
+        //    if (!IsPostBack)
+        //    {
+        //        base.BreadCrumb(AppManager.LeftMenu.ID_Utility, "生成队列", AppManager.Permission.Platform_Utility);
+        //    }
+
+        //    if (!string.IsNullOrEmpty(base.AuthRequest.GetQueryString("Cancel")))
+        //    {
+        //        DataProvider.CreateTaskDAO.DeleteAll(base.SiteId);
+        //    }
+        //}
     }
 }

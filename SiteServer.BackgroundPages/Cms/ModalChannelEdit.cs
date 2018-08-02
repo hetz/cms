@@ -1,73 +1,63 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Specialized;
-using System.Web.UI;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
 using SiteServer.BackgroundPages.Core;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Create;
-using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Plugin;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class ModalChannelEdit : BasePageCms
     {
-        public Control NodeNameRow;
-        public Control NodeIndexNameRow;
-        public Control LinkUrlRow;
-        public Control NodeGroupNameCollectionRow;
-        public Control LinkTypeRow;
-        public Control ChannelTemplateIDRow;
-        public Control ContentTemplateIDRow;
-        public Control ImageUrlRow;
-        public Control FilePathRow;
-        public Control ContentRow;
-        public Control KeywordsRow;
-        public Control DescriptionRow;
+        public PlaceHolder PhFilePath;
+        public PlaceHolder PhLinkUrl;
+        public PlaceHolder PhLinkType;
+        public PlaceHolder PhChannelTemplateId;
 
-        public TextBox NodeName;
-        public TextBox NodeIndexName;
-        public TextBox LinkUrl;
-        public CheckBoxList NodeGroupNameCollection;
-        public DropDownList LinkType;
-        public DropDownList ChannelTemplateID;
-        public DropDownList ContentTemplateID;
-        public TextBox tbImageUrl;
-        public Literal ltlImageUrlButtonGroup;
-        public TextBox FilePath;
-        public TextBox Keywords;
-        public TextBox Description;
+        public TextBox TbNodeName;
+        public TextBox TbNodeIndexName;
+        public TextBox TbLinkUrl;
+        public CheckBoxList CblNodeGroupNameCollection;
+        public DropDownList DdlLinkType;
+        public DropDownList DdlTaxisType;
+        public DropDownList DdlChannelTemplateId;
+        public DropDownList DdlContentTemplateId;
+        public TextBox TbImageUrl;
+        public Literal LtlImageUrlButtonGroup;
+        public TextBox TbFilePath;
+        public TextBox TbKeywords;
+        public TextBox TbDescription;
 
-        public TextEditorControl Content;
+        public TextEditorControl TbContent;
 
-        public ChannelAuxiliaryControl channelControl;
+        public ChannelAuxiliaryControl CacAttributes;
 
         public Button BtnSubmit;
 
-        private int _nodeId;
+        private int _channelId;
         private string _returnUrl;
 
-        public static string GetOpenWindowString(int publishmentSystemId, int nodeId, string returnUrl)
+        public static string GetOpenWindowString(int siteId, int channelId, string returnUrl)
         {
-            return PageUtils.GetOpenLayerString("快速修改栏目", PageUtils.GetCmsUrl(nameof(ModalChannelEdit), new NameValueCollection
+            return LayerUtils.GetOpenScript("快速修改栏目", PageUtils.GetCmsUrl(siteId, nameof(ModalChannelEdit), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
-                {"NodeID", nodeId.ToString()},
+                {"channelId", channelId.ToString()},
                 {"ReturnUrl", StringUtils.ValueToUrl(returnUrl)}
             }));
         }
 
-        public static string GetRedirectUrl(int publishmentSystemId, int nodeId, string returnUrl)
+        public static string GetRedirectUrl(int siteId, int channelId, string returnUrl)
         {
-            return PageUtils.GetCmsUrl(nameof(ModalChannelEdit), new NameValueCollection
+            return PageUtils.GetCmsUrl(siteId, nameof(ModalChannelEdit), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
-                {"NodeID", nodeId.ToString()},
+                {"channelId", channelId.ToString()},
                 {"ReturnUrl", StringUtils.ValueToUrl(returnUrl)}
             });
         }
@@ -76,348 +66,221 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID", "NodeID", "ReturnUrl");
-            _nodeId = Body.GetQueryInt("NodeID");
-            _returnUrl = StringUtils.ValueFromUrl(Body.GetQueryString("ReturnUrl"));
+            PageUtils.CheckRequestParameter("siteId", "channelId", "ReturnUrl");
+            _channelId = AuthRequest.GetQueryInt("channelId");
+            _returnUrl = StringUtils.ValueFromUrl(AuthRequest.GetQueryString("ReturnUrl"));
 
-            channelControl = (ChannelAuxiliaryControl)FindControl("ControlForAuxiliary");
+            CacAttributes.SiteInfo = SiteInfo;
+            CacAttributes.ChannelId = _channelId;
+
             if (!IsPostBack)
             {
-                if (!HasChannelPermissions(_nodeId, AppManager.Permissions.Channel.ChannelEdit))
+                if (!HasChannelPermissions(_channelId, ConfigManager.ChannelPermissions.ChannelEdit))
                 {
                     PageUtils.RedirectToErrorPage("您没有修改栏目的权限！");
                     return;
                 }
 
-                var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, _nodeId);
-                if (nodeInfo != null)
+                var nodeInfo = ChannelManager.GetChannelInfo(SiteId, _channelId);
+                if (nodeInfo == null) return;
+
+                if (nodeInfo.ParentId == 0)
                 {
-                    if (nodeInfo.NodeType == ENodeType.BackgroundPublishNode)
-                    {
-                        LinkUrlRow.Visible = false;
-                        LinkTypeRow.Visible = false;
-                        ChannelTemplateIDRow.Visible = false;
-                        FilePathRow.Visible = false;
-                    }
+                    PhLinkUrl.Visible = false;
+                    PhLinkType.Visible = false;
+                    PhChannelTemplateId.Visible = false;
+                    PhFilePath.Visible = false;
+                }
 
-                    BtnSubmit.Attributes.Add("onclick", "if (UE && UE.getEditor('Content', {{allowDivTransToP: false}})){ UE.getEditor('Content', {{allowDivTransToP: false}}).sync(); }");
+                BtnSubmit.Attributes.Add("onclick", $"if (UE && UE.getEditor('Content', {ETextEditorTypeUtils.ConfigValues})){{ UE.getEditor('Content', {ETextEditorTypeUtils.ConfigValues}).sync(); }}");
 
-                    if (!string.IsNullOrEmpty(PublishmentSystemInfo.Additional.ChannelEditAttributes))
-                    {
-                        var channelEditAttributes = TranslateUtils.StringCollectionToStringList(PublishmentSystemInfo.Additional.ChannelEditAttributes);
-                        if (channelEditAttributes.Count > 0)
-                        {
-                            NodeNameRow.Visible = NodeIndexNameRow.Visible = LinkUrlRow.Visible = NodeGroupNameCollectionRow.Visible = LinkTypeRow.Visible = ChannelTemplateIDRow.Visible = ContentTemplateIDRow.Visible = ImageUrlRow.Visible = FilePathRow.Visible = ContentRow.Visible = KeywordsRow.Visible = DescriptionRow.Visible = false;
-                            foreach (string attribute in channelEditAttributes)
-                            {
-                                if (attribute == NodeAttribute.ChannelName)
-                                {
-                                    NodeNameRow.Visible = true;
-                                }
-                                else if (attribute == NodeAttribute.ChannelIndex)
-                                {
-                                    NodeIndexNameRow.Visible = true;
-                                }
-                                else if (attribute == NodeAttribute.LinkUrl)
-                                {
-                                    LinkUrlRow.Visible = true;
-                                }
-                                else if (attribute == NodeAttribute.ChannelGroupNameCollection)
-                                {
-                                    NodeGroupNameCollectionRow.Visible = true;
-                                }
-                                else if (attribute == NodeAttribute.LinkType)
-                                {
-                                    LinkTypeRow.Visible = true;
-                                }
-                                else if (attribute == NodeAttribute.ChannelTemplateId)
-                                {
-                                    ChannelTemplateIDRow.Visible = true;
-                                }
-                                else if (attribute == NodeAttribute.ContentTemplateId)
-                                {
-                                    ContentTemplateIDRow.Visible = true;
-                                }
-                                else if (attribute == NodeAttribute.ImageUrl)
-                                {
-                                    ImageUrlRow.Visible = true;
-                                }
-                                else if (attribute == NodeAttribute.FilePath)
-                                {
-                                    FilePathRow.Visible = true;
-                                }
-                                else if (attribute == NodeAttribute.Content)
-                                {
-                                    ContentRow.Visible = true;
-                                }
-                                else if (attribute == NodeAttribute.Keywords)
-                                {
-                                    KeywordsRow.Visible = true;
-                                }
-                                else if (attribute == NodeAttribute.Description)
-                                {
-                                    DescriptionRow.Visible = true;
-                                }
-                            }
-                        }
-                    }
+                CacAttributes.Attributes = nodeInfo.Additional;
 
-                    if (channelControl.Visible)
-                    {
-                        //List<string> displayAttributes = null;
-                        //if (!string.IsNullOrEmpty(PublishmentSystemInfo.Additional.ChannelEditAttributes))
-                        //{
-                        //    displayAttributes = TranslateUtils.StringCollectionToStringList(PublishmentSystemInfo.Additional.ChannelEditAttributes);
-                        //}
-                        channelControl.SetParameters(nodeInfo.Additional.ToNameValueCollection(), true, IsPostBack);
-                    }
+                if (PhLinkType.Visible)
+                {
+                    ELinkTypeUtils.AddListItems(DdlLinkType);
+                }
 
-                    if (LinkTypeRow.Visible)
-                    {
-                        ELinkTypeUtils.AddListItems(LinkType);
-                    }
+                ETaxisTypeUtils.AddListItemsForChannelEdit(DdlTaxisType);
 
-                    if (NodeGroupNameCollectionRow.Visible)
-                    {
-                        NodeGroupNameCollection.DataSource = DataProvider.NodeGroupDao.GetDataSource(PublishmentSystemId);
-                    }
-                    if (ChannelTemplateIDRow.Visible)
-                    {
-                        ChannelTemplateID.DataSource = DataProvider.TemplateDao.GetDataSourceByType(PublishmentSystemId, ETemplateType.ChannelTemplate);
-                    }
-                    if (ContentTemplateIDRow.Visible)
-                    {
-                        ContentTemplateID.DataSource = DataProvider.TemplateDao.GetDataSourceByType(PublishmentSystemId, ETemplateType.ContentTemplate);
-                    }
+                CblNodeGroupNameCollection.DataSource = DataProvider.ChannelGroupDao.GetDataSource(SiteId);
+                if (PhChannelTemplateId.Visible)
+                {
+                    DdlChannelTemplateId.DataSource = DataProvider.TemplateDao.GetDataSourceByType(SiteId, TemplateType.ChannelTemplate);
+                }
+                DdlContentTemplateId.DataSource = DataProvider.TemplateDao.GetDataSourceByType(SiteId, TemplateType.ContentTemplate);
 
-                    DataBind();
+                DataBind();
 
-                    if (ChannelTemplateIDRow.Visible)
-                    {
-                        ChannelTemplateID.Items.Insert(0, new ListItem("<未设置>", "0"));
-                        ControlUtils.SelectListItems(ChannelTemplateID, nodeInfo.ChannelTemplateId.ToString());
-                    }
+                if (PhChannelTemplateId.Visible)
+                {
+                    DdlChannelTemplateId.Items.Insert(0, new ListItem("<未设置>", "0"));
+                    ControlUtils.SelectSingleItem(DdlChannelTemplateId, nodeInfo.ChannelTemplateId.ToString());
+                }
 
-                    if (ContentTemplateIDRow.Visible)
-                    {
-                        ContentTemplateID.Items.Insert(0, new ListItem("<未设置>", "0"));
-                        ControlUtils.SelectListItems(ContentTemplateID, nodeInfo.ContentTemplateId.ToString());
-                    }
+                DdlContentTemplateId.Items.Insert(0, new ListItem("<未设置>", "0"));
+                ControlUtils.SelectSingleItem(DdlContentTemplateId, nodeInfo.ContentTemplateId.ToString());
 
-                    if (NodeNameRow.Visible)
-                    {
-                        NodeName.Text = nodeInfo.NodeName;
-                    }
-                    if (NodeIndexNameRow.Visible)
-                    {
-                        NodeIndexName.Text = nodeInfo.NodeIndexName;
-                    }
-                    if (LinkUrlRow.Visible)
-                    {
-                        LinkUrl.Text = nodeInfo.LinkUrl;
-                    }
+                TbNodeName.Text = nodeInfo.ChannelName;
+                TbNodeIndexName.Text = nodeInfo.IndexName;
+                if (PhLinkUrl.Visible)
+                {
+                    TbLinkUrl.Text = nodeInfo.LinkUrl;
+                }
 
-                    if (NodeGroupNameCollectionRow.Visible)
-                    {
-                        foreach (ListItem item in NodeGroupNameCollection.Items)
-                        {
-                            if (CompareUtils.Contains(nodeInfo.NodeGroupNameCollection, item.Value))
-                            {
-                                item.Selected = true;
-                            }
-                            else
-                            {
-                                item.Selected = false;
-                            }
-                        }
-                    }
-                    if (FilePathRow.Visible)
-                    {
-                        FilePath.Text = nodeInfo.FilePath;
-                    }
+                foreach (ListItem item in CblNodeGroupNameCollection.Items)
+                {
+                    item.Selected = StringUtils.In(nodeInfo.GroupNameCollection, item.Value);
+                }
+                if (PhFilePath.Visible)
+                {
+                    TbFilePath.Text = nodeInfo.FilePath;
+                }
 
-                    if (LinkTypeRow.Visible)
-                    {
-                        ControlUtils.SelectListItems(LinkType, ELinkTypeUtils.GetValue(nodeInfo.LinkType));
-                    }
+                if (PhLinkType.Visible)
+                {
+                    ControlUtils.SelectSingleItem(DdlLinkType, nodeInfo.LinkType);
+                }
+                ControlUtils.SelectSingleItem(DdlTaxisType, nodeInfo.Additional.DefaultTaxisType);
 
-                    if (ImageUrlRow.Visible)
-                    {
-                        tbImageUrl.Text = nodeInfo.ImageUrl;
-                        ltlImageUrlButtonGroup.Text = ControlUtility.GetImageUrlButtonGroupHtml(PublishmentSystemInfo, tbImageUrl.ClientID);
-                    }
-                    if (ContentRow.Visible)
-                    {
-                        var formCollection = new NameValueCollection();
-                        formCollection[NodeAttribute.Content] = nodeInfo.Content;
-                        Content.SetParameters(PublishmentSystemInfo, NodeAttribute.Content, formCollection, true, IsPostBack);
-
-                        //this.Content.PublishmentSystemID = base.PublishmentSystemID;
-                        //this.Content.Text = StringUtility.TextEditorContentDecode(nodeInfo.Content, ConfigUtils.Instance.ApplicationPath, base.PublishmentSystemInfo.PublishmentSystemUrl);
-                    }
-                    if (Keywords.Visible)
-                    {
-                        Keywords.Text = nodeInfo.Keywords;
-                    }
-                    if (Description.Visible)
-                    {
-                        Description.Text = nodeInfo.Description;
-                    }
-
-
+                TbImageUrl.Text = nodeInfo.ImageUrl;
+                LtlImageUrlButtonGroup.Text = WebUtils.GetImageUrlButtonGroupHtml(SiteInfo, TbImageUrl.ClientID);
+                TbContent.SetParameters(SiteInfo, ChannelAttribute.Content, nodeInfo.Content);
+                if (TbKeywords.Visible)
+                {
+                    TbKeywords.Text = nodeInfo.Keywords;
+                }
+                if (TbDescription.Visible)
+                {
+                    TbDescription.Text = nodeInfo.Description;
                 }
             }
             else
             {
-                if (channelControl.Visible)
-                {
-                    channelControl.SetParameters(Request.Form, true, IsPostBack);
-                }
+                CacAttributes.Attributes = new ExtendedAttributes(Request.Form);
             }
         }
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
-            if (Page.IsPostBack && Page.IsValid)
+            if (!Page.IsPostBack || !Page.IsValid) return;
+
+            var isChanged = false;
+
+            try
             {
-                var isChanged = false;
+                var nodeInfo = ChannelManager.GetChannelInfo(SiteId, _channelId);
 
-                try
+                if (!nodeInfo.IndexName.Equals(TbNodeIndexName.Text) && TbNodeIndexName.Text.Length != 0)
                 {
-                    var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, _nodeId);
-
-                    if (NodeIndexNameRow.Visible)
+                    var nodeIndexNameList = DataProvider.ChannelDao.GetIndexNameList(SiteId);
+                    if (nodeIndexNameList.IndexOf(TbNodeIndexName.Text) != -1)
                     {
-                        if (!nodeInfo.NodeIndexName.Equals(NodeIndexName.Text) && NodeIndexName.Text.Length != 0)
-                        {
-                            var nodeIndexNameList = DataProvider.NodeDao.GetNodeIndexNameList(PublishmentSystemId);
-                            if (nodeIndexNameList.IndexOf(NodeIndexName.Text) != -1)
-                            {
-                                FailMessage("栏目修改失败，栏目索引已存在！");
-                                return;
-                            }
-                        }
+                        FailMessage("栏目修改失败，栏目索引已存在！");
+                        return;
                     }
-
-                    if (FilePathRow.Visible)
-                    {
-                        FilePath.Text = FilePath.Text.Trim();
-                        if (!nodeInfo.FilePath.Equals(FilePath.Text) && FilePath.Text.Length != 0)
-                        {
-                            if (!DirectoryUtils.IsDirectoryNameCompliant(FilePath.Text))
-                            {
-                                FailMessage("栏目页面路径不符合系统要求！");
-                                return;
-                            }
-
-                            if (PathUtils.IsDirectoryPath(FilePath.Text))
-                            {
-                                FilePath.Text = PageUtils.Combine(FilePath.Text, "index.html");
-                            }
-
-                            var filePathArrayList = DataProvider.NodeDao.GetAllFilePathByPublishmentSystemId(PublishmentSystemId);
-                            if (filePathArrayList.IndexOf(FilePath.Text) != -1)
-                            {
-                                FailMessage("栏目修改失败，栏目页面路径已存在！");
-                                return;
-                            }
-                        }
-                    }
-
-                    if (channelControl.Visible)
-                    {
-                        var extendedAttributes = new ExtendedAttributes();
-                        var relatedIdentities = RelatedIdentities.GetChannelRelatedIdentities(PublishmentSystemId, _nodeId);
-                        BackgroundInputTypeParser.AddValuesToAttributes(ETableStyle.Channel, DataProvider.NodeDao.TableName, PublishmentSystemInfo, relatedIdentities, Request.Form, extendedAttributes.ToNameValueCollection(), null);
-                        if (extendedAttributes.ToNameValueCollection().Count > 0)
-                        {
-                            nodeInfo.Additional.Load(extendedAttributes.ToNameValueCollection());
-                        }
-                    }
-
-                    if (NodeNameRow.Visible)
-                    {
-                        nodeInfo.NodeName = NodeName.Text;
-                    }
-                    if (NodeIndexNameRow.Visible)
-                    {
-                        nodeInfo.NodeIndexName = NodeIndexName.Text;
-                    }
-                    if (FilePathRow.Visible)
-                    {
-                        nodeInfo.FilePath = FilePath.Text;
-                    }
-
-                    if (NodeGroupNameCollectionRow.Visible)
-                    {
-                        var list = new ArrayList();
-                        foreach (ListItem item in NodeGroupNameCollection.Items)
-                        {
-                            if (item.Selected)
-                            {
-                                list.Add(item.Value);
-                            }
-                        }
-                        nodeInfo.NodeGroupNameCollection = TranslateUtils.ObjectCollectionToString(list);
-                    }
-                    if (ImageUrlRow.Visible)
-                    {
-                        nodeInfo.ImageUrl = tbImageUrl.Text;
-                    }
-                    if (ContentRow.Visible)
-                    {
-                        nodeInfo.Content = ContentUtility.TextEditorContentEncode(PublishmentSystemInfo, Request.Form[NodeAttribute.Content]);
-                    }
-                    if (Keywords.Visible)
-                    {
-                        nodeInfo.Keywords = Keywords.Text;
-                    }
-                    if (Description.Visible)
-                    {
-                        nodeInfo.Description = Description.Text;
-                    }
-
-                    if (LinkUrlRow.Visible)
-                    {
-                        nodeInfo.LinkUrl = LinkUrl.Text;
-                    }
-                    if (LinkTypeRow.Visible)
-                    {
-                        nodeInfo.LinkType = ELinkTypeUtils.GetEnumType(LinkType.SelectedValue);
-                    }
-                    if (ChannelTemplateIDRow.Visible)
-                    {
-                        nodeInfo.ChannelTemplateId = (ChannelTemplateID.Items.Count > 0) ? int.Parse(ChannelTemplateID.SelectedValue) : 0;
-                    }
-                    if (ContentTemplateIDRow.Visible)
-                    {
-                        nodeInfo.ContentTemplateId = (ContentTemplateID.Items.Count > 0) ? int.Parse(ContentTemplateID.SelectedValue) : 0;
-                    }
-
-                    DataProvider.NodeDao.UpdateNodeInfo(nodeInfo);
-
-                    Body.AddSiteLog(PublishmentSystemId, _nodeId, 0, "修改栏目", $"栏目:{nodeInfo.NodeName}");
-
-                    isChanged = true;
-                }
-                catch (Exception ex)
-                {
-                    FailMessage(ex, $"栏目修改失败：{ex.Message}");
-                    LogUtils.AddSystemErrorLog(ex);
                 }
 
-                if (isChanged)
+                if (PhFilePath.Visible)
                 {
-                    CreateManager.CreateChannel(PublishmentSystemId, _nodeId);
+                    TbFilePath.Text = TbFilePath.Text.Trim();
+                    if (!nodeInfo.FilePath.Equals(TbFilePath.Text) && TbFilePath.Text.Length != 0)
+                    {
+                        if (!DirectoryUtils.IsDirectoryNameCompliant(TbFilePath.Text))
+                        {
+                            FailMessage("栏目页面路径不符合系统要求！");
+                            return;
+                        }
 
-                    if (string.IsNullOrEmpty(_returnUrl))
-                    {
-                        PageUtils.CloseModalPage(Page);
+                        if (PathUtils.IsDirectoryPath(TbFilePath.Text))
+                        {
+                            TbFilePath.Text = PageUtils.Combine(TbFilePath.Text, "index.html");
+                        }
+
+                        var filePathArrayList = DataProvider.ChannelDao.GetAllFilePathBySiteId(SiteId);
+                        if (filePathArrayList.IndexOf(TbFilePath.Text) != -1)
+                        {
+                            FailMessage("栏目修改失败，栏目页面路径已存在！");
+                            return;
+                        }
                     }
-                    else
+                }
+
+                var extendedAttributes = new ExtendedAttributes();
+                var relatedIdentities = RelatedIdentities.GetChannelRelatedIdentities(SiteId, _channelId);
+                var styleInfoList = TableStyleManager.GetTableStyleInfoList(DataProvider.ChannelDao.TableName,
+                    relatedIdentities);
+                BackgroundInputTypeParser.SaveAttributes(extendedAttributes, SiteInfo, styleInfoList, Request.Form, null);
+                if (extendedAttributes.Count > 0)
+                {
+                    nodeInfo.Additional.Load(extendedAttributes.ToDictionary());
+                }
+
+                nodeInfo.ChannelName = TbNodeName.Text;
+                nodeInfo.IndexName = TbNodeIndexName.Text;
+                if (PhFilePath.Visible)
+                {
+                    nodeInfo.FilePath = TbFilePath.Text;
+                }
+
+                var list = new ArrayList();
+                foreach (ListItem item in CblNodeGroupNameCollection.Items)
+                {
+                    if (item.Selected)
                     {
-                        PageUtils.CloseModalPageAndRedirect(Page, _returnUrl);
+                        list.Add(item.Value);
                     }
+                }
+                nodeInfo.GroupNameCollection = TranslateUtils.ObjectCollectionToString(list);
+                nodeInfo.ImageUrl = TbImageUrl.Text;
+                nodeInfo.Content = ContentUtility.TextEditorContentEncode(SiteInfo, Request.Form[ChannelAttribute.Content]);
+                if (TbKeywords.Visible)
+                {
+                    nodeInfo.Keywords = TbKeywords.Text;
+                }
+                if (TbDescription.Visible)
+                {
+                    nodeInfo.Description = TbDescription.Text;
+                }
+
+                if (PhLinkUrl.Visible)
+                {
+                    nodeInfo.LinkUrl = TbLinkUrl.Text;
+                }
+                if (PhLinkType.Visible)
+                {
+                    nodeInfo.LinkType = DdlLinkType.SelectedValue;
+                }
+                nodeInfo.Additional.DefaultTaxisType = ETaxisTypeUtils.GetValue(ETaxisTypeUtils.GetEnumType(DdlTaxisType.SelectedValue));
+                if (PhChannelTemplateId.Visible)
+                {
+                    nodeInfo.ChannelTemplateId = DdlChannelTemplateId.Items.Count > 0 ? TranslateUtils.ToInt(DdlChannelTemplateId.SelectedValue) : 0;
+                }
+                nodeInfo.ContentTemplateId = DdlContentTemplateId.Items.Count > 0 ? TranslateUtils.ToInt(DdlContentTemplateId.SelectedValue) : 0;
+
+                DataProvider.ChannelDao.Update(nodeInfo);
+
+                AuthRequest.AddSiteLog(SiteId, _channelId, 0, "修改栏目", $"栏目:{nodeInfo.ChannelName}");
+
+                isChanged = true;
+            }
+            catch (Exception ex)
+            {
+                FailMessage(ex, $"栏目修改失败：{ex.Message}");
+                LogUtils.AddErrorLog(ex);
+            }
+
+            if (isChanged)
+            {
+                CreateManager.CreateChannel(SiteId, _channelId);
+
+                if (string.IsNullOrEmpty(_returnUrl))
+                {
+                    LayerUtils.Close(Page);
+                }
+                else
+                {
+                    LayerUtils.CloseAndRedirect(Page, _returnUrl);
                 }
             }
         }

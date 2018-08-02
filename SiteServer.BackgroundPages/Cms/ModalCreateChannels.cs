@@ -1,62 +1,59 @@
 ﻿using System;
-using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Create;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class ModalCreateChannels : BasePageCms
     {
-		protected RadioButtonList IsIncludeChildren;
-        protected RadioButtonList IsCreateContents;
+		protected DropDownList DdlIsIncludeChildren;
+        protected DropDownList DdlIsCreateContents;
 
         private string _channelIdCollection;
 
-        public static string GetOpenWindowString(int publishmentSystemId)
+        public static string GetOpenWindowString(int siteId)
         {
-            return PageUtils.GetOpenWindowStringWithCheckBoxValue("生成栏目页", PageUtils.GetCmsUrl(nameof(ModalCreateChannels), new NameValueCollection
-            {
-                {"PublishmentSystemID", publishmentSystemId.ToString()}
-            }), "ChannelIDCollection", "请选择需要生成页面的栏目!", 450, 300);
+            return LayerUtils.GetOpenScriptWithCheckBoxValue("生成栏目页", PageUtils.GetCmsUrl(siteId, nameof(ModalCreateChannels), null), "ChannelIDCollection", "请选择需要生成页面的栏目!", 550, 300);
         }
 
 		public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID", "ChannelIDCollection");
+            PageUtils.CheckRequestParameter("siteId", "ChannelIDCollection");
 
-            _channelIdCollection = Body.GetQueryString("ChannelIDCollection");
+            _channelIdCollection = AuthRequest.GetQueryString("ChannelIDCollection");
 		}
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
-            var isIncludeChildren = TranslateUtils.ToBool(IsIncludeChildren.SelectedValue);
-            var isCreateContents = TranslateUtils.ToBool(IsCreateContents.SelectedValue);
+            var isIncludeChildren = TranslateUtils.ToBool(DdlIsIncludeChildren.SelectedValue);
+            var isCreateContents = TranslateUtils.ToBool(DdlIsCreateContents.SelectedValue);
 
             foreach (var channelId in TranslateUtils.StringCollectionToIntList(_channelIdCollection))
             {
-                CreateManager.CreateChannel(PublishmentSystemId, channelId);
+                CreateManager.CreateChannel(SiteId, channelId);
                 if (isCreateContents)
                 {
-                    CreateManager.CreateAllContent(PublishmentSystemId, channelId);
+                    CreateManager.CreateAllContent(SiteId, channelId);
                 }
                 if (isIncludeChildren)
                 {
-                    foreach (var childChannelId in DataProvider.NodeDao.GetNodeIdListForDescendant(channelId))
+                    foreach (var childChannelId in ChannelManager.GetChannelIdList(ChannelManager.GetChannelInfo(SiteId, channelId), EScopeType.Descendant, string.Empty, string.Empty, string.Empty))
                     {
-                        CreateManager.CreateChannel(PublishmentSystemId, childChannelId);
+                        CreateManager.CreateChannel(SiteId, childChannelId);
                         if (isCreateContents)
                         {
-                            CreateManager.CreateAllContent(PublishmentSystemId, channelId);
+                            CreateManager.CreateAllContent(SiteId, channelId);
                         }
                     }
                 }
             }
 
-            PageUtils.CloseModalPageWithoutRefresh(Page);
+            LayerUtils.CloseAndOpenPageCreateStatus(Page);
 		}
 	}
 }

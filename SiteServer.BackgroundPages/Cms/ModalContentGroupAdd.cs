@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Model;
 
@@ -13,21 +13,17 @@ namespace SiteServer.BackgroundPages.Cms
         public Literal LtlContentGroupName;
         protected TextBox TbDescription;
 
-        public static string GetOpenWindowString(int publishmentSystemId, string groupName)
+        public static string GetOpenWindowString(int siteId, string groupName)
         {
-            return PageUtils.GetOpenLayerString("修改内容组", PageUtils.GetCmsUrl(nameof(ModalContentGroupAdd), new NameValueCollection
+            return LayerUtils.GetOpenScript("修改内容组", PageUtils.GetCmsUrl(siteId, nameof(ModalContentGroupAdd), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"GroupName", groupName}
             }), 600, 300);
         }
 
-        public static string GetOpenWindowString(int publishmentSystemId)
+        public static string GetOpenWindowString(int siteId)
         {
-            return PageUtils.GetOpenLayerString("添加内容组", PageUtils.GetCmsUrl(nameof(ModalContentGroupAdd), new NameValueCollection
-            {
-                {"PublishmentSystemID", publishmentSystemId.ToString()}
-            }), 600, 300);
+            return LayerUtils.GetOpenScript("添加内容组", PageUtils.GetCmsUrl(siteId, nameof(ModalContentGroupAdd), null), 600, 300);
         }
 
 		public void Page_Load(object sender, EventArgs e)
@@ -36,15 +32,15 @@ namespace SiteServer.BackgroundPages.Cms
 
 			if (!IsPostBack)
 			{
-				if (Body.IsQueryExists("GroupName"))
+				if (AuthRequest.IsQueryExists("GroupName"))
 				{
-                    var groupName = Body.GetQueryString("GroupName");
-                    var contentGroupInfo = DataProvider.ContentGroupDao.GetContentGroupInfo(groupName, PublishmentSystemId);
+                    var groupName = AuthRequest.GetQueryString("GroupName");
+                    var contentGroupInfo = DataProvider.ContentGroupDao.GetContentGroupInfo(groupName, SiteId);
 					if (contentGroupInfo != null)
 					{
-                        TbContentGroupName.Text = contentGroupInfo.ContentGroupName;
+                        TbContentGroupName.Text = contentGroupInfo.GroupName;
                         TbContentGroupName.Visible = false;
-                        LtlContentGroupName.Text = $"<strong>{contentGroupInfo.ContentGroupName}</strong>";
+                        LtlContentGroupName.Text = $"<strong>{contentGroupInfo.GroupName}</strong>";
                         TbDescription.Text = contentGroupInfo.Description;
 					}
 				}
@@ -57,17 +53,17 @@ namespace SiteServer.BackgroundPages.Cms
 
             var contentGroupInfo = new ContentGroupInfo
             {
-                ContentGroupName = PageUtils.FilterXss(TbContentGroupName.Text),
-                PublishmentSystemId = PublishmentSystemId,
+                GroupName = PageUtils.FilterXss(TbContentGroupName.Text),
+                SiteId = SiteId,
                 Description = TbDescription.Text
             };
 
-            if (Body.IsQueryExists("GroupName"))
+            if (AuthRequest.IsQueryExists("GroupName"))
 			{
 				try
 				{
                     DataProvider.ContentGroupDao.Update(contentGroupInfo);
-                    Body.AddSiteLog(PublishmentSystemId, "修改内容组", $"内容组:{contentGroupInfo.ContentGroupName}");
+                    AuthRequest.AddSiteLog(SiteId, "修改内容组", $"内容组:{contentGroupInfo.GroupName}");
 					isChanged = true;
 				}
                 catch (Exception ex)
@@ -77,7 +73,7 @@ namespace SiteServer.BackgroundPages.Cms
 			}
 			else
 			{
-                var contentGroupNameList = DataProvider.ContentGroupDao.GetContentGroupNameList(PublishmentSystemId);
+                var contentGroupNameList = DataProvider.ContentGroupDao.GetGroupNameList(SiteId);
 				if (contentGroupNameList.IndexOf(TbContentGroupName.Text) != -1)
 				{
                     FailMessage("内容组添加失败，内容组名称已存在！");
@@ -87,8 +83,8 @@ namespace SiteServer.BackgroundPages.Cms
 					try
 					{
                         DataProvider.ContentGroupDao.Insert(contentGroupInfo);
-                        Body.AddSiteLog(PublishmentSystemId, "添加内容组",
-                            $"内容组:{contentGroupInfo.ContentGroupName}");
+                        AuthRequest.AddSiteLog(SiteId, "添加内容组",
+                            $"内容组:{contentGroupInfo.GroupName}");
 						isChanged = true;
 					}
 					catch(Exception ex)
@@ -100,7 +96,7 @@ namespace SiteServer.BackgroundPages.Cms
 
 			if (isChanged)
 			{
-				PageUtils.CloseModalPage(Page);
+                LayerUtils.Close(Page);
 			}
 		}
 	}

@@ -2,10 +2,11 @@
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.Model;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Settings
 {
@@ -16,8 +17,9 @@ namespace SiteServer.BackgroundPages.Settings
         public DateTimeTextBox TbDateFrom;
         public DateTimeTextBox TbDateTo;
         public DropDownList DdlXType;
-        public Literal LtlArray1;
-        public Literal LtlArray2;
+
+        public string StrArray1 { get; set; }
+        public string StrArray2 { get; set; }
 
         //管理员登录（按日期）
         private readonly Dictionary<int, int> _adminNumDictionaryDay = new Dictionary<int, int>();
@@ -111,14 +113,14 @@ namespace SiteServer.BackgroundPages.Settings
             if (IsForbidden) return;
             if (IsPostBack) return;
 
-            BreadCrumbSettings("管理员登录统计", AppManager.Permissions.Settings.Chart);
+            VerifySystemPermissions(ConfigManager.SettingsPermissions.Chart);
 
-            LtlPageTitle1.Text = $"管理员登录最近{_count}{EStatictisXTypeUtils.GetText(EStatictisXTypeUtils.GetEnumType(Body.GetQueryString("XType")))}分配图表（按日期统计）";
-            LtlPageTitle2.Text = $"管理员登录最近{_count}{EStatictisXTypeUtils.GetText(EStatictisXTypeUtils.GetEnumType(Body.GetQueryString("XType")))}分配图表（按管理员统计）";
+            LtlPageTitle1.Text = $"管理员登录最近{_count}{EStatictisXTypeUtils.GetText(EStatictisXTypeUtils.GetEnumType(AuthRequest.GetQueryString("XType")))}分配图表（按日期统计）";
+            LtlPageTitle2.Text = $"管理员登录最近{_count}{EStatictisXTypeUtils.GetText(EStatictisXTypeUtils.GetEnumType(AuthRequest.GetQueryString("XType")))}分配图表（按管理员统计）";
 
             EStatictisXTypeUtils.AddListItems(DdlXType);
 
-            _xType = EStatictisXTypeUtils.GetEnumType(Body.GetQueryString("XType"));
+            _xType = EStatictisXTypeUtils.GetEnumType(AuthRequest.GetQueryString("XType"));
 
             if (Equals(_xType, EStatictisXType.Day))
             {
@@ -134,15 +136,15 @@ namespace SiteServer.BackgroundPages.Settings
             }
 
 
-            TbDateFrom.Text = Body.GetQueryString("DateFrom");
-            TbDateTo.Text = Body.GetQueryString("DateTo");
+            TbDateFrom.Text = AuthRequest.GetQueryString("DateFrom");
+            TbDateTo.Text = AuthRequest.GetQueryString("DateTo");
             DdlXType.SelectedValue = EStatictisXTypeUtils.GetValue(_xType);
 
             //管理员登录量统计，按照日期
-            var trackingDayDictionary = BaiRongDataProvider.LogDao.GetAdminLoginDictionaryByDate(TranslateUtils.ToDateTime(Body.GetQueryString("DateFrom")), TranslateUtils.ToDateTime(Body.GetQueryString("DateTo"), DateTime.Now), EStatictisXTypeUtils.GetValue(_xType), LogInfo.AdminLogin);
+            var trackingDayDictionary = DataProvider.LogDao.GetAdminLoginDictionaryByDate(TranslateUtils.ToDateTime(AuthRequest.GetQueryString("DateFrom")), TranslateUtils.ToDateTime(AuthRequest.GetQueryString("DateTo"), DateTime.Now), EStatictisXTypeUtils.GetValue(_xType), LogInfo.AdminLogin);
 
             //管理员登录量统计，按照用户名
-            var adminNumDictionaryName = BaiRongDataProvider.LogDao.GetAdminLoginDictionaryByName(TranslateUtils.ToDateTime(Body.GetQueryString("DateFrom")), TranslateUtils.ToDateTime(Body.GetQueryString("DateTo"), DateTime.Now), LogInfo.AdminLogin);
+            var adminNumDictionaryName = DataProvider.LogDao.GetAdminLoginDictionaryByName(TranslateUtils.ToDateTime(AuthRequest.GetQueryString("DateFrom")), TranslateUtils.ToDateTime(AuthRequest.GetQueryString("DateTo"), DateTime.Now), LogInfo.AdminLogin);
 
             var now = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, 0, 0, 0);
             for (var i = 0; i < _count; i++)
@@ -178,7 +180,7 @@ namespace SiteServer.BackgroundPages.Settings
 
             for (var i = 1; i <= _count; i++)
             {
-                LtlArray1.Text += $@"
+                StrArray1 += $@"
 xArray.push('{GetGraphicX(i)}');
 yArray.push('{GetGraphicY(i)}');
 ";
@@ -186,7 +188,7 @@ yArray.push('{GetGraphicY(i)}');
 
             foreach (var key in adminNumDictionaryName.Keys)
             {
-                LtlArray2.Text += $@"
+                StrArray2 += $@"
 xArray.push('{key}');
 yArray.push('{GetGraphicYUser(adminNumDictionaryName, key)}');
 ";

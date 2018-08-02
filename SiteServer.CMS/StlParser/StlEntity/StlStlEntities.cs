@@ -1,18 +1,13 @@
 ﻿using System.Collections.Generic;
-using System.Text;
-using BaiRong.Core; 
-using BaiRong.Core.AuxiliaryTable;
-using BaiRong.Core.Model.Enumerations;
-using SiteServer.CMS.Controllers.Preview;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.StlParser.Cache;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
-using SiteServer.Plugin.Models;
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.StlParser.StlEntity
 {
-    [Stl(Usage = "通用实体", Description = "通过 {stl.} 实体在模板中显示对应数据")]
+    [StlClass(Usage = "通用实体", Description = "通过 {stl.} 实体在模板中显示对应数据")]
     public class StlStlEntities
 	{
 		private StlStlEntities()
@@ -70,27 +65,27 @@ namespace SiteServer.CMS.StlParser.StlEntity
                 }
                 else if (StringUtils.EqualsIgnoreCase(SiteId, attributeName))//ID
                 {
-                    parsedContent = pageInfo.PublishmentSystemId.ToString();
+                    parsedContent = pageInfo.SiteId.ToString();
                 }
                 else if (StringUtils.EqualsIgnoreCase(SiteName, attributeName))//名称
                 {
-                    parsedContent = pageInfo.PublishmentSystemInfo.PublishmentSystemName;
+                    parsedContent = pageInfo.SiteInfo.SiteName;
                 }
                 else if (StringUtils.EqualsIgnoreCase(SiteUrl, attributeName))//域名地址
                 {
-                    parsedContent = PageUtility.GetPublishmentSystemUrl(pageInfo.PublishmentSystemInfo, pageInfo.IsLocal).TrimEnd('/');
+                    parsedContent = PageUtility.GetSiteUrl(pageInfo.SiteInfo, pageInfo.IsLocal).TrimEnd('/');
                 }
                 else if (StringUtils.EqualsIgnoreCase(SiteDir, attributeName))//文件夹
                 {
-                    parsedContent = pageInfo.PublishmentSystemInfo.PublishmentSystemDir;
+                    parsedContent = pageInfo.SiteInfo.SiteDir;
                 }
                 else if (StringUtils.EqualsIgnoreCase(CurrentUrl, attributeName))//当前页地址
                 {
-                    parsedContent = StlUtility.GetStlCurrentUrl(pageInfo.PublishmentSystemInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.TemplateId, pageInfo.IsLocal);
+                    parsedContent = StlParserUtility.GetStlCurrentUrl(pageInfo.SiteInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.Id, pageInfo.IsLocal);
                 }
                 else if (StringUtils.EqualsIgnoreCase(ChannelUrl, attributeName))//栏目页地址
                 {
-                    parsedContent = PageUtility.GetChannelUrl(pageInfo.PublishmentSystemInfo, NodeManager.GetNodeInfo(pageInfo.PublishmentSystemId, contextInfo.ChannelId), pageInfo.IsLocal);
+                    parsedContent = PageUtility.GetChannelUrl(pageInfo.SiteInfo, ChannelManager.GetChannelInfo(pageInfo.SiteId, contextInfo.ChannelId), pageInfo.IsLocal);
                 }
                 //else if (StringUtils.EqualsIgnoreCase(HomeUrl, attributeName))//用户中心地址
                 //{
@@ -98,69 +93,59 @@ namespace SiteServer.CMS.StlParser.StlEntity
                 //}
                 //else if (StringUtils.EqualsIgnoreCase(attributeName, LoginUrl))
                 //{
-                //    var returnUrl = StlUtility.GetStlCurrentUrl(pageInfo.PublishmentSystemInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.TemplateId);
+                //    var returnUrl = StlUtility.GetStlCurrentUrl(pageInfo.SiteInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.TemplateId);
                 //    parsedContent = HomeUtils.GetLoginUrl(pageInfo.HomeUrl, returnUrl);
                 //}
                 //else if (StringUtils.EqualsIgnoreCase(attributeName, LogoutUrl))
                 //{
-                //    var returnUrl = StlUtility.GetStlCurrentUrl(pageInfo.PublishmentSystemInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.TemplateId);
+                //    var returnUrl = StlUtility.GetStlCurrentUrl(pageInfo.SiteInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.TemplateId);
                 //    parsedContent = HomeUtils.GetLogoutUrl(pageInfo.HomeUrl, returnUrl);
                 //}
                 //else if (StringUtils.EqualsIgnoreCase(attributeName, RegisterUrl))
                 //{
-                //    var returnUrl = StlUtility.GetStlCurrentUrl(pageInfo.PublishmentSystemInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.TemplateId);
+                //    var returnUrl = StlUtility.GetStlCurrentUrl(pageInfo.SiteInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.TemplateId);
                 //    parsedContent = HomeUtils.GetRegisterUrl(pageInfo.HomeUrl, returnUrl);
                 //}
                 else if (StringUtils.StartsWithIgnoreCase(attributeName, "TableFor"))//
                 {
                     if (StringUtils.EqualsIgnoreCase(attributeName, "TableForContent"))
                     {
-                        parsedContent = pageInfo.PublishmentSystemInfo.AuxiliaryTableForContent;
+                        parsedContent = pageInfo.SiteInfo.TableName;
                     }
                 }
                 else if (StringUtils.StartsWithIgnoreCase(attributeName, "Site"))//
                 {
-                    parsedContent = pageInfo.PublishmentSystemInfo.Additional.GetString(attributeName.Substring(4));
+                    parsedContent = pageInfo.SiteInfo.Additional.GetString(attributeName.Substring(4));
+                }
+                else if (pageInfo.Parameters != null && pageInfo.Parameters.ContainsKey(attributeName))
+                {
+                    pageInfo.Parameters.TryGetValue(attributeName, out parsedContent);
                 }
                 else
                 {
-                    if (pageInfo.PublishmentSystemInfo.Additional.ContainsKey(attributeName))
+                    if (pageInfo.SiteInfo.Additional.ContainsKey(attributeName))
                     {
-                        parsedContent = pageInfo.PublishmentSystemInfo.Additional.GetString(attributeName);
+                        parsedContent = pageInfo.SiteInfo.Additional.GetString(attributeName);
                          
                         if (!string.IsNullOrEmpty(parsedContent))
                         {
-                            var styleInfo = TableStyleManager.GetTableStyleInfo(ETableStyle.Site, DataProvider.PublishmentSystemDao.TableName, attributeName, RelatedIdentities.GetRelatedIdentities(ETableStyle.Site, pageInfo.PublishmentSystemId, pageInfo.PublishmentSystemId));
+                            var styleInfo = TableStyleManager.GetTableStyleInfo(DataProvider.SiteDao.TableName, attributeName, RelatedIdentities.GetRelatedIdentities(pageInfo.SiteId, pageInfo.SiteId));
                             
                             // 如果 styleInfo.TableStyleId <= 0，表示此字段已经被删除了，不需要再显示值了 ekun008
-                            if (styleInfo.TableStyleId > 0 && styleInfo.IsVisible)
+                            if (styleInfo.Id > 0)
                             {
-                                if (InputTypeUtils.EqualsAny(styleInfo.InputType, InputType.Image, InputType.File))
-                                {
-                                    parsedContent = PageUtility.ParseNavigationUrl(pageInfo.PublishmentSystemInfo, parsedContent, pageInfo.IsLocal);
-                                }
-                                else
-                                {
-                                    parsedContent = InputParserUtility.GetContentByTableStyle(parsedContent, string.Empty, pageInfo.PublishmentSystemInfo, ETableStyle.Site, styleInfo, string.Empty, null, string.Empty, true);
-                                }
+                                parsedContent = InputTypeUtils.EqualsAny(styleInfo.InputType, InputType.Image,
+                                    InputType.File)
+                                    ? PageUtility.ParseNavigationUrl(pageInfo.SiteInfo, parsedContent,
+                                        pageInfo.IsLocal)
+                                    : InputParserUtility.GetContentByTableStyle(parsedContent, string.Empty,
+                                        pageInfo.SiteInfo, styleInfo, string.Empty, null, string.Empty,
+                                        true);
                             }
                             else
                             { // 如果字段已经被删除或不再显示了，则此字段的值为空。有时虚拟字段值不会清空
                                 parsedContent = string.Empty;
                             }
-                        }
-                    }
-                    else
-                    {
-                        //var stlTagInfo = DataProvider.StlTagDao.GetStlTagInfo(pageInfo.PublishmentSystemId, attributeName) ??
-                        //                 DataProvider.StlTagDao.GetStlTagInfo(0, attributeName);
-                        var stlTagInfo = StlTag.GetStlTagInfo(pageInfo.PublishmentSystemId, attributeName) ??
-                                         StlTag.GetStlTagInfo(0, attributeName);
-                        if (!string.IsNullOrEmpty(stlTagInfo?.TagContent))
-                        {
-                            var innerBuilder = new StringBuilder(stlTagInfo.TagContent);
-                            StlParserManager.ParseInnerContent(innerBuilder, pageInfo, contextInfo);
-                            parsedContent = innerBuilder.ToString();
                         }
                     }
                 }

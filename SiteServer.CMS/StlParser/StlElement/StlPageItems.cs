@@ -1,49 +1,29 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Xml;
-using BaiRong.Core;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Parsers;
 using SiteServer.CMS.StlParser.Utility;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
-    [Stl(Usage = "翻页项容器", Description = "通过 stl:pageItems 标签在模板中插入翻页项的容器，当不需要翻页时容器内的内容不显示")]
+    [StlClass(Usage = "翻页项容器", Description = "通过 stl:pageItems 标签在模板中插入翻页项的容器，当不需要翻页时容器内的内容不显示")]
     public class StlPageItems
     {
         private StlPageItems() { }
         public const string ElementName = "stl:pageItems";
 
-        public const string AttributeContext = "context";
-
-        public static SortedList<string, string> AttributeList => new SortedList<string, string>
-        {
-            {AttributeContext, "所处上下文"}
-        };
+        private static readonly Attr Context = new Attr("context", "所处上下文");
 
         //对“翻页项容器”（stl:pageItems）元素进行解析，此元素在生成页面时单独解析，不包含在ParseStlElement方法中。
-        public static string Parse(string stlElement, PageInfo pageInfo, int nodeId, int contentId, int currentPageIndex, int pageCount, int totalNum, EContextType contextType)
+        public static string Parse(string stlElement, PageInfo pageInfo, int channelId, int contentId, int currentPageIndex, int pageCount, int totalNum, EContextType contextType)
         {
-            pageInfo.AddPageScriptsIfNotExists(PageInfo.Const.Jquery);
+            pageInfo.AddPageBodyCodeIfNotExists(PageInfo.Const.Jquery);
             string parsedContent;
             try
             {
-                var xmlDocument = StlParserUtility.GetXmlDocument(stlElement, false);
-                XmlNode node = xmlDocument.DocumentElement;
-                node = node?.FirstChild;
-
-                var ie = node?.Attributes?.GetEnumerator();
-                if (ie != null)
+                var stlElementInfo = StlParserUtility.ParseStlElement(stlElement);
+                if (stlElementInfo.Attributes[Context.Name] != null)
                 {
-                    while (ie.MoveNext())
-                    {
-                        var attr = (XmlAttribute)ie.Current;
-
-                        if (StringUtils.EqualsIgnoreCase(attr.Name, AttributeContext))
-                        {
-                            contextType = EContextTypeUtils.GetEnumType(attr.Value);
-                        }
-                    }
+                    contextType = EContextTypeUtils.GetEnumType(stlElementInfo.Attributes[Context.Name]);
                 }
 
                 if (pageCount <= 1)
@@ -56,7 +36,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                 var length = stlElement.LastIndexOf("<", StringComparison.Ordinal) - index;
                 if (index <= 0 || length <= 0)
                 {
-                    stlElement = node?.InnerXml;
+                    stlElement = stlElementInfo.InnerHtml;
                     isXmlContent = true;
                 }
                 else
@@ -65,7 +45,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                     isXmlContent = false;
                 }
 
-                parsedContent = StlPageElementParser.ParseStlPageItems(stlElement, pageInfo, nodeId, contentId, currentPageIndex, pageCount, totalNum, isXmlContent, contextType);
+                parsedContent = StlPageElementParser.ParseStlPageItems(stlElement, pageInfo, channelId, contentId, currentPageIndex, pageCount, totalNum, isXmlContent, contextType);
             }
             catch (Exception ex)
             {
@@ -75,14 +55,12 @@ namespace SiteServer.CMS.StlParser.StlElement
             return parsedContent;
         }
 
-        public static string ParseInSearchPage(string stlElement, PageInfo pageInfo, string ajaxDivId, int nodeId, int currentPageIndex, int pageCount, int totalNum)
+        public static string ParseInSearchPage(string stlElement, PageInfo pageInfo, string ajaxDivId, int channelId, int currentPageIndex, int pageCount, int totalNum)
         {
             string parsedContent;
             try
             {
-                var xmlDocument = StlParserUtility.GetXmlDocument(stlElement, false);
-                XmlNode node = xmlDocument.DocumentElement;
-                node = node?.FirstChild;
+                var stlElementInfo = StlParserUtility.ParseStlElement(stlElement);
 
                 if (pageCount <= 1)
                 {
@@ -94,7 +72,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                 var length = stlElement.LastIndexOf("<", StringComparison.Ordinal) - index;
                 if (index <= 0 || length <= 0)
                 {
-                    stlElement = node?.InnerXml;
+                    stlElement = stlElementInfo.InnerHtml;
                     //isXmlContent = true;
                 }
                 else
@@ -103,7 +81,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                     //isXmlContent = false;
                 }
 
-                parsedContent = StlPageElementParser.ParseStlPageItemsInSearchPage(stlElement, pageInfo, ajaxDivId, nodeId, currentPageIndex, pageCount, totalNum);
+                parsedContent = StlPageElementParser.ParseStlPageItemsInSearchPage(stlElement, pageInfo, ajaxDivId, channelId, currentPageIndex, pageCount, totalNum);
             }
             catch (Exception ex)
             {
@@ -113,14 +91,12 @@ namespace SiteServer.CMS.StlParser.StlElement
             return parsedContent;
         }
 
-        public static string ParseInDynamicPage(string stlElement, PageInfo pageInfo, string pageUrl, int nodeId, int currentPageIndex, int pageCount, int totalNum, bool isPageRefresh, string ajaxDivId)
+        public static string ParseInDynamicPage(string stlElement, PageInfo pageInfo, string pageUrl, int channelId, int currentPageIndex, int pageCount, int totalNum, bool isPageRefresh, string ajaxDivId)
         {
             string parsedContent;
             try
             {
-                var xmlDocument = StlParserUtility.GetXmlDocument(stlElement, false);
-                XmlNode node = xmlDocument.DocumentElement;
-                node = node?.FirstChild;
+                var stlElementInfo = StlParserUtility.ParseStlElement(stlElement);
 
                 if (pageCount <= 1)
                 {
@@ -131,14 +107,14 @@ namespace SiteServer.CMS.StlParser.StlElement
                 var length = stlElement.LastIndexOf("<", StringComparison.Ordinal) - index;
                 if (index <= 0 || length <= 0)
                 {
-                    stlElement = node?.InnerXml;
+                    stlElement = stlElementInfo.InnerHtml;
                 }
                 else
                 {
                     stlElement = stlElement.Substring(index, length);
                 }
 
-                parsedContent = StlPageElementParser.ParseStlPageItemsInDynamicPage(stlElement, pageInfo, pageUrl, nodeId, currentPageIndex, pageCount, totalNum, isPageRefresh, ajaxDivId);
+                parsedContent = StlPageElementParser.ParseStlPageItemsInDynamicPage(stlElement, pageInfo, pageUrl, channelId, currentPageIndex, pageCount, totalNum, isPageRefresh, ajaxDivId);
             }
             catch (Exception ex)
             {

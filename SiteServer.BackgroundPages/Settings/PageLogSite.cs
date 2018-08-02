@@ -1,166 +1,176 @@
 using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Data;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
 using SiteServer.BackgroundPages.Core;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.BackgroundPages.Settings
 {
 	public class PageLogSite : BasePageCms
     {
-        public DropDownList PublishmentSystem;
-        public DropDownList LogType;
-        public TextBox UserName;
-        public TextBox Keyword;
-        public DateTimeTextBox DateFrom;
-        public DateTimeTextBox DateTo;
+        public DropDownList DdlSiteId;
+        public DropDownList DdlLogType;
+        public TextBox TbUserName;
+        public TextBox TbKeyword;
+        public DateTimeTextBox TbDateFrom;
+        public DateTimeTextBox TbDateTo;
 
-        public Repeater rptContents;
-        public SqlPager spContents;
-        public Literal ltlPublishmentSystem;
+        public Repeater RptContents;
+        public SqlPager SpContents;
+        public Literal LtlSite;
+        public Literal LtlState;
+        public Button BtnDelete;
+		public Button BtnDeleteAll;
+        public Button BtnSetting;
 
-		public Button Delete;
-		public Button DeleteAll;
-
-		public void Page_Load(object sender, EventArgs e)
+        public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            spContents.ControlToPaginate = rptContents;
-            spContents.ItemsPerPage = StringUtils.Constants.PageSize;
+            SpContents.ControlToPaginate = RptContents;
+            SpContents.ItemsPerPage = StringUtils.Constants.PageSize;
 
-            if (!Body.IsQueryExists("LogType"))
-            {
-                spContents.SelectCommand = DataProvider.LogDao.GetSelectCommend();
-            }
-            else
-            {
-                spContents.SelectCommand = DataProvider.LogDao.GetSelectCommend(PublishmentSystemId, Body.GetQueryString("LogType"), Body.GetQueryString("UserName"), Body.GetQueryString("Keyword"), Body.GetQueryString("DateFrom"), Body.GetQueryString("DateTo"));
-            }
+            SpContents.SelectCommand = !AuthRequest.IsQueryExists("LogType")
+                ? DataProvider.SiteLogDao.GetSelectCommend()
+                : DataProvider.SiteLogDao.GetSelectCommend(SiteId, AuthRequest.GetQueryString("LogType"),
+                    AuthRequest.GetQueryString("UserName"), AuthRequest.GetQueryString("Keyword"), AuthRequest.GetQueryString("DateFrom"),
+                    AuthRequest.GetQueryString("DateTo"));
 
-            spContents.SortField = "ID";
-            spContents.SortMode = SortMode.DESC;
-            rptContents.ItemDataBound += rptContents_ItemDataBound;
+            SpContents.SortField = nameof(SiteLogInfo.Id);
+            SpContents.SortMode = SortMode.DESC;
+            RptContents.ItemDataBound += RptContents_ItemDataBound;
+
+            if (AuthRequest.IsQueryExists("Delete"))
+            {
+                var arraylist = TranslateUtils.StringCollectionToIntList(AuthRequest.GetQueryString("IDCollection"));
+                DataProvider.SiteLogDao.Delete(arraylist);
+                SuccessDeleteMessage();
+            }
+            else if (AuthRequest.IsQueryExists("DeleteAll"))
+            {
+                DataProvider.SiteLogDao.DeleteAll();
+                SuccessDeleteMessage();
+            }
+            else if (AuthRequest.IsQueryExists("Setting"))
+            {
+                ConfigManager.SystemConfigInfo.IsLogSite = !ConfigManager.SystemConfigInfo.IsLogSite;
+                DataProvider.ConfigDao.Update(ConfigManager.Instance);
+                SuccessMessage($"成功{(ConfigManager.SystemConfigInfo.IsLogSite ? "启用" : "禁用")}日志记录");
+            }
 
             if (IsPostBack) return;
 
-            BreadCrumbSettings("站点日志", AppManager.Permissions.Settings.Log);
+            VerifySystemPermissions(ConfigManager.SettingsPermissions.Log);
 
-            if (PublishmentSystemId == 0)
+            if (SiteId == 0)
             {
-                ltlPublishmentSystem.Text = @"<td align=""center"" width=""160"">&nbsp;站点名称</td>";
+                LtlSite.Text = @"<th align=""text-center text-nowrap"">站点名称</th>";
             }
 
-            PublishmentSystem.Items.Add(new ListItem("<<全部站点>>", "0"));
+            DdlSiteId.Items.Add(new ListItem("<<全部站点>>", "0"));
 
-            var publishmentSystemIdList = PublishmentSystemManager.GetPublishmentSystemIdListOrderByLevel();
-            foreach (var psId in publishmentSystemIdList)
+            var siteIdList = SiteManager.GetSiteIdListOrderByLevel();
+            foreach (var psId in siteIdList)
             {
-                PublishmentSystem.Items.Add(new ListItem(PublishmentSystemManager.GetPublishmentSystemInfo(psId).PublishmentSystemName, psId.ToString())); 
+                DdlSiteId.Items.Add(new ListItem(SiteManager.GetSiteInfo(psId).SiteName, psId.ToString())); 
             }
 
-            LogType.Items.Add(new ListItem("全部记录", "All"));
-            LogType.Items.Add(new ListItem("栏目相关记录", "Channel"));
-            LogType.Items.Add(new ListItem("内容相关记录", "Content"));
+            DdlLogType.Items.Add(new ListItem("全部记录", "All"));
+            DdlLogType.Items.Add(new ListItem("栏目相关记录", "Channel"));
+            DdlLogType.Items.Add(new ListItem("内容相关记录", "Content"));
 
-            if (Body.IsQueryExists("LogType"))
+            if (AuthRequest.IsQueryExists("LogType"))
             {
-                ControlUtils.SelectListItems(PublishmentSystem, PublishmentSystemId.ToString());
-                ControlUtils.SelectListItems(LogType, Body.GetQueryString("LogType"));
-                UserName.Text = Body.GetQueryString("UserName");
-                Keyword.Text = Body.GetQueryString("Keyword");
-                DateFrom.Text = Body.GetQueryString("DateFrom");
-                DateTo.Text = Body.GetQueryString("DateTo");
+                ControlUtils.SelectSingleItem(DdlSiteId, SiteId.ToString());
+                ControlUtils.SelectSingleItem(DdlLogType, AuthRequest.GetQueryString("LogType"));
+                TbUserName.Text = AuthRequest.GetQueryString("UserName");
+                TbKeyword.Text = AuthRequest.GetQueryString("Keyword");
+                TbDateFrom.Text = AuthRequest.GetQueryString("DateFrom");
+                TbDateTo.Text = AuthRequest.GetQueryString("DateTo");
             }
 
-            if (Body.IsQueryExists("Delete"))
-            {
-                var arraylist = TranslateUtils.StringCollectionToIntList(Body.GetQueryString("IDCollection"));
-                try
-                {
-                    DataProvider.LogDao.Delete(arraylist);
-                    SuccessDeleteMessage();
-                }
-                catch (Exception ex)
-                {
-                    FailDeleteMessage(ex);
-                }
-            }
-            else if (Body.IsQueryExists("DeleteAll"))
-            {
-                try
-                {
-                    DataProvider.LogDao.DeleteAll();
-                    SuccessDeleteMessage();
-                }
-                catch (Exception ex)
-                {
-                    FailDeleteMessage(ex);
-                }
-            }
-
-            Delete.Attributes.Add("onclick",
+            BtnDelete.Attributes.Add("onclick",
                 PageUtils.GetRedirectStringWithCheckBoxValueAndAlert(
                     PageUtils.GetSettingsUrl(nameof(PageLogSite), new NameValueCollection
                     {
                         {"Delete", "True"}
                     }), "IDCollection", "IDCollection", "请选择需要删除的日志！", "此操作将删除所选日志，确认吗？"));
-            DeleteAll.Attributes.Add("onclick",
-                PageUtils.GetRedirectStringWithConfirm(
+
+            BtnDeleteAll.Attributes.Add("onclick",
+                AlertUtils.ConfirmRedirect("删除所有日志", "此操作将删除所有日志信息，确定吗？", "删除全部",
                     PageUtils.GetSettingsUrl(nameof(PageLogSite), new NameValueCollection
                     {
                         {"DeleteAll", "True"}
-                    }), "此操作将删除所有日志信息，确定吗？"));
+                    })));
 
-            spContents.DataBind();
+            if (ConfigManager.SystemConfigInfo.IsLogSite)
+            {
+                BtnSetting.Text = "禁用站点日志";
+                BtnSetting.Attributes.Add("onclick",
+                    AlertUtils.ConfirmRedirect("禁用站点日志", "此操作将禁用站点日志记录功能，确定吗？", "禁 用",
+                        PageUtils.GetSettingsUrl(nameof(PageLogSite), new NameValueCollection
+                        {
+                            {"Setting", "True"}
+                        })));
+            }
+            else
+            {
+                LtlState.Text = @"<div class=""alert alert-danger m-t-10"">站点日志当前处于禁用状态，系统将不会记录站点操作日志！</div>";
+                BtnSetting.Text = "启用站点日志";
+                BtnSetting.Attributes.Add("onclick",
+                    AlertUtils.ConfirmRedirect("启用站点日志", "此操作将启用站点日志记录功能，确定吗？", "启 用",
+                        PageUtils.GetSettingsUrl(nameof(PageLogSite), new NameValueCollection
+                        {
+                            {"Setting", "True"}
+                        })));
+            }
+
+            SpContents.DataBind();
         }
 
-        void rptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
+        private void RptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
         {
-            if (e.Item.ItemType == ListItemType.Item || e.Item.ItemType == ListItemType.AlternatingItem)
-            {
-                var ltlPublishmentSystem = (Literal)e.Item.FindControl("ltlPublishmentSystem");
-                var ltlUserName = (Literal)e.Item.FindControl("ltlUserName");
-                var ltlAddDate = (Literal)e.Item.FindControl("ltlAddDate");
-                var ltlIPAddress = (Literal)e.Item.FindControl("ltlIPAddress");
-                var ltlAction = (Literal)e.Item.FindControl("ltlAction");
-                var ltlSummary = (Literal)e.Item.FindControl("ltlSummary");
+            if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-                if (PublishmentSystemId == 0)
+            var ltlSite = (Literal)e.Item.FindControl("ltlSite");
+            var ltlUserName = (Literal)e.Item.FindControl("ltlUserName");
+            var ltlAddDate = (Literal)e.Item.FindControl("ltlAddDate");
+            var ltlIpAddress = (Literal)e.Item.FindControl("ltlIpAddress");
+            var ltlAction = (Literal)e.Item.FindControl("ltlAction");
+            var ltlSummary = (Literal)e.Item.FindControl("ltlSummary");
+
+            if (SiteId == 0)
+            {
+                var siteInfo = SiteManager.GetSiteInfo(SqlUtils.EvalInt(e.Item.DataItem, nameof(SiteLogInfo.SiteId)));
+                var siteName = string.Empty;
+                if (siteInfo != null)
                 {
-                    var publishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(SqlUtils.EvalInt(e.Item.DataItem, "PublishmentSystemID"));
-                    var publishmentSystemName = string.Empty;
-                    if (publishmentSystemInfo != null)
-                    {
-                        publishmentSystemName =
-                            $"<a href='{publishmentSystemInfo.Additional.WebUrl}' target='_blank'>{publishmentSystemInfo.PublishmentSystemName}</a>";
-                    }
-                    ltlPublishmentSystem.Text = $@"<td align=""center"" width=""160"">{publishmentSystemName}</td>";
+                    siteName =
+                        $"<a href='{siteInfo.Additional.WebUrl}' target='_blank'>{siteInfo.SiteName}</a>";
                 }
-                ltlUserName.Text = SqlUtils.EvalString(e.Item.DataItem, "UserName");
-                ltlAddDate.Text = DateUtils.GetDateAndTimeString(SqlUtils.EvalDateTime(e.Item.DataItem, "AddDate"));
-                ltlIPAddress.Text = SqlUtils.EvalString(e.Item.DataItem, "IPAddress");
-                ltlAction.Text = SqlUtils.EvalString(e.Item.DataItem, "Action");
-                ltlSummary.Text = SqlUtils.EvalString(e.Item.DataItem, "Summary");
+                ltlSite.Text = $@"<td align=""text-center text-nowrap"">{siteName}</td>";
             }
+            ltlUserName.Text = SqlUtils.EvalString(e.Item.DataItem, nameof(SiteLogInfo.UserName));
+            ltlAddDate.Text = DateUtils.GetDateAndTimeString(SqlUtils.EvalDateTime(e.Item.DataItem, nameof(SiteLogInfo.AddDate)));
+            ltlIpAddress.Text = SqlUtils.EvalString(e.Item.DataItem, nameof(SiteLogInfo.IpAddress));
+            ltlAction.Text = SqlUtils.EvalString(e.Item.DataItem, nameof(SiteLogInfo.Action));
+            ltlSummary.Text = SqlUtils.EvalString(e.Item.DataItem, nameof(SiteLogInfo.Summary));
         }
 
         public void Search_OnClick(object sender, EventArgs e)
         {
-            Response.Redirect(PageUrl, true);
+            PageUtils.Redirect(PageUtils.GetSettingsUrl(nameof(PageLogSite), new NameValueCollection
+            {
+                {"UserName", TbUserName.Text},
+                {"Keyword", TbKeyword.Text},
+                {"DateFrom", TbDateFrom.Text},
+                {"DateTo", TbDateTo.Text},
+                {"SiteId", DdlSiteId.SelectedValue},
+                {"LogType", DdlLogType.SelectedValue}
+            }));
         }
-
-	    private string PageUrl => PageUtils.GetSettingsUrl(nameof(PageLogSite), new NameValueCollection
-	    {
-	        {"UserName", UserName.Text},
-	        {"Keyword", Keyword.Text},
-	        {"DateFrom", DateFrom.Text},
-	        {"DateTo", DateTo.Text},
-	        {"PublishmentSystemID", PublishmentSystem.SelectedValue},
-	        {"LogType", LogType.SelectedValue}
-	    });
-	}
+    }
 }

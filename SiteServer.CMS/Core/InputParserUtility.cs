@@ -1,35 +1,31 @@
 using System.Collections;
-using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Web.UI.HtmlControls;
-using BaiRong.Core;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Enumerations;
-using SiteServer.CMS.Controllers.Sys.Stl;
+using SiteServer.CMS.Api;
+using SiteServer.CMS.Api.Sys.Stl;
+using SiteServer.Utils;
 using SiteServer.CMS.Model;
-using SiteServer.Plugin.Models;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Core
 {
-    public class InputParserUtility
+    public static class InputParserUtility
     {
-        private InputParserUtility()
-        {
-        }
-
-        public static string GetContentByTableStyle(string content, PublishmentSystemInfo publishmentSystemInfo, ETableStyle tableStyle, TableStyleInfo styleInfo)
+        public static string GetContentByTableStyle(string content, SiteInfo siteInfo, TableStyleInfo styleInfo)
         {
             if (!string.IsNullOrEmpty(content))
             {
-                return GetContentByTableStyle(content, ",", publishmentSystemInfo, tableStyle, styleInfo, string.Empty, null, string.Empty, false);
+                return GetContentByTableStyle(content, ",", siteInfo, styleInfo, string.Empty, null, string.Empty, false);
             }
             return string.Empty;
         }
 
-        public static string GetContentByTableStyle(string content, string separator, PublishmentSystemInfo publishmentSystemInfo, ETableStyle tableStyle, TableStyleInfo styleInfo, string formatString, Dictionary<string, string> attributes, string innerXml, bool isStlEntity)
+        public static string GetContentByTableStyle(string content, string separator, SiteInfo siteInfo, TableStyleInfo styleInfo, string formatString, NameValueCollection attributes, string innerHtml, bool isStlEntity)
         {
             var parsedContent = content;
 
-            var inputType = InputTypeUtils.GetEnumType(styleInfo.InputType);
+            var inputType = styleInfo.InputType;
 
             if (inputType == InputType.Date)
             {
@@ -68,7 +64,7 @@ namespace SiteServer.CMS.Core
                 var selectedTexts = new ArrayList();
                 var selectedValues = TranslateUtils.StringCollectionToStringList(content);
                 var styleItems = styleInfo.StyleItems ??
-                                 BaiRongDataProvider.TableStyleItemDao.GetStyleItemInfoList(styleInfo.TableStyleId);
+                                 DataProvider.TableStyleItemDao.GetStyleItemInfoList(styleInfo.Id);
                 foreach (var itemInfo in styleItems)
                 {
                     if (selectedValues.Contains(itemInfo.ItemValue))
@@ -84,30 +80,30 @@ namespace SiteServer.CMS.Core
             //}
             else if (inputType == InputType.TextEditor)
             {
-                parsedContent = ContentUtility.TextEditorContentDecode(publishmentSystemInfo, parsedContent, true);
+                parsedContent = ContentUtility.TextEditorContentDecode(siteInfo, parsedContent, true);
             }
             else if (inputType == InputType.Image)
             {
-                parsedContent = GetImageOrFlashHtml(publishmentSystemInfo, parsedContent, attributes, isStlEntity);
+                parsedContent = GetImageOrFlashHtml(siteInfo, parsedContent, attributes, isStlEntity);
             }
             else if (inputType == InputType.Video)
             {
-                parsedContent = GetVideoHtml(publishmentSystemInfo, parsedContent, attributes, isStlEntity);
+                parsedContent = GetVideoHtml(siteInfo, parsedContent, attributes, isStlEntity);
             }
             else if (inputType == InputType.File)
             {
-                parsedContent = GetFileHtmlWithoutCount(publishmentSystemInfo, parsedContent, attributes, innerXml, isStlEntity);
+                parsedContent = GetFileHtmlWithoutCount(siteInfo, parsedContent, attributes, innerHtml, isStlEntity);
             }
 
             return parsedContent;
         }
 
-        public static string GetContentByTableStyle(ContentInfo contentInfo, string separator, PublishmentSystemInfo publishmentSystemInfo, ETableStyle tableStyle, TableStyleInfo styleInfo, string formatString, int no, Dictionary<string, string> attributes, string innerXml, bool isStlEntity)
+        public static string GetContentByTableStyle(ContentInfo contentInfo, string separator, SiteInfo siteInfo, TableStyleInfo styleInfo, string formatString, int no, NameValueCollection attributes, string innerHtml, bool isStlEntity)
         {
             var value = contentInfo.GetString(styleInfo.AttributeName);
             var parsedContent = string.Empty;
 
-            var inputType = InputTypeUtils.GetEnumType(styleInfo.InputType);
+            var inputType = styleInfo.InputType;
 
             if (inputType == InputType.Date)
             {
@@ -138,7 +134,7 @@ namespace SiteServer.CMS.Core
                 var selectedTexts = new ArrayList();
                 var selectedValues = TranslateUtils.StringCollectionToStringList(value);
                 var styleItems = styleInfo.StyleItems ??
-                                 BaiRongDataProvider.TableStyleItemDao.GetStyleItemInfoList(styleInfo.TableStyleId);
+                                 DataProvider.TableStyleItemDao.GetStyleItemInfoList(styleInfo.Id);
                 foreach (var itemInfo in styleItems)
                 {
                     if (selectedValues.Contains(itemInfo.ItemValue))
@@ -150,13 +146,13 @@ namespace SiteServer.CMS.Core
             }
             else if (inputType == InputType.TextEditor)
             {
-                parsedContent = ContentUtility.TextEditorContentDecode(publishmentSystemInfo, value, true);
+                parsedContent = ContentUtility.TextEditorContentDecode(siteInfo, value, true);
             }
             else if (inputType == InputType.Image)
             {
                 if (no <= 1)
                 {
-                    parsedContent = GetImageOrFlashHtml(publishmentSystemInfo, value, attributes, isStlEntity);
+                    parsedContent = GetImageOrFlashHtml(siteInfo, value, attributes, isStlEntity);
                 }
                 else
                 {
@@ -169,7 +165,7 @@ namespace SiteServer.CMS.Core
                         {
                             if (index == no)
                             {
-                                parsedContent = GetImageOrFlashHtml(publishmentSystemInfo, extendValue, attributes, isStlEntity);
+                                parsedContent = GetImageOrFlashHtml(siteInfo, extendValue, attributes, isStlEntity);
                                 break;
                             }
                             index++;
@@ -181,7 +177,7 @@ namespace SiteServer.CMS.Core
             {
                 if (no <= 1)
                 {
-                    parsedContent = GetVideoHtml(publishmentSystemInfo, value, attributes, isStlEntity);
+                    parsedContent = GetVideoHtml(siteInfo, value, attributes, isStlEntity);
                 }
                 else
                 {
@@ -194,7 +190,7 @@ namespace SiteServer.CMS.Core
                         {
                             if (index == no)
                             {
-                                parsedContent = GetVideoHtml(publishmentSystemInfo, extendValue, attributes, isStlEntity);
+                                parsedContent = GetVideoHtml(siteInfo, extendValue, attributes, isStlEntity);
                                 break;
                             }
                             index++;
@@ -206,7 +202,7 @@ namespace SiteServer.CMS.Core
             {
                 if (no <= 1)
                 {
-                    parsedContent = GetFileHtmlWithoutCount(publishmentSystemInfo, value, attributes, innerXml, isStlEntity);
+                    parsedContent = GetFileHtmlWithoutCount(siteInfo, value, attributes, innerHtml, isStlEntity);
                 }
                 else
                 {
@@ -219,7 +215,7 @@ namespace SiteServer.CMS.Core
                         {
                             if (index == no)
                             {
-                                parsedContent = GetFileHtmlWithoutCount(publishmentSystemInfo, extendValue, attributes, innerXml, isStlEntity);
+                                parsedContent = GetFileHtmlWithoutCount(siteInfo, extendValue, attributes, innerHtml, isStlEntity);
                                 break;
                             }
                             index++;
@@ -235,12 +231,12 @@ namespace SiteServer.CMS.Core
             return parsedContent;
         }
 
-        public static string GetImageOrFlashHtml(PublishmentSystemInfo publishmentSystemInfo, string imageUrl, Dictionary<string, string> attributes, bool isStlEntity)
+        public static string GetImageOrFlashHtml(SiteInfo siteInfo, string imageUrl, NameValueCollection attributes, bool isStlEntity)
         {
             var retval = string.Empty;
             if (!string.IsNullOrEmpty(imageUrl))
             {
-                imageUrl = PageUtility.ParseNavigationUrl(publishmentSystemInfo, imageUrl, false);
+                imageUrl = PageUtility.ParseNavigationUrl(siteInfo, imageUrl, false);
                 if (isStlEntity)
                 {
                     retval = imageUrl;
@@ -296,12 +292,12 @@ namespace SiteServer.CMS.Core
             return retval;
         }
 
-        public static string GetVideoHtml(PublishmentSystemInfo publishmentSystemInfo, string videoUrl, Dictionary<string, string> attributes, bool isStlEntity)
+        public static string GetVideoHtml(SiteInfo siteInfo, string videoUrl, NameValueCollection attributes, bool isStlEntity)
         {
             var retval = string.Empty;
             if (!string.IsNullOrEmpty(videoUrl))
             {
-                videoUrl = PageUtility.ParseNavigationUrl(publishmentSystemInfo, videoUrl, false);
+                videoUrl = PageUtility.ParseNavigationUrl(siteInfo, videoUrl, false);
                 if (isStlEntity)
                 {
                     retval = videoUrl;
@@ -309,7 +305,7 @@ namespace SiteServer.CMS.Core
                 else
                 {
                     retval = $@"
-<embed src=""{SiteFilesAssets.GetUrl(PageUtils.OuterApiUrl, SiteFilesAssets.BrPlayer.Swf)}"" allowfullscreen=""true"" flashvars=""controlbar=over&autostart={true
+<embed src=""{SiteFilesAssets.GetUrl(ApiManager.ApiUrl, SiteFilesAssets.BrPlayer.Swf)}"" allowfullscreen=""true"" flashvars=""controlbar=over&autostart={true
                         .ToString().ToLower()}&image={string.Empty}&file={videoUrl}"" width=""{450}"" height=""{350}""/>
 ";
                 }
@@ -317,21 +313,21 @@ namespace SiteServer.CMS.Core
             return retval;
         }
 
-        public static string GetFileHtmlWithCount(PublishmentSystemInfo publishmentSystemInfo, int nodeId, int contentId, string fileUrl, Dictionary<string, string> attributes, string innerXml, bool isStlEntity)
+        public static string GetFileHtmlWithCount(SiteInfo siteInfo, int channelId, int contentId, string fileUrl, NameValueCollection attributes, string innerHtml, bool isStlEntity)
         {
             var retval = string.Empty;
             if (!string.IsNullOrEmpty(fileUrl))
             {
                 if (isStlEntity)
                 {
-                    retval = ActionsDownload.GetUrl(PageUtils.OuterApiUrl, publishmentSystemInfo.PublishmentSystemId, nodeId, contentId, fileUrl);
+                    retval = ApiRouteActionsDownload.GetUrl(ApiManager.ApiUrl, siteInfo.Id, channelId, contentId, fileUrl);
                 }
                 else
                 {
                     var stlAnchor = new HtmlAnchor();
                     ControlUtils.AddAttributesIfNotExists(stlAnchor, attributes);
-                    stlAnchor.HRef = ActionsDownload.GetUrl(PageUtils.OuterApiUrl, publishmentSystemInfo.PublishmentSystemId, nodeId, contentId, fileUrl);
-                    stlAnchor.InnerHtml = string.IsNullOrEmpty(innerXml) ? PageUtils.GetFileNameFromUrl(fileUrl) : innerXml;
+                    stlAnchor.HRef = ApiRouteActionsDownload.GetUrl(ApiManager.ApiUrl, siteInfo.Id, channelId, contentId, fileUrl);
+                    stlAnchor.InnerHtml = string.IsNullOrEmpty(innerHtml) ? PageUtils.GetFileNameFromUrl(fileUrl) : innerHtml;
 
                     retval = ControlUtils.GetControlRenderHtml(stlAnchor);
                 }
@@ -339,23 +335,23 @@ namespace SiteServer.CMS.Core
             return retval;
         }
 
-        public static string GetFileHtmlWithoutCount(PublishmentSystemInfo publishmentSystemInfo, string fileUrl, Dictionary<string, string> attributes, string innerXml, bool isStlEntity)
+        public static string GetFileHtmlWithoutCount(SiteInfo siteInfo, string fileUrl, NameValueCollection attributes, string innerHtml, bool isStlEntity)
         {
-            if (publishmentSystemInfo != null)
+            if (siteInfo != null)
             {
                 var retval = string.Empty;
                 if (!string.IsNullOrEmpty(fileUrl))
                 {
                     if (isStlEntity)
                     {
-                        retval = ActionsDownload.GetUrl(PageUtils.OuterApiUrl, publishmentSystemInfo.PublishmentSystemId, fileUrl);
+                        retval = ApiRouteActionsDownload.GetUrl(ApiManager.ApiUrl, siteInfo.Id, fileUrl);
                     }
                     else
                     {
                         var stlAnchor = new HtmlAnchor();
                         ControlUtils.AddAttributesIfNotExists(stlAnchor, attributes);
-                        stlAnchor.HRef = ActionsDownload.GetUrl(PageUtils.OuterApiUrl, publishmentSystemInfo.PublishmentSystemId, fileUrl);
-                        stlAnchor.InnerHtml = string.IsNullOrEmpty(innerXml) ? PageUtils.GetFileNameFromUrl(fileUrl) : innerXml;
+                        stlAnchor.HRef = ApiRouteActionsDownload.GetUrl(ApiManager.ApiUrl, siteInfo.Id, fileUrl);
+                        stlAnchor.InnerHtml = string.IsNullOrEmpty(innerHtml) ? PageUtils.GetFileNameFromUrl(fileUrl) : innerHtml;
 
                         retval = ControlUtils.GetControlRenderHtml(stlAnchor);
                     }

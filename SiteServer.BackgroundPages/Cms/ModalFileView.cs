@@ -2,25 +2,24 @@
 using System.Collections.Specialized;
 using System.IO;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
 	public class ModalFileView : BasePageCms
     {
-        public Literal ltlFileName;
-        public Literal ltlFileType;
-        public Literal ltlFilePath;
-        public Literal ltlFileSize;
-        public Literal ltlCreationTime;
-        public Literal ltlLastWriteTime;
-        public Literal ltlLastAccessTime;
-
-        public Literal ltlOpen;
-        public Literal ltlEdit;
-        public Literal ltlChangeName;
+        public Literal LtlFileName;
+        public Literal LtlFileType;
+        public Literal LtlFilePath;
+        public Literal LtlFileSize;
+        public Literal LtlCreationTime;
+        public Literal LtlLastWriteTime;
+        public Literal LtlLastAccessTime;
+        public Literal LtlOpen;
+        public Literal LtlEdit;
+        public Literal LtlChangeName;
 
 		private string _relatedPath;
         private string _fileName;
@@ -28,21 +27,19 @@ namespace SiteServer.BackgroundPages.Cms
         private string _updateName;
         private string _hiddenClientId;
 
-        public static string GetRedirectUrl(int publishmentSystemId, string relatedPath, string fileName)
+        public static string GetRedirectUrl(int siteId, string relatedPath, string fileName)
         {
-            return PageUtils.GetCmsUrl(nameof(ModalFileView), new NameValueCollection
+            return PageUtils.GetCmsUrl(siteId, nameof(ModalFileView), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"RelatedPath", relatedPath},
                 {"FileName", fileName}
             });
         }
 
-        public static string GetRedirectUrl(int publishmentSystemId, string relatedPath, string fileName, string updateName, string hiddenClientId)
+        public static string GetRedirectUrl(int siteId, string relatedPath, string fileName, string updateName, string hiddenClientId)
         {
-            return PageUtils.GetCmsUrl(nameof(ModalFileView), new NameValueCollection
+            return PageUtils.GetCmsUrl(siteId, nameof(ModalFileView), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"RelatedPath", relatedPath},
                 {"FileName", fileName},
                 {"UpdateName", updateName},
@@ -51,17 +48,16 @@ namespace SiteServer.BackgroundPages.Cms
             });
         }
 
-        public static string GetOpenWindowString(int publishmentSystemId, string relatedPath, string fileName)
+        public static string GetOpenWindowString(int siteId, string relatedPath, string fileName)
         {
-            return PageUtils.GetOpenLayerString("查看文件属性", PageUtils.GetCmsUrl(nameof(ModalFileView), new NameValueCollection
+            return LayerUtils.GetOpenScript("查看文件属性", PageUtils.GetCmsUrl(siteId, nameof(ModalFileView), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"RelatedPath", relatedPath},
                 {"FileName", fileName}
             }), 680, 660);
         }
 
-        public static string GetOpenWindowString(int publishmentSystemId, string fileUrl)
+        public static string GetOpenWindowString(int siteId, string fileUrl)
         {
             var relatedPath = "@/";
             var fileName = fileUrl;
@@ -75,10 +71,10 @@ namespace SiteServer.BackgroundPages.Cms
                     fileName = fileUrl.Substring(i + 1, fileUrl.Length - i - 1);
                 }
             }
-            return GetOpenWindowString(publishmentSystemId, relatedPath, fileName);
+            return GetOpenWindowString(siteId, relatedPath, fileName);
         }
 
-        public static string GetOpenWindowStringHidden(int publishmentSystemId, string fileUrl, string hiddenClientId)
+        public static string GetOpenWindowStringHidden(int siteId, string fileUrl, string hiddenClientId)
         {
             var relatedPath = "@/";
             var fileName = fileUrl;
@@ -92,25 +88,23 @@ namespace SiteServer.BackgroundPages.Cms
                     fileName = fileUrl.Substring(i + 1, fileUrl.Length - i - 1);
                 }
             }
-            return GetOpenWindowString(publishmentSystemId,hiddenClientId, relatedPath, fileName);
+            return GetOpenWindowString(siteId,hiddenClientId, relatedPath, fileName);
         }
 
-        public static string GetOpenWindowString(int publishmentSystemId,string hiddenClientId, string relatedPath, string fileName)
+        public static string GetOpenWindowString(int siteId,string hiddenClientId, string relatedPath, string fileName)
         {
-            return PageUtils.GetOpenLayerString("查看文件属性", PageUtils.GetCmsUrl(nameof(ModalFileView), new NameValueCollection
+            return LayerUtils.GetOpenScript("查看文件属性", PageUtils.GetCmsUrl(siteId, nameof(ModalFileView), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"HiddenClientID", hiddenClientId},
                 {"RelatedPath", relatedPath},
                 {"FileName", fileName}
             }), 680, 660);
         }
 
-        public static string GetOpenWindowStringWithTextBoxValue(int publishmentSystemId, string textBoxId)
+        public static string GetOpenWindowStringWithTextBoxValue(int siteId, string textBoxId)
         {
-            return PageUtils.GetOpenLayerStringWithTextBoxValue("查看文件属性", PageUtils.GetCmsUrl(nameof(ModalFileView), new NameValueCollection
+            return LayerUtils.GetOpenScriptWithTextBoxValue("查看文件属性", PageUtils.GetCmsUrl(siteId, nameof(ModalFileView), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"TextBoxID", textBoxId}
             }), textBoxId, 680, 660);
         }
@@ -119,30 +113,30 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID");
-            if (Body.IsQueryExists("TextBoxID"))
+            PageUtils.CheckRequestParameter("siteId");
+            if (AuthRequest.IsQueryExists("TextBoxID"))
             {
-                var textBoxId = Body.GetQueryString("TextBoxID");
-                var virtualUrl = Body.GetQueryString(textBoxId);
-                _filePath = PathUtility.MapPath(PublishmentSystemInfo, virtualUrl);
+                var textBoxId = AuthRequest.GetQueryString("TextBoxID");
+                var virtualUrl = AuthRequest.GetQueryString(textBoxId);
+                _filePath = PathUtility.MapPath(SiteInfo, virtualUrl);
                 _relatedPath = PageUtils.RemoveFileNameFromUrl(virtualUrl);
                 _fileName = PathUtils.GetFileName(_filePath);
             }
             else
             {
-                _relatedPath = Body.GetQueryString("RelatedPath").Trim('/');
-                _hiddenClientId = Body.GetQueryString("HiddenClientID");
+                _relatedPath = AuthRequest.GetQueryString("RelatedPath").Trim('/');
+                _hiddenClientId = AuthRequest.GetQueryString("HiddenClientID");
                 if (!_relatedPath.StartsWith("~") && !_relatedPath.StartsWith("@"))
                 {
                     _relatedPath = "@/" + _relatedPath;
                 }
-                _fileName = Body.GetQueryString("FileName");
-                _updateName = Body.GetQueryString("UpdateName");
+                _fileName = AuthRequest.GetQueryString("FileName");
+                _updateName = AuthRequest.GetQueryString("UpdateName");
                 if (!string.IsNullOrEmpty(_updateName))
                 {
                     _fileName = _updateName;
                 }
-                _filePath = PathUtility.MapPath(PublishmentSystemInfo, PathUtils.Combine(_relatedPath, _fileName));
+                _filePath = PathUtility.MapPath(SiteInfo, PathUtils.Combine(_relatedPath, _fileName));
             }
 
             if (!FileUtils.IsFileExists(_filePath))
@@ -151,38 +145,30 @@ namespace SiteServer.BackgroundPages.Cms
                 return;
             }
 
-			if (!IsPostBack)
-			{
-                var fileInfo = new FileInfo(_filePath);
-                var fileType = EFileSystemTypeUtils.GetEnumType(fileInfo.Extension);
-                if (Body.IsQueryExists("UpdateName"))
-                {
-                    ltlFileName.Text = Body.GetQueryString("UpdateName");
-                }
-                else
-                {
-                    ltlFileName.Text = fileInfo.Name;
-                }
-                ltlFileType.Text = EFileSystemTypeUtils.GetText(fileType);
-                ltlFilePath.Text = Path.GetDirectoryName(_filePath);
-                ltlFileSize.Text = TranslateUtils.GetKbSize(fileInfo.Length) + " KB";
-                ltlCreationTime.Text = fileInfo.CreationTime.ToString("yyyy-MM-dd hh:mm:ss");
-                ltlLastWriteTime.Text = fileInfo.LastWriteTime.ToString("yyyy-MM-dd hh:mm:ss");
-                ltlLastAccessTime.Text = fileInfo.LastAccessTime.ToString("yyyy-MM-dd hh:mm:ss");
+            if (IsPostBack) return;
 
-                ltlOpen.Text =
-                    $@"<a href=""{PageUtility.GetPublishmentSystemUrlByPhysicalPath(PublishmentSystemInfo, _filePath, true)}"" target=""_blank"">浏 览</a>&nbsp;&nbsp;";
-			    if (EFileSystemTypeUtils.IsTextEditable(fileType))
-			    {
-                    ltlEdit.Text = $@"<a href=""{ModalFileEdit.GetRedirectUrl(PublishmentSystemId, _relatedPath, _fileName, false)}"">修 改</a>&nbsp;&nbsp;";
-			    }
-			    if (!string.IsNullOrEmpty(_hiddenClientId))
-                {
-                    ltlChangeName.Text =
-                        $@"<a href=""javascript:;"" onclick=""{ModalFileChangeName.GetOpenWindowString(
-                            PublishmentSystemId, _relatedPath, fileInfo.Name, _hiddenClientId)}"">改 名</a>";
-                }
-			}
-		}
+            var fileInfo = new FileInfo(_filePath);
+            var fileType = EFileSystemTypeUtils.GetEnumType(fileInfo.Extension);
+            LtlFileName.Text = AuthRequest.IsQueryExists("UpdateName") ? AuthRequest.GetQueryString("UpdateName") : fileInfo.Name;
+            LtlFileType.Text = EFileSystemTypeUtils.GetText(fileType);
+            LtlFilePath.Text = Path.GetDirectoryName(_filePath);
+            LtlFileSize.Text = TranslateUtils.GetKbSize(fileInfo.Length) + " KB";
+            LtlCreationTime.Text = fileInfo.CreationTime.ToString("yyyy-MM-dd hh:mm:ss");
+            LtlLastWriteTime.Text = fileInfo.LastWriteTime.ToString("yyyy-MM-dd hh:mm:ss");
+            LtlLastAccessTime.Text = fileInfo.LastAccessTime.ToString("yyyy-MM-dd hh:mm:ss");
+
+            LtlOpen.Text =
+                $@"<a class=""btn btn-default m-l-5"" href=""{PageUtility.GetSiteUrlByPhysicalPath(SiteInfo, _filePath, true)}"" target=""_blank"">浏 览</a>";
+            if (EFileSystemTypeUtils.IsTextEditable(fileType))
+            {
+                LtlEdit.Text = $@"<a class=""btn btn-default m-l-5"" href=""{ModalFileEdit.GetRedirectUrl(SiteId, _relatedPath, _fileName, false)}"">修 改</a>";
+            }
+            if (!string.IsNullOrEmpty(_hiddenClientId))
+            {
+                LtlChangeName.Text =
+                    $@"<a class=""btn btn-default m-l-5"" href=""javascript:;"" onclick=""{ModalFileChangeName.GetOpenWindowString(
+                        SiteId, _relatedPath, fileInfo.Name, _hiddenClientId)}"">改 名</a>";
+            }
+        }
 	}
 }

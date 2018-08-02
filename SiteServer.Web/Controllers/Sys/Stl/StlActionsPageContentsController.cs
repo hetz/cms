@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Web.Http;
-using BaiRong.Core;
-using SiteServer.CMS.Controllers.Sys.Stl;
+using SiteServer.CMS.Api.Sys.Stl;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.Plugin;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.StlElement;
 
@@ -11,31 +13,31 @@ namespace SiteServer.API.Controllers.Sys.Stl
     [RoutePrefix("api")]
     public class StlActionsPageContentsController : ApiController
     {
-        [HttpPost, Route(ActionsPageContents.Route)]
+        [HttpPost, Route(ApiRouteActionsPageContents.Route)]
         public IHttpActionResult Main()
         {
             try
             {
-                var body = new RequestBody();
+                var request = new AuthRequest();
 
-                var publishmentSystemId = body.GetPostInt("publishmentSystemId");
-                var publishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(publishmentSystemId);
-                var pageNodeId = body.GetPostInt("pageNodeId");
-                var templateId = body.GetPostInt("templateId");
-                var totalNum = body.GetPostInt("totalNum");
-                var pageCount = body.GetPostInt("pageCount");
-                var currentPageIndex = body.GetPostInt("currentPageIndex", 0);
-                var stlPageContentsElement = TranslateUtils.DecryptStringBySecretKey(body.GetPostString("stlPageContentsElement"));
+                var siteId = request.GetPostInt("siteId");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                var pageChannelId = request.GetPostInt("pageChannelId");
+                var templateId = request.GetPostInt("templateId");
+                var totalNum = request.GetPostInt("totalNum");
+                var pageCount = request.GetPostInt("pageCount");
+                var currentPageIndex = request.GetPostInt("currentPageIndex");
+                var stlPageContentsElement = TranslateUtils.DecryptStringBySecretKey(request.GetPostString("stlPageContentsElement"));
 
-                var nodeInfo = NodeManager.GetNodeInfo(publishmentSystemId, pageNodeId);
-                var templateInfo = TemplateManager.GetTemplateInfo(publishmentSystemId, templateId);
-                var pageInfo = new PageInfo(nodeInfo.NodeId, 0, publishmentSystemInfo, templateInfo)
+                var nodeInfo = ChannelManager.GetChannelInfo(siteId, pageChannelId);
+                var templateInfo = TemplateManager.GetTemplateInfo(siteId, templateId);
+                var pageInfo = new PageInfo(nodeInfo.Id, 0, siteInfo, templateInfo, new Dictionary<string, object>())
                 {
-                    UserInfo = body.UserInfo
+                    UserInfo = request.UserInfo
                 };
                 var contextInfo = new ContextInfo(pageInfo);
 
-                var stlPageContents = new StlPageContents(stlPageContentsElement, pageInfo, contextInfo, false);
+                var stlPageContents = new StlPageContents(stlPageContentsElement, pageInfo, contextInfo);
 
                 var pageHtml = stlPageContents.Parse(totalNum, currentPageIndex, pageCount, false);
 

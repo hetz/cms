@@ -1,18 +1,17 @@
 using System.Collections;
-using BaiRong.Core;
-using BaiRong.Core.AuxiliaryTable;
+using SiteServer.Utils;
 using SiteServer.CMS.Model;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Collections.Specialized;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.Core.Office
 {
 	public class AccessObject
 	{
-        public static bool CreateAccessFileForContents(string filePath, PublishmentSystemInfo publishmentSystemInfo, NodeInfo nodeInfo, List<int> contentIDArrayList, List<string> displayAttributes, bool isPeriods, string dateFrom, string dateTo, ETriState checkedState)
+        public static bool CreateAccessFileForContents(string filePath, SiteInfo siteInfo, ChannelInfo nodeInfo, List<int> contentIdList, List<string> displayAttributes, bool isPeriods, string dateFrom, string dateTo, ETriState checkedState)
         {
             DirectoryUtils.CreateDirectoryIfNotExists(DirectoryUtils.GetDirectoryPath(filePath));
             FileUtils.DeleteFileIfExists(filePath);
@@ -20,33 +19,32 @@ namespace SiteServer.CMS.Core.Office
             var sourceFilePath = SiteServerAssets.GetPath(SiteServerAssets.Default.AccessMdb);
             FileUtils.CopyFile(sourceFilePath, filePath);
 
-            var relatedidentityes = RelatedIdentities.GetChannelRelatedIdentities(publishmentSystemInfo.PublishmentSystemId, nodeInfo.NodeId);
+            var relatedidentityes = RelatedIdentities.GetChannelRelatedIdentities(siteInfo.Id, nodeInfo.Id);
 
-            var tableStyle = NodeManager.GetTableStyle(publishmentSystemInfo, nodeInfo);
-            var tableName = NodeManager.GetTableName(publishmentSystemInfo, nodeInfo);
-            var styleInfoList = TableStyleManager.GetTableStyleInfoList(tableStyle, tableName, relatedidentityes);
-            styleInfoList = ContentUtility.GetAllTableStyleInfoList(publishmentSystemInfo, tableStyle, styleInfoList);
+            var tableName = ChannelManager.GetTableName(siteInfo, nodeInfo);
+            var styleInfoList = TableStyleManager.GetTableStyleInfoList(tableName, relatedidentityes);
+            styleInfoList = ContentUtility.GetAllTableStyleInfoList(styleInfoList);
 
-            var accessDAO = new AccessDao(filePath);
+            var accessDao = new AccessDao(filePath);
 
-            var createTableSqlString = accessDAO.GetCreateTableSqlString(nodeInfo.NodeName, styleInfoList, displayAttributes);
-            accessDAO.ExecuteSqlString(createTableSqlString);
+            var createTableSqlString = accessDao.GetCreateTableSqlString(nodeInfo.ChannelName, styleInfoList, displayAttributes);
+            accessDao.ExecuteSqlString(createTableSqlString);
 
             bool isExport;
 
-            var insertSqlArrayList = accessDAO.GetInsertSqlStringArrayList(nodeInfo.NodeName, publishmentSystemInfo.PublishmentSystemId, nodeInfo.NodeId, tableStyle, tableName, styleInfoList, displayAttributes, contentIDArrayList, isPeriods, dateFrom, dateTo, checkedState, out isExport);
+            var insertSqlArrayList = accessDao.GetInsertSqlStringArrayList(nodeInfo.ChannelName, siteInfo.Id, nodeInfo.Id, tableName, styleInfoList, displayAttributes, contentIdList, isPeriods, dateFrom, dateTo, checkedState, out isExport);
 
             foreach (string insertSql in insertSqlArrayList)
             {
-                accessDAO.ExecuteSqlString(insertSql);
+                accessDao.ExecuteSqlString(insertSql);
             }
 
             return isExport;
         }
 
-        public static ArrayList GetContentsByAccessFile(string filePath, PublishmentSystemInfo publishmentSystemInfo, NodeInfo nodeInfo)
+        public static List<ContentInfo> GetContentsByAccessFile(string filePath, SiteInfo siteInfo, ChannelInfo nodeInfo)
         {
-            var contentInfoArrayList = new ArrayList();
+            var contentInfoList = new List<ContentInfo>();
 
             var accessDao = new AccessDao(filePath);
             var tableNames = accessDao.GetTableNames();
@@ -61,12 +59,11 @@ namespace SiteServer.CMS.Core.Office
 
                     if (oleDt.Rows.Count > 0)
                     {
-                        var relatedidentityes = RelatedIdentities.GetChannelRelatedIdentities(publishmentSystemInfo.PublishmentSystemId, nodeInfo.NodeId);
+                        var relatedidentityes = RelatedIdentities.GetChannelRelatedIdentities(siteInfo.Id, nodeInfo.Id);
 
-                        var tableStyle = NodeManager.GetTableStyle(publishmentSystemInfo, nodeInfo);
-                        var theTableName = NodeManager.GetTableName(publishmentSystemInfo, nodeInfo);
+                        var theTableName = ChannelManager.GetTableName(siteInfo, nodeInfo);
 
-                        var tableStyleInfoList = TableStyleManager.GetTableStyleInfoList(tableStyle, theTableName, relatedidentityes);
+                        var tableStyleInfoList = TableStyleManager.GetTableStyleInfoList(theTableName, relatedidentityes);
 
                         var nameValueCollection = new NameValueCollection();
 
@@ -79,19 +76,14 @@ namespace SiteServer.CMS.Core.Office
                         for (var i = 0; i < oleDt.Columns.Count; i++)
                         {
                             var columnName = oleDt.Columns[i].ColumnName;
-                            if (!string.IsNullOrEmpty(nameValueCollection[columnName]))
-                            {
-                                attributeNames.Add(nameValueCollection[columnName]);
-                            }
-                            else
-                            {
-                                attributeNames.Add(columnName);
-                            }
+                            attributeNames.Add(!string.IsNullOrEmpty(nameValueCollection[columnName])
+                                ? nameValueCollection[columnName]
+                                : columnName);
                         }
 
                         foreach (DataRow row in oleDt.Rows)
                         {
-                            var contentInfo = new BackgroundContentInfo();
+                            var contentInfo = new ContentInfo();
 
                             for (var i = 0; i < oleDt.Columns.Count; i++)
                             {
@@ -105,18 +97,18 @@ namespace SiteServer.CMS.Core.Office
 
                             if (!string.IsNullOrEmpty(contentInfo.Title))
                             {
-                                contentInfo.PublishmentSystemId = publishmentSystemInfo.PublishmentSystemId;
-                                contentInfo.NodeId = nodeInfo.NodeId;
+                                contentInfo.SiteId = siteInfo.Id;
+                                contentInfo.ChannelId = nodeInfo.Id;
                                 contentInfo.LastEditDate = DateTime.Now;
 
-                                contentInfoArrayList.Add(contentInfo);
+                                contentInfoList.Add(contentInfo);
                             }
                         }
                     }
                 }
             }
 
-            return contentInfoArrayList;
+            return contentInfoList;
         }
 	}
 }

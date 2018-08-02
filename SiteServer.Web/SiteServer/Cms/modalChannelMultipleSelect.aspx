@@ -1,5 +1,5 @@
 ﻿<%@ Page Language="C#" Inherits="SiteServer.BackgroundPages.Cms.ModalChannelMultipleSelect" Trace="false"%>
-  <%@ Register TagPrefix="bairong" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
+  <%@ Register TagPrefix="ctrl" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
     <!DOCTYPE html>
     <html class="modalPage">
 
@@ -9,36 +9,34 @@
     </head>
 
     <body>
-      <!--#include file="../inc/openWindow.html"-->
-
       <form runat="server">
-        <bairong:alerts runat="server" />
+        <ctrl:alerts runat="server" />
 
-        <div class="form-horizontal">
-
-          <asp:PlaceHolder id="PhPublishmentSystemId" runat="server">
-            <div class="form-group">
-              <label class="col-xs-3 control-label text-right">选择站点</label>
-              <div class="col-xs-8">
-                <asp:DropDownList class="form-control" ID="DdlPublishmentSystemId" runat="server" AutoPostBack="true" OnSelectedIndexChanged="DdlPublishmentSystemId_OnSelectedIndexChanged">
-                </asp:DropDownList>
-              </div>
-              <div class="col-xs-1">
-
-              </div>
+        <asp:PlaceHolder id="PhSiteId" runat="server">
+          <div class="form-group form-row">
+            <label class="col-2 col-form-label text-right m-t-5">选择站点</label>
+            <div class="col-6">
+              <asp:DropDownList class="form-control" ID="DdlSiteId" runat="server" AutoPostBack="true" OnSelectedIndexChanged="DdlSiteId_OnSelectedIndexChanged">
+              </asp:DropDownList>
             </div>
-          </asp:PlaceHolder>
+            <div class="col-4"></div>
+          </div>
+        </asp:PlaceHolder>
 
-          <table class="table table-hover m-5">
-            <tr class="info thead">
-              <td>
+        <table class="table table-tree tablesaw table-hover m-0">
+          <thead>
+            <tr class="thead">
+              <th>
                 点击栏目名称进行选择
-              </td>
+              </th>
             </tr>
-            <tr treeItemLevel="0">
+          </thead>
+          <tbody>
+            <tr treeItemLevel="1">
               <td>
-                <img align="absmiddle" src="../assets/icons/tree/minus.gif" />
-                <img align="absmiddle" border="0" src="../assets/icons/tree/folder.gif" />
+                <img align="absmiddle" style="cursor:pointer" onClick="displayChildren(this);" isAjax="false" isOpen="true" src="../assets/icons/tree/minus.png"
+                />
+                <i class="ion-ios-home"></i>
                 <asp:Literal ID="LtlChannelName" runat="server"></asp:Literal>
               </td>
             </tr>
@@ -47,11 +45,11 @@
                 <asp:Literal id="ltlHtml" runat="server" />
               </itemtemplate>
             </asp:Repeater>
-          </table>
-
-        </div>
+          </tbody>
+        </table>
 
       </form>
     </body>
 
     </html>
+    <!--#include file="../inc/foot.html"-->

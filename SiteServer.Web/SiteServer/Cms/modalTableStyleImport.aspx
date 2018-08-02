@@ -1,26 +1,37 @@
 ﻿<%@ Page Language="C#" Trace="false" Inherits="SiteServer.BackgroundPages.Cms.ModalTableStyleImport" %>
-<%@ Register TagPrefix="bairong" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<!--#include file="../inc/header.aspx"-->
-</head>
+	<%@ Register TagPrefix="ctrl" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
+		<!DOCTYPE html>
+		<html class="modalPage">
 
-<body>
-<!--#include file="../inc/openWindow.html"-->
-<form class="form-inline" enctype="multipart/form-data" method="post" runat="server">
-<asp:Button id="btnSubmit" useSubmitBehavior="false" OnClick="Submit_OnClick" runat="server" style="display:none" />
-<bairong:alerts runat="server"></bairong:alerts>
+		<head>
+			<meta charset="utf-8">
+			<!--#include file="../inc/head.html"-->
+		</head>
 
-	<table class="table table-noborder table-hover">
-	  <tr>
-	    <td><bairong:help HelpText="选择需要上传的表样式文件" Text="表样式文件：" runat="server"></bairong:help></td>
-	    <td><input type=file  id=myFile size="35" runat="server"/>
-	      <asp:RequiredFieldValidator ControlToValidate="myFile" errorMessage=" *" foreColor="red" display="Dynamic" runat="server" /></td>
-	  </tr>
-	</table>
+		<body>
+			<form enctype="multipart/form-data" method="post" runat="server">
+				<ctrl:alerts runat="server" />
 
-</form>
-</body>
-</html>
+				<div class="form-group form-row">
+					<label class="col-3 text-right col-form-label">表样式文件</label>
+					<div class="col-8">
+						<input type="file" id="HifMyFile" class="form-control" runat="server" />
+					</div>
+					<div class="col-1 help-block">
+						<asp:RequiredFieldValidator ControlToValidate="HifMyFile" errorMessage=" *" foreColor="red" display="Dynamic" runat="server"
+						/>
+					</div>
+				</div>
+
+				<hr />
+
+				<div class="text-right mr-1">
+					<asp:Button class="btn btn-primary m-l-5" text="确 定" runat="server" onClick="Submit_OnClick" />
+					<button type="button" class="btn btn-default m-l-5" onclick="window.parent.layer.closeAll()">取 消</button>
+				</div>
+
+			</form>
+		</body>
+
+		</html>
+		<!--#include file="../inc/foot.html"-->

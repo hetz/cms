@@ -1,66 +1,41 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Attributes;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.Utils;
 using SiteServer.CMS.Model.Enumerations;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
-    [Stl(Usage = "列表项循环", Description = "通过 stl:each 标签在模板中遍历指定的列表项")]
+    [StlClass(Usage = "列表项循环", Description = "通过 stl:each 标签在模板中遍历指定的列表项")]
     public class StlEach
     {
         public const string ElementName = "stl:each";
 
-        public const string AttributeType = "type";
-        public const string AttributeTotalNum = "totalNum";
-        public const string AttributeStartNum = "startNum";
-        public const string AttributeOrder = "order";
-        public const string AttributeCellPadding = "cellPadding";
-        public const string AttributeCellSpacing = "cellSpacing";
-        public const string AttributeClass = "class";
-        public const string AttributeColumns = "columns";
-        public const string AttributeDirection = "direction";
-        public const string AttributeHeight = "height";
-        public const string AttributeWidth = "width";
-        public const string AttributeAlign = "align";
-        public const string AttributeItemHeight = "itemHeight";
-        public const string AttributeItemWidth = "itemWidth";
-        public const string AttributeItemAlign = "itemAlign";
-        public const string AttributeItemVerticalAlign = "itemVerticalAlign";
-        public const string AttributeItemClass = "itemClass";
-        public const string AttributeLayout = "layout";
-
-        public static SortedList<string, string> AttributeList => new SortedList<string, string>
-        {
-            {AttributeType, StringUtils.SortedListToAttributeValueString("循环类型", TypeList)},
-            {AttributeTotalNum, "显示信息数目"},
-            {AttributeStartNum, "从第几条信息开始显示"},
-            {AttributeOrder, "排序"},
-            {AttributeCellPadding, "填充"},
-            {AttributeCellSpacing, "间距"},
-            {AttributeClass, "Css类"},
-            {AttributeColumns, "列数"},
-            {AttributeDirection, "方向"},
-            {AttributeLayout, "指定列表布局方式"},
-            {AttributeHeight, "整体高度"},
-            {AttributeWidth, "整体宽度"},
-            {AttributeAlign, "整体对齐"},
-            {AttributeItemHeight, "项高度"},
-            {AttributeItemWidth, "项宽度"},
-            {AttributeItemAlign, "项水平对齐"},
-            {AttributeItemVerticalAlign, "项垂直对齐"},
-            {AttributeItemClass, "项Css类"}
-        };
-
-        public const string TypePhoto = "Photo";
+        private static readonly Attr Type = new Attr("type", "循环类型");
+        private static readonly Attr TotalNum = new Attr("totalNum", "显示信息数目");
+        private static readonly Attr StartNum = new Attr("startNum", "从第几条信息开始显示");
+        private static readonly Attr Order = new Attr("order", "排序");
+        private static readonly Attr CellPadding = new Attr("cellPadding", "填充");
+        private static readonly Attr CellSpacing = new Attr("cellSpacing", "间距");
+        private static readonly Attr Class = new Attr("class", "Css类");
+        private static readonly Attr Columns = new Attr("columns", "列数");
+        private static readonly Attr Direction = new Attr("direction", "方向");
+        private static readonly Attr Height = new Attr("height", "指定列表布局方式");
+        private static readonly Attr Width = new Attr("width", "整体高度");
+        private static readonly Attr Align = new Attr("align", "整体宽度");
+        private static readonly Attr ItemHeight = new Attr("itemHeight", "整体对齐");
+        private static readonly Attr ItemWidth = new Attr("itemWidth", "项高度");
+        private static readonly Attr ItemAlign = new Attr("itemAlign", "项宽度");
+        private static readonly Attr ItemVerticalAlign = new Attr("itemVerticalAlign", "项水平对齐");
+        private static readonly Attr ItemClass = new Attr("itemClass", "项垂直对齐");
+        private static readonly Attr Layout = new Attr("layout", "项Css类");
 
         public static SortedList<string, string> TypeList => new SortedList<string, string>
         {
-            {TypePhoto, "遍历内容模型为图片的内容的图片列表"},
             {BackgroundContentAttribute.ImageUrl, "遍历内容的图片字段"},
             {BackgroundContentAttribute.VideoUrl, "遍历内容的视频字段"},
             {BackgroundContentAttribute.FileUrl, "遍历内容的附件字段"}
@@ -77,7 +52,7 @@ namespace SiteServer.CMS.StlParser.StlElement
         {
             var parsedContent = string.Empty;
 
-            var type = listInfo.Others.Get(AttributeType);
+            var type = listInfo.Others.Get(Type.Name);
             if (string.IsNullOrEmpty(type))
             {
                 type = BackgroundContentAttribute.ImageUrl;
@@ -85,56 +60,48 @@ namespace SiteServer.CMS.StlParser.StlElement
 
             var contextType = EContextType.Each;
             IEnumerable dataSource = null;
-            if (StringUtils.EqualsIgnoreCase(type, TypePhoto))
+            var contentInfo = contextInfo.ContentInfo;
+            if (contentInfo != null)
             {
-                contextType = EContextType.Photo;
-                dataSource = StlDataUtility.GetPhotosDataSource(pageInfo.PublishmentSystemInfo, contextInfo.ContentId, listInfo.StartNum, listInfo.TotalNum);
-            }
-            else
-            {
-                var contentInfo = contextInfo.ContentInfo;
-                if (contentInfo != null)
+                var eachList = new List<string>();
+
+                if (!string.IsNullOrEmpty(contentInfo.GetString(type)))
                 {
-                    var eachList = new List<string>();
-
-                    if (!string.IsNullOrEmpty(contentInfo.GetString(type)))
-                    {
-                        eachList.Add(contentInfo.GetString(type));
-                    }
-
-                    var extendAttributeName = ContentAttribute.GetExtendAttributeName(type);
-                    var extendValues = contentInfo.GetString(extendAttributeName);
-                    if (!string.IsNullOrEmpty(extendValues))
-                    {
-                        foreach (var extendValue in TranslateUtils.StringCollectionToStringList(extendValues))
-                        {
-                            eachList.Add(extendValue);
-                        }
-                    }
-
-                    if (listInfo.StartNum > 1 || listInfo.TotalNum > 0)
-                    {
-                        if (listInfo.StartNum > 1)
-                        {
-                            var count = listInfo.StartNum - 1;
-                            if (count > eachList.Count)
-                            {
-                                count = eachList.Count;
-                            }
-                            eachList.RemoveRange(0, count);
-                        }
-
-                        if (listInfo.TotalNum > 0)
-                        {
-                            if (listInfo.TotalNum < eachList.Count)
-                            {
-                                eachList.RemoveRange(listInfo.TotalNum, eachList.Count - listInfo.TotalNum);
-                            }
-                        }
-                    }
-
-                    dataSource = eachList;
+                    eachList.Add(contentInfo.GetString(type));
                 }
+
+                var extendAttributeName = ContentAttribute.GetExtendAttributeName(type);
+                var extendValues = contentInfo.GetString(extendAttributeName);
+                if (!string.IsNullOrEmpty(extendValues))
+                {
+                    foreach (var extendValue in TranslateUtils.StringCollectionToStringList(extendValues))
+                    {
+                        eachList.Add(extendValue);
+                    }
+                }
+
+                if (listInfo.StartNum > 1 || listInfo.TotalNum > 0)
+                {
+                    if (listInfo.StartNum > 1)
+                    {
+                        var count = listInfo.StartNum - 1;
+                        if (count > eachList.Count)
+                        {
+                            count = eachList.Count;
+                        }
+                        eachList.RemoveRange(0, count);
+                    }
+
+                    if (listInfo.TotalNum > 0)
+                    {
+                        if (listInfo.TotalNum < eachList.Count)
+                        {
+                            eachList.RemoveRange(listInfo.TotalNum, eachList.Count - listInfo.TotalNum);
+                        }
+                    }
+                }
+
+                dataSource = eachList;
             }
 
             if (listInfo.Layout == ELayout.None)

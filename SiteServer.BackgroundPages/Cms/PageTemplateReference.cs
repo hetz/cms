@@ -1,74 +1,112 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Reflection;
 using System.Text;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.CMS.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.StlParser.Model;
 
 namespace SiteServer.BackgroundPages.Cms
 {
 	public class PageTemplateReference : BasePageCms
     {
-		public Literal LtlTemplateElements;
-		public Literal LtlTemplateEntities;
+        public Literal LtlAll;
+        public PlaceHolder PhRefenreces;
+        public Literal LtlReferences;
 
-		public void Page_Load(object sender, EventArgs e)
+        public static string GetRedirectUrl(int siteId, string elementName)
+        {
+            return PageUtils.GetCmsUrl(siteId, nameof(PageTemplateReference), new NameValueCollection
+            {
+                {"elementName", elementName}
+            });
+        }
+
+        private string _elementName = string.Empty;
+
+        public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID");
+            PageUtils.CheckRequestParameter("siteId");
 
-			if (!IsPostBack)
+            _elementName = AuthRequest.GetQueryString("elementName");
+
+            if (IsPostBack) return;
+
+            VerifySitePermissions(ConfigManager.WebSitePermissions.Template);
+
+            var elements = StlAll.Elements;
+            var allBuilder = new StringBuilder();
+            foreach (var elementName in elements.Keys)
             {
-                BreadCrumb(AppManager.Cms.LeftMenu.IdTemplate, "STL语言参考", AppManager.Permissions.WebSite.Template);
+                allBuilder.Append($@"<li class=""nav-item {(elementName == _elementName ? "active" : string.Empty)}"">
+              <a href=""{GetRedirectUrl(SiteId, elementName)}"" class=""nav-link"">
+                {elementName}
+              </a>
+            </li>");
+            }
+            LtlAll.Text = allBuilder.ToString();
 
-                var elementsDictionary = StlAll.StlElements.GetElementsNameDictionary();
-                var attributesDictionary = StlAll.StlElements.ElementsAttributesDictionary;
-                LtlTemplateElements.Text = GetElementsString(elementsDictionary, attributesDictionary, false);
+            if (!string.IsNullOrEmpty(_elementName))
+            {
+                Type elementType;
+                if (elements.TryGetValue(_elementName, out elementType))
+                {
+                    PhRefenreces.Visible = true;
 
-                elementsDictionary = StlAll.StlEntities.GetEntitiesNameDictionary();
-                attributesDictionary = StlAll.StlEntities.EntitiesAttributesDictionary;
-                LtlTemplateEntities.Text = GetElementsString(elementsDictionary, attributesDictionary, true);
-			}
-		}
+                    var attrBuilder = new StringBuilder();
 
-
-        private string GetElementsString(SortedList<string, StlAttribute> elementsDictionary, SortedList<string, SortedList<string, string>> attributesDictionary, bool isEntities)
-		{
-			var retval = string.Empty;
-
-            if (elementsDictionary != null)
-			{
-				var builder = new StringBuilder();
-				foreach (string name in elementsDictionary.Keys)
-				{
-					var stlAttribute = elementsDictionary[name];
-				    var helpUrl = StringUtils.Constants.GetStlUrl(isEntities, name);
-                    string tdName = $@"<a href=""{helpUrl}"" target=""_blank"">&lt;{name}&gt;</a>";
-                    if (isEntities)
+                    var fields = elementType.GetFields(BindingFlags.Static | BindingFlags.NonPublic);
+                    foreach (var field in fields)
                     {
-                        tdName = $@"<a href=""{helpUrl}"" target=""_blank"">{{{name}}}</a>";
-                    }
-
-					var attributesList = attributesDictionary[name];
-					var attributesBuilder = new StringBuilder();
-                    if (attributesList != null)
-                    {
-                        foreach (var attributeName in attributesList.Keys)
+                        var attr = field.GetValue(null) as Attr;
+                        if (attr != null)
                         {
-                            attributesBuilder.Append($@"<a href=""{helpUrl + "#" + attributeName}"" target=""_blank"">{attributeName}</a>=""{attributesList[attributeName]}""<br />");
+                            attrBuilder.Append($@"<tr>
+                          <td>{attr.Name}</td>
+                          <td>{AttrUtils.GetAttrTypeText(attr.Type, attr.GetEnums(elementType, SiteId))}</td>
+                          <td>{attr.Description}</td>
+                        </tr>");
                         }
                     }
-				    if (attributesBuilder.Length > 0) attributesBuilder.Length = attributesBuilder.Length - 6;
 
-                    string tdAttributes = $@"<td>{attributesBuilder}<br /></td>";
+                    var helpUrl = StringUtils.Constants.GetStlUrl(false, _elementName);
 
-					builder.Append(@"<tr><td>" + tdName + $@"</td><td>{stlAttribute.Usage}</td><td>{stlAttribute.Description}</td>" + tdAttributes);
-				}
-				retval = builder.ToString();
-			}
+                    var stlAttribute = (StlClassAttribute)Attribute.GetCustomAttribute(elementType, typeof(StlClassAttribute));
 
-			return retval;
-		}
+                    LtlReferences.Text = $@"
+<div class=""tab-pane"" style=""display: block;"">
+    <h4 class=""m-t-0 header-title"">
+    &lt;{_elementName}&gt; {stlAttribute.Usage}
+    </h4>
+    <p>
+    {stlAttribute.Description}
+    <a href=""{helpUrl}"" target=""_blank"">详细使用说明</a>
+    </p>
+    <div class=""panel panel-default m-t-10"">
+    <div class=""panel-body p-0"">
+        <div class=""table-responsive"">
+        <table class=""table tablesaw table-striped m-0"">
+            <thead>
+            <tr>
+                <th>属性</th>
+                <th>类型</th>
+                <th>说明</th>
+            </tr>
+            </thead>
+            <tbody>
+            {attrBuilder}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    </div>
+</div>
+";
+                }
+            }
+        }
 	}
 }

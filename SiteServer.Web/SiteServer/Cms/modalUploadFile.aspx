@@ -1,38 +1,47 @@
 ﻿<%@ Page Language="C#" Inherits="SiteServer.BackgroundPages.Cms.ModalUploadFile" Trace="false" %>
-<%@ Register TagPrefix="bairong" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<!--#include file="../inc/header.aspx"-->
-</head>
+  <%@ Register TagPrefix="ctrl" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
+    <!DOCTYPE html>
+    <html class="modalPage">
 
-<body>
-<!--#include file="../inc/openWindow.html"-->
-<form class="form-inline" enctype="multipart/form-data" method="post" runat="server">
-<asp:Button id="btnSubmit" useSubmitBehavior="false" OnClick="Submit_OnClick" runat="server" style="display:none" />
-<bairong:alerts runat="server"></bairong:alerts>
+    <head>
+      <meta charset="utf-8">
+      <!--#include file="../inc/head.html"-->
+    </head>
 
-  <table class="table table-noborder table-hover">
-    <tr>
-      <td width="120">选择上传的附件：</td>
-      <td>
-        <input type=file  id="hifUpload" size="45" runat="server"/> 
-        <asp:RequiredFieldValidator ControlToValidate="hifUpload" ErrorMessage=" *" foreColor="red" Display="Dynamic" runat="server" />
-      </td>
-    </tr>
-    <tr>
-      <td>是否重命名：</td>
-      <td class="radiobuttonlist">
-          <asp:RadioButtonList id="rblIsFileUploadChangeFileName" runat="server" />
-      </td>
-    </tr>
-  </table>
+    <body>
+      <form runat="server">
+        <ctrl:alerts runat="server" />
 
-  <script type="text/javascript" language="javascript">
-    <asp:Literal id="ltlScript" runat="server"></asp:Literal>
-  </script>
+        <div class="form-group form-row">
+          <label class="col-3 col-form-label text-right">选择上传的附件</label>
+          <div class="col-8">
+            <input type="file" id="HifUpload" class="form-control" runat="server" />
+          </div>
+          <div class="col-1">
+            <asp:RequiredFieldValidator ControlToValidate="HifUpload" ErrorMessage=" *" foreColor="red" Display="Dynamic" runat="server"
+            />
+          </div>
+        </div>
 
-</form>
-</body>
-</html>
+        <div class="form-group form-row">
+          <label class="col-3 col-form-label text-right">是否重命名</label>
+          <div class="col-8">
+            <asp:DropDownList id="DdlIsFileUploadChangeFileName" class="form-control" runat="server" />
+          </div>
+          <div class="col-1"></div>
+        </div>
+
+        <asp:Literal id="LtlScript" runat="server"></asp:Literal>
+
+        <hr />
+
+        <div class="text-right mr-1">
+          <asp:Button class="btn btn-primary m-l-5" text="确 定" runat="server" onClick="Submit_OnClick" />
+          <button type="button" class="btn btn-default m-l-5" onclick="window.parent.layer.closeAll()">取 消</button>
+        </div>
+
+      </form>
+    </body>
+
+    </html>
+    <!--#include file="../inc/foot.html"-->

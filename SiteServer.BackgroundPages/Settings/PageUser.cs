@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
 using SiteServer.BackgroundPages.Core;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.Model;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Settings
 {
@@ -19,13 +20,12 @@ namespace SiteServer.BackgroundPages.Settings
         public DropDownList DdlLastActivityDate;
 
         public Repeater RptContents;
-        public SqlCountPager SpContents;
+        public SqlPager SpContents;
 
         public Button BtnAdd;
         public Button BtnLock;
         public Button BtnUnLock;
         public Button BtnDelete;
-        public Button BtnImport;
         public Button BtnExport;
 
         private EUserLockType _lockType = EUserLockType.Forever;
@@ -49,17 +49,17 @@ namespace SiteServer.BackgroundPages.Settings
         {
             if (IsForbidden) return;
 
-            if (Body.IsQueryExists("Delete"))
+            if (AuthRequest.IsQueryExists("Delete"))
             {
-                var userIdList = TranslateUtils.StringCollectionToIntList(Body.GetQueryString("UserIDCollection"));
+                var userIdList = TranslateUtils.StringCollectionToIntList(AuthRequest.GetQueryString("UserIDCollection"));
                 try
                 {
                     foreach (var userId in userIdList)
                     {
-                        BaiRongDataProvider.UserDao.Delete(userId);
+                        DataProvider.UserDao.Delete(userId);
                     }
 
-                    Body.AddAdminLog("删除用户", string.Empty);
+                    AuthRequest.AddAdminLog("删除用户", string.Empty);
 
                     SuccessDeleteMessage();
                 }
@@ -68,14 +68,14 @@ namespace SiteServer.BackgroundPages.Settings
                     FailDeleteMessage(ex);
                 }
             }
-            else if (Body.IsQueryExists("Lock"))
+            else if (AuthRequest.IsQueryExists("Lock"))
             {
-                var userIdList = TranslateUtils.StringCollectionToIntList(Body.GetQueryString("UserIDCollection"));
+                var userIdList = TranslateUtils.StringCollectionToIntList(AuthRequest.GetQueryString("UserIDCollection"));
                 try
                 {
-                    BaiRongDataProvider.UserDao.Lock(userIdList);
+                    DataProvider.UserDao.Lock(userIdList);
 
-                    Body.AddAdminLog("锁定用户", string.Empty);
+                    AuthRequest.AddAdminLog("锁定用户", string.Empty);
 
                     SuccessMessage("成功锁定所选会员！");
                 }
@@ -84,14 +84,14 @@ namespace SiteServer.BackgroundPages.Settings
                     FailMessage(ex, "锁定所选会员失败！");
                 }
             }
-            else if (Body.IsQueryExists("UnLock"))
+            else if (AuthRequest.IsQueryExists("UnLock"))
             {
-                var userIdList = TranslateUtils.StringCollectionToIntList(Body.GetQueryString("UserIDCollection"));
+                var userIdList = TranslateUtils.StringCollectionToIntList(AuthRequest.GetQueryString("UserIDCollection"));
                 try
                 {
-                    BaiRongDataProvider.UserDao.UnLock(userIdList);
+                    DataProvider.UserDao.UnLock(userIdList);
 
-                    Body.AddAdminLog("解除锁定用户", string.Empty);
+                    AuthRequest.AddAdminLog("解除锁定用户", string.Empty);
 
                     SuccessMessage("成功解除锁定所选会员！");
                 }
@@ -103,27 +103,27 @@ namespace SiteServer.BackgroundPages.Settings
 
             SpContents.ControlToPaginate = RptContents;
 
-            if (string.IsNullOrEmpty(Body.GetQueryString("PageNum")))
+            if (string.IsNullOrEmpty(AuthRequest.GetQueryString("PageNum")))
             {
                 SpContents.ItemsPerPage = TranslateUtils.ToInt(DdlPageNum.SelectedValue) == 0 ? 25 : TranslateUtils.ToInt(DdlPageNum.SelectedValue);
 
-                SpContents.SelectCommand = BaiRongDataProvider.UserDao.GetSelectCommand(true);
+                SpContents.SelectCommand = DataProvider.UserDao.GetSelectCommand(true);
             }
             else
             {
-                SpContents.ItemsPerPage = Body.GetQueryInt("PageNum") == 0 ? StringUtils.Constants.PageSize : Body.GetQueryInt("PageNum");
-                SpContents.SelectCommand = BaiRongDataProvider.UserDao.GetSelectCommand(Body.GetQueryString("Keyword"), Body.GetQueryInt("CreationDate"), Body.GetQueryInt("LastActivityDate"), true, Body.GetQueryInt("LoginCount"), Body.GetQueryString("SearchType"));
+                SpContents.ItemsPerPage = AuthRequest.GetQueryInt("PageNum") == 0 ? StringUtils.Constants.PageSize : AuthRequest.GetQueryInt("PageNum");
+                SpContents.SelectCommand = DataProvider.UserDao.GetSelectCommand(AuthRequest.GetQueryString("Keyword"), AuthRequest.GetQueryInt("CreationDate"), AuthRequest.GetQueryInt("LastActivityDate"), true, AuthRequest.GetQueryInt("LoginCount"), AuthRequest.GetQueryString("SearchType"));
             }
 
             RptContents.ItemDataBound += rptContents_ItemDataBound;
-            SpContents.SortField = BaiRongDataProvider.UserDao.GetSortFieldName();
+            SpContents.SortField = DataProvider.UserDao.GetSortFieldName();
             SpContents.SortMode = SortMode.DESC;
 
             _lockType = EUserLockTypeUtils.GetEnumType(ConfigManager.SystemConfigInfo.UserLockLoginType);
 
             if (IsPostBack) return;
 
-            BreadCrumbSettings("用户管理", AppManager.Permissions.Settings.UserManagement);
+            VerifySystemPermissions(ConfigManager.SettingsPermissions.User);
 
             //添加隐藏属性
             DdlSearchType.Items.Add(new ListItem("用户ID", "userID"));
@@ -134,29 +134,29 @@ namespace SiteServer.BackgroundPages.Settings
             //默认选择用户名
             DdlSearchType.SelectedValue = "userName";
 
-            if (!string.IsNullOrEmpty(Body.GetQueryString("SearchType")))
+            if (!string.IsNullOrEmpty(AuthRequest.GetQueryString("SearchType")))
             {
-                ControlUtils.SelectListItems(DdlSearchType, Body.GetQueryString("SearchType"));
+                ControlUtils.SelectSingleItem(DdlSearchType, AuthRequest.GetQueryString("SearchType"));
             }
-            if (!string.IsNullOrEmpty(Body.GetQueryString("PageNum")))
+            if (!string.IsNullOrEmpty(AuthRequest.GetQueryString("PageNum")))
             {
-                ControlUtils.SelectListItems(DdlPageNum, Body.GetQueryString("PageNum"));
+                ControlUtils.SelectSingleItem(DdlPageNum, AuthRequest.GetQueryString("PageNum"));
             }
-            if (!string.IsNullOrEmpty(Body.GetQueryString("LoginCount")))
+            if (!string.IsNullOrEmpty(AuthRequest.GetQueryString("LoginCount")))
             {
-                ControlUtils.SelectListItems(DdlLoginCount, Body.GetQueryString("LoginCount"));
+                ControlUtils.SelectSingleItem(DdlLoginCount, AuthRequest.GetQueryString("LoginCount"));
             }
-            if (!string.IsNullOrEmpty(Body.GetQueryString("Keyword")))
+            if (!string.IsNullOrEmpty(AuthRequest.GetQueryString("Keyword")))
             {
-                TbKeyword.Text = Body.GetQueryString("Keyword");
+                TbKeyword.Text = AuthRequest.GetQueryString("Keyword");
             }
-            if (!string.IsNullOrEmpty(Body.GetQueryString("CreationDate")))
+            if (!string.IsNullOrEmpty(AuthRequest.GetQueryString("CreationDate")))
             {
-                ControlUtils.SelectListItems(DdlCreationDate, Body.GetQueryString("CreationDate"));
+                ControlUtils.SelectSingleItem(DdlCreationDate, AuthRequest.GetQueryString("CreationDate"));
             }
-            if (!string.IsNullOrEmpty(Body.GetQueryString("LastActivityDate")))
+            if (!string.IsNullOrEmpty(AuthRequest.GetQueryString("LastActivityDate")))
             {
-                ControlUtils.SelectListItems(DdlLastActivityDate, Body.GetQueryString("LastActivityDate"));
+                ControlUtils.SelectSingleItem(DdlLastActivityDate, AuthRequest.GetQueryString("LastActivityDate"));
             }
 
             var backgroundUrl = GetRedirectUrl();
@@ -172,8 +172,6 @@ namespace SiteServer.BackgroundPages.Settings
 
             BtnDelete.Attributes.Add("onclick", PageUtils.GetRedirectStringWithCheckBoxValueAndAlert(
                 $"{backgroundUrl}?Delete=True", "UserIDCollection", "UserIDCollection", "请选择需要删除的会员！", "此操作将删除所选会员，确认吗？"));
-
-            BtnImport.Attributes.Add("onclick", ModalUserImport.GetOpenWindowString());
 
             BtnExport.Attributes.Add("onclick", ModalUserExport.GetOpenWindowString());
 
@@ -206,9 +204,9 @@ namespace SiteServer.BackgroundPages.Settings
             ltlLoginCount.Text = userInfo.CountOfLogin.ToString();
             ltlCreationDate.Text = DateUtils.GetDateAndTimeString(userInfo.CreateDate);
 
-            hlEditLink.NavigateUrl = PageUserAdd.GetRedirectUrlToEdit(userInfo.UserId, GetRedirectUrl());
+            hlEditLink.NavigateUrl = PageUserAdd.GetRedirectUrlToEdit(userInfo.Id, GetRedirectUrl());
             hlChangePassword.Attributes.Add("onclick", ModalUserPassword.GetOpenWindowString(userInfo.UserName));
-            ltlSelect.Text = $@"<input type=""checkbox"" name=""UserIDCollection"" value=""{userInfo.UserId}"" />";
+            ltlSelect.Text = $@"<input type=""checkbox"" name=""UserIDCollection"" value=""{userInfo.Id}"" />";
 
             ltlWritingCount.Text = userInfo.CountOfWriting.ToString();
         }

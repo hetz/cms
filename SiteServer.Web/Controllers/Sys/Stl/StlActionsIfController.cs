@@ -1,52 +1,52 @@
 ﻿using System;
 using System.Web.Http;
-using BaiRong.Core;
-using SiteServer.CMS.Controllers.Sys.Stl;
+using SiteServer.CMS.Api.Sys.Stl;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.Plugin;
 using SiteServer.CMS.StlParser.StlElement;
-using SiteServer.CMS.StlParser.Utility;
 
 namespace SiteServer.API.Controllers.Sys.Stl
 {
     [RoutePrefix("api")]
     public class StlActionsIfController : ApiController
     {
-        [HttpPost, Route(ActionsIf.Route)]
+        [HttpPost, Route(ApiRouteActionsIf.Route)]
         public IHttpActionResult Main()
         {
             try
             {
-                var body = new RequestBody();
+                var request = new AuthRequest();
 
-                var publishmentSystemId = body.GetPostInt("publishmentSystemId");
-                var channelId = body.GetPostInt("channelId");
-                var contentId = body.GetPostInt("contentId");
-                var templateId = body.GetPostInt("templateId");
-                var ajaxDivId = PageUtils.FilterSqlAndXss(body.GetPostString("ajaxDivId"));
-                var pageUrl = TranslateUtils.DecryptStringBySecretKey(body.GetPostString("pageUrl"));
-                var testType = PageUtils.FilterSqlAndXss(body.GetPostString("testType"));
-                var testValue = PageUtils.FilterSqlAndXss(body.GetPostString("testValue"));
-                var testOperate = PageUtils.FilterSqlAndXss(body.GetPostString("testOperate"));
-                var successTemplate = TranslateUtils.DecryptStringBySecretKey(body.GetPostString("successTemplate"));
-                var failureTemplate = TranslateUtils.DecryptStringBySecretKey(body.GetPostString("failureTemplate"));
+                var siteId = request.GetPostInt("siteId");
+                var channelId = request.GetPostInt("channelId");
+                var contentId = request.GetPostInt("contentId");
+                var templateId = request.GetPostInt("templateId");
+                var ajaxDivId = PageUtils.FilterSqlAndXss(request.GetPostString("ajaxDivId"));
+                var pageUrl = TranslateUtils.DecryptStringBySecretKey(request.GetPostString("pageUrl"));
+                var testType = PageUtils.FilterSqlAndXss(request.GetPostString("testType"));
+                //var testValue = PageUtils.FilterSqlAndXss(request.GetPostString("testValue"));
+                //var testOperate = PageUtils.FilterSqlAndXss(request.GetPostString("testOperate"));
+                var successTemplate = TranslateUtils.DecryptStringBySecretKey(request.GetPostString("successTemplate"));
+                var failureTemplate = TranslateUtils.DecryptStringBySecretKey(request.GetPostString("failureTemplate"));
 
                 var isSuccess = false;
                 if (StringUtils.EqualsIgnoreCase(testType, StlIf.TypeIsUserLoggin))
                 {
-                    isSuccess = body.IsUserLoggin;
+                    isSuccess = request.IsUserLoggin;
                 }
                 else if (StringUtils.EqualsIgnoreCase(testType, StlIf.TypeIsAdministratorLoggin))
                 {
-                    isSuccess = body.IsAdminLoggin;
+                    isSuccess = request.IsAdminLoggin;
                 }
                 else if (StringUtils.EqualsIgnoreCase(testType, StlIf.TypeIsUserOrAdministratorLoggin))
                 {
-                    isSuccess = body.IsUserLoggin || body.IsAdminLoggin;
+                    isSuccess = request.IsUserLoggin || request.IsAdminLoggin;
                 }
 
                 return Ok(new
                 {
-                    Html = StlUtility.ParseDynamicContent(publishmentSystemId, channelId, contentId, templateId, false, isSuccess ? successTemplate : failureTemplate, pageUrl, 0, ajaxDivId, null, body.UserInfo)
+                    Html = StlDynamic.ParseDynamicContent(siteId, channelId, contentId, templateId, false, isSuccess ? successTemplate : failureTemplate, pageUrl, 0, ajaxDivId, null, request.UserInfo)
                 });
             }
             catch(Exception ex)

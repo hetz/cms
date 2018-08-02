@@ -1,52 +1,30 @@
 ﻿using System.Collections.Generic;
-using System.Text;
-using BaiRong.Core;
-using BaiRong.Core.AuxiliaryTable;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.StlParser.Cache;
 using SiteServer.CMS.StlParser.Model;
-using SiteServer.CMS.StlParser.Utility;
-using SiteServer.Plugin.Models;
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
-    [Stl(Usage = "获取值", Description = "通过 stl:value 标签在模板中获取值")]
+    [StlClass(Usage = "获取值", Description = "通过 stl:value 标签在模板中获取值")]
     public class StlValue
 	{
 		private StlValue(){}
 		public const string ElementName = "stl:value";
 
-		public const string AttributeType = "type";
-        public const string AttributeFormatString = "formatString";
-        public const string AttributeSeparator = "separator";
-        public const string AttributeStartIndex = "startIndex";
-        public const string AttributeLength = "length";
-        public const string AttributeWordNum = "wordNum";
-        public const string AttributeEllipsis = "ellipsis";
-        public const string AttributeReplace = "replace";
-        public const string AttributeTo = "to";
-        public const string AttributeIsClearTags = "isClearTags";
-        public const string AttributeIsReturnToBr = "isReturnToBr";
-        public const string AttributeIsLower = "isLower";
-        public const string AttributeIsUpper = "isUpper";
-
-        public static SortedList<string, string> AttributeList => new SortedList<string, string>
-        {
-            {AttributeType, StringUtils.SortedListToAttributeValueString("类型", TypeList)},
-            {AttributeFormatString, "显示的格式"},
-            {AttributeSeparator, "显示多项时的分割字符串"},
-            {AttributeStartIndex, "字符开始位置"},
-            {AttributeLength, "指定字符长度"},
-            {AttributeWordNum, "显示字符的数目"},
-            {AttributeEllipsis, "文字超出部分显示的文字"},
-            {AttributeReplace, "需要替换的文字，可以是正则表达式"},
-            {AttributeTo, "替换replace的文字信息"},
-            {AttributeIsClearTags, "是否清除标签信息"},
-            {AttributeIsReturnToBr, "是否将回车替换为HTML换行标签"},
-            {AttributeIsLower, "是否转换为小写"},
-            {AttributeIsUpper, "是否转换为大写"}
-        };
+		private static readonly Attr Type = new Attr("type", "类型");
+        private static readonly Attr FormatString = new Attr("formatString", "显示的格式");
+        private static readonly Attr Separator = new Attr("separator", "显示多项时的分割字符串");
+        private static readonly Attr StartIndex = new Attr("startIndex", "字符开始位置");
+        private static readonly Attr Length = new Attr("length", "指定字符长度");
+        private static readonly Attr WordNum = new Attr("wordNum", "显示字符的数目");
+        private static readonly Attr Ellipsis = new Attr("ellipsis", "文字超出部分显示的文字");
+        private static readonly Attr Replace = new Attr("replace", "需要替换的文字，可以是正则表达式");
+        private static readonly Attr To = new Attr("to", "替换replace的文字信息");
+        private static readonly Attr IsClearTags = new Attr("isClearTags", "是否清除标签信息");
+        private static readonly Attr IsReturnToBr = new Attr("isReturnToBr", "是否将回车替换为HTML换行标签");
+        private static readonly Attr IsLower = new Attr("isLower", "是否转换为小写");
+        private static readonly Attr IsUpper = new Attr("isUpper", "是否转换为大写");
 
         public const string TypeSiteName = "SiteName";
 		public const string TypeSiteUrl = "SiteUrl";
@@ -77,59 +55,59 @@ namespace SiteServer.CMS.StlParser.StlElement
             var isLower = false;
             var isUpper = false;
 
-		    foreach (var name in contextInfo.Attributes.Keys)
+		    foreach (var name in contextInfo.Attributes.AllKeys)
 		    {
 		        var value = contextInfo.Attributes[name];
 
-                if (StringUtils.EqualsIgnoreCase(name, AttributeType))
+                if (StringUtils.EqualsIgnoreCase(name, Type.Name))
                 {
                     type = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeFormatString))
+                else if (StringUtils.EqualsIgnoreCase(name, FormatString.Name))
                 {
                     formatString = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeSeparator))
+                else if (StringUtils.EqualsIgnoreCase(name, Separator.Name))
                 {
                     separator = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeStartIndex))
+                else if (StringUtils.EqualsIgnoreCase(name, StartIndex.Name))
                 {
                     startIndex = TranslateUtils.ToInt(value);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeLength))
+                else if (StringUtils.EqualsIgnoreCase(name, Length.Name))
                 {
                     length = TranslateUtils.ToInt(value);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeWordNum))
+                else if (StringUtils.EqualsIgnoreCase(name, WordNum.Name))
                 {
                     wordNum = TranslateUtils.ToInt(value);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeEllipsis))
+                else if (StringUtils.EqualsIgnoreCase(name, Ellipsis.Name))
                 {
                     ellipsis = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeReplace))
+                else if (StringUtils.EqualsIgnoreCase(name, Replace.Name))
                 {
                     replace = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeTo))
+                else if (StringUtils.EqualsIgnoreCase(name, To.Name))
                 {
                     to = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeIsClearTags))
+                else if (StringUtils.EqualsIgnoreCase(name, IsClearTags.Name))
                 {
                     isClearTags = TranslateUtils.ToBool(value, false);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeIsReturnToBr))
+                else if (StringUtils.EqualsIgnoreCase(name, IsReturnToBr.Name))
                 {
                     isReturnToBr = TranslateUtils.ToBool(value, false);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeIsLower))
+                else if (StringUtils.EqualsIgnoreCase(name, IsLower.Name))
                 {
                     isLower = TranslateUtils.ToBool(value, true);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeIsUpper))
+                else if (StringUtils.EqualsIgnoreCase(name, IsUpper.Name))
                 {
                     isUpper = TranslateUtils.ToBool(value, true);
                 }
@@ -152,61 +130,57 @@ namespace SiteServer.CMS.StlParser.StlElement
 
             if (type.ToLower().Equals(TypeSiteName.ToLower()))
             {
-                parsedContent = pageInfo.PublishmentSystemInfo.PublishmentSystemName;
+                parsedContent = pageInfo.SiteInfo.SiteName;
             }
             else if (type.ToLower().Equals(TypeSiteUrl.ToLower()))
             {
-                parsedContent = pageInfo.PublishmentSystemInfo.Additional.WebUrl;
+                parsedContent = pageInfo.SiteInfo.Additional.WebUrl;
             }
             else if (type.ToLower().Equals(TypeDate.ToLower()))
             {
-                pageInfo.AddPageScriptsIfNotExists("datestring.js",
-                    $@"<script charset=""{SiteFilesAssets.DateString.Charset}"" src=""{SiteFilesAssets.GetUrl(
+                if (!pageInfo.BodyCodes.ContainsKey("datestring.js"))
+                {
+                    pageInfo.BodyCodes.Add("datestring.js", $@"<script charset=""{SiteFilesAssets.DateString.Charset}"" src=""{SiteFilesAssets.GetUrl(
                         pageInfo.ApiUrl, SiteFilesAssets.DateString.Js)}"" type=""text/javascript""></script>");
+                }
 
                 parsedContent = @"<script language=""javascript"" type=""text/javascript"">RunGLNL(false);</script>";
             }
             else if (type.ToLower().Equals(TypeDateOfTraditional.ToLower()))
             {
-                pageInfo.AddPageScriptsIfNotExists("datestring",
-                    $@"<script charset=""{SiteFilesAssets.DateString.Charset}"" src=""{SiteFilesAssets.GetUrl(
+                if (!pageInfo.BodyCodes.ContainsKey("datestring"))
+                {
+                    pageInfo.BodyCodes.Add("datestring", $@"<script charset=""{SiteFilesAssets.DateString.Charset}"" src=""{SiteFilesAssets.GetUrl(
                         pageInfo.ApiUrl, SiteFilesAssets.DateString.Js)}"" type=""text/javascript""></script>");
+                }
 
                 parsedContent = @"<script language=""javascript"" type=""text/javascript"">RunGLNL(true);</script>";
             }
+            else if (pageInfo.Parameters != null && pageInfo.Parameters.ContainsKey(type))
+            {
+                pageInfo.Parameters.TryGetValue(type, out parsedContent);
+                parsedContent = StringUtils.ParseString(InputType.Text, parsedContent, replace, to, startIndex, length, wordNum, ellipsis, isClearTags, isReturnToBr, isLower, isUpper, formatString);
+            }
             else
             {
-                if (pageInfo.PublishmentSystemInfo.Additional.GetString(type) == null)
+                if (pageInfo.SiteInfo.Additional.GetString(type) != null)
                 {
-                    //var stlTagInfo = DataProvider.StlTagDao.GetStlTagInfo(pageInfo.PublishmentSystemId, type) ??
-                    //                 DataProvider.StlTagDao.GetStlTagInfo(0, type);
-                    var stlTagInfo = StlTag.GetStlTagInfo(pageInfo.PublishmentSystemId, type) ??
-                                     StlTag.GetStlTagInfo(0, type);
-                    if (!string.IsNullOrEmpty(stlTagInfo?.TagContent))
-                    {
-                        var innerBuilder = new StringBuilder(stlTagInfo.TagContent);
-                        StlParserManager.ParseInnerContent(innerBuilder, pageInfo, contextInfo);
-                        parsedContent = innerBuilder.ToString();
-                    }
-                }
-                else
-                {
-                    parsedContent = pageInfo.PublishmentSystemInfo.Additional.GetString(type);
+                    parsedContent = pageInfo.SiteInfo.Additional.GetString(type);
                     if (!string.IsNullOrEmpty(parsedContent))
                     {
-                        var styleInfo = TableStyleManager.GetTableStyleInfo(ETableStyle.Site, DataProvider.PublishmentSystemDao.TableName, type, RelatedIdentities.GetRelatedIdentities(ETableStyle.Site, pageInfo.PublishmentSystemId, pageInfo.PublishmentSystemId));
+                        var styleInfo = TableStyleManager.GetTableStyleInfo(DataProvider.SiteDao.TableName, type, RelatedIdentities.GetRelatedIdentities(pageInfo.SiteId, pageInfo.SiteId));
 
                         // 如果 styleInfo.TableStyleId <= 0，表示此字段已经被删除了，不需要再显示值了 ekun008
-                        if (styleInfo.TableStyleId > 0 && styleInfo.IsVisible)
+                        if (styleInfo.Id > 0)
                         {
                             if (isClearTags && InputTypeUtils.EqualsAny(styleInfo.InputType, InputType.Image, InputType.File))
                             {
-                                parsedContent = PageUtility.ParseNavigationUrl(pageInfo.PublishmentSystemInfo, parsedContent, pageInfo.IsLocal);
+                                parsedContent = PageUtility.ParseNavigationUrl(pageInfo.SiteInfo, parsedContent, pageInfo.IsLocal);
                             }
                             else
                             {
-                                parsedContent = InputParserUtility.GetContentByTableStyle(parsedContent, separator, pageInfo.PublishmentSystemInfo, ETableStyle.Site, styleInfo, formatString, contextInfo.Attributes, contextInfo.InnerXml, false);
-                                parsedContent = StringUtils.ParseString(InputTypeUtils.GetEnumType(styleInfo.InputType), parsedContent, replace, to, startIndex, length, wordNum, ellipsis, isClearTags, isReturnToBr, isLower, isUpper, formatString);
+                                parsedContent = InputParserUtility.GetContentByTableStyle(parsedContent, separator, pageInfo.SiteInfo, styleInfo, formatString, contextInfo.Attributes, contextInfo.InnerHtml, false);
+                                parsedContent = StringUtils.ParseString(styleInfo.InputType, parsedContent, replace, to, startIndex, length, wordNum, ellipsis, isClearTags, isReturnToBr, isLower, isUpper, formatString);
                             }
                         }
                         else

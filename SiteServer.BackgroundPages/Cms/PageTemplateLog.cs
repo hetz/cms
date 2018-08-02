@@ -1,28 +1,26 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Data;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
 using SiteServer.BackgroundPages.Core;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class PageTemplateLog : BasePageCms
     {
-        public Repeater rptContents;
-        public SqlPager spContents;
-        public Button btnCompare;
-        public Button btnDelete;
+        public Repeater RptContents;
+        public SqlPager SpContents;
+        public Button BtnDelete;
 
         private int _templateId;
 
-        public static string GetRedirectUrl(int publishmentSystemId, int templateId)
+        public static string GetRedirectUrl(int siteId, int templateId)
         {
-            return PageUtils.GetCmsUrl(nameof(PageTemplateLog), new NameValueCollection
+            return PageUtils.GetCmsUrl(siteId, nameof(PageTemplateLog), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"TemplateID", templateId.ToString()}
             });
         }
@@ -31,17 +29,9 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            _templateId = Body.GetQueryInt("templateID");
+            _templateId = AuthRequest.GetQueryInt("templateID");
 
-            if (Body.IsQueryExists("Compare"))
-            {
-                var idList = TranslateUtils.StringCollectionToIntList(Request.QueryString["IDCollection"]);
-                if (idList.Count != 2)
-                {
-                    FailMessage("请选择2条记录以便进行对比");
-                }
-            }
-            if (Body.IsQueryExists("Delete"))
+            if (AuthRequest.IsQueryExists("Delete"))
             {
                 var arraylist = TranslateUtils.StringCollectionToIntList(Request.QueryString["IDCollection"]);
                 try
@@ -55,61 +45,49 @@ namespace SiteServer.BackgroundPages.Cms
                 }
             }
 
-            spContents.ControlToPaginate = rptContents;
-            spContents.ItemsPerPage = StringUtils.Constants.PageSize;
+            SpContents.ControlToPaginate = RptContents;
+            SpContents.ItemsPerPage = StringUtils.Constants.PageSize;
 
-            spContents.SelectCommand = DataProvider.TemplateLogDao.GetSelectCommend(PublishmentSystemId, _templateId);
+            SpContents.SelectCommand = DataProvider.TemplateLogDao.GetSelectCommend(SiteId, _templateId);
 
-            spContents.SortField = "ID";
-            spContents.SortMode = SortMode.DESC;
-            rptContents.ItemDataBound += rptContents_ItemDataBound;
+            SpContents.SortField = nameof(TemplateLogInfo.Id);
+            SpContents.SortMode = SortMode.DESC;
+            RptContents.ItemDataBound += RptContents_ItemDataBound;
 
-            if (!IsPostBack)
-            {
-                BreadCrumb(AppManager.Cms.LeftMenu.IdTemplate, "修订历史", AppManager.Permissions.WebSite.Template);
+            if (IsPostBack) return;
 
-                btnCompare.Attributes.Add("onclick",
-                    PageUtils.GetRedirectStringWithCheckBoxValue(
-                        PageUtils.GetCmsUrl(nameof(PageTemplateLog), new NameValueCollection
-                        {
-                            {"PublishmentSystemID", PublishmentSystemId.ToString()},
-                            {"TemplateID", _templateId.ToString()},
-                            {"Compare", true.ToString()}
-                        }), "IDCollection", "IDCollection", "请选择需要对比的记录！"));
+            VerifySitePermissions(ConfigManager.WebSitePermissions.Template);
 
-                btnDelete.Attributes.Add("onclick",
-                    PageUtils.GetRedirectStringWithCheckBoxValueAndAlert(
-                        PageUtils.GetCmsUrl(nameof(PageTemplateLog), new NameValueCollection
-                        {
-                            {"PublishmentSystemID", PublishmentSystemId.ToString()},
-                            {"TemplateID", _templateId.ToString()},
-                            {"Delete", true.ToString()}
-                        }), "IDCollection", "IDCollection", "请选择需要删除的修订历史！", "此操作将删除所选修订历史，确认吗？"));
+            BtnDelete.Attributes.Add("onclick",
+                PageUtils.GetRedirectStringWithCheckBoxValueAndAlert(
+                    PageUtils.GetCmsUrl(SiteId, nameof(PageTemplateLog), new NameValueCollection
+                    {
+                        {"TemplateID", _templateId.ToString()},
+                        {"Delete", true.ToString()}
+                    }), "IDCollection", "IDCollection", "请选择需要删除的修订历史！", "此操作将删除所选修订历史，确认吗？"));
 
-                spContents.DataBind();
-            }
+            SpContents.DataBind();
         }
 
-        void rptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
+        private void RptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
         {
-            if (e.Item.ItemType == ListItemType.Item || e.Item.ItemType == ListItemType.AlternatingItem)
-            {
-                var ltlIndex = (Literal)e.Item.FindControl("ltlIndex");
-                var ltlAddUserName = (Literal)e.Item.FindControl("ltlAddUserName");
-                var ltlAddDate = (Literal)e.Item.FindControl("ltlAddDate");
-                var ltlContentLength = (Literal)e.Item.FindControl("ltlContentLength");
-                var ltlView = (Literal)e.Item.FindControl("ltlView");
+            if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-                var logID = SqlUtils.EvalInt(e.Item.DataItem, "ID");
+            var ltlIndex = (Literal)e.Item.FindControl("ltlIndex");
+            var ltlAddUserName = (Literal)e.Item.FindControl("ltlAddUserName");
+            var ltlAddDate = (Literal)e.Item.FindControl("ltlAddDate");
+            var ltlContentLength = (Literal)e.Item.FindControl("ltlContentLength");
+            var ltlView = (Literal)e.Item.FindControl("ltlView");
 
-                ltlIndex.Text = Convert.ToString(e.Item.ItemIndex + 1);
-                ltlAddUserName.Text = SqlUtils.EvalString(e.Item.DataItem, "AddUserName");
-                ltlAddDate.Text = DateUtils.GetDateAndTimeString(SqlUtils.EvalDateTime(e.Item.DataItem, "AddDate"));
-                ltlContentLength.Text = SqlUtils.EvalInt(e.Item.DataItem, "ContentLength").ToString();
-                ltlView.Text =
-                    $@"<a href=""javascript:;"" onclick=""{ModalTemplateView.GetOpenLayerString(PublishmentSystemId,
-                        logID)}"">查看</a>";
-            }
+            var logId = SqlUtils.EvalInt(e.Item.DataItem, nameof(TemplateLogInfo.Id));
+
+            ltlIndex.Text = Convert.ToString(e.Item.ItemIndex + 1);
+            ltlAddUserName.Text = SqlUtils.EvalString(e.Item.DataItem, nameof(TemplateLogInfo.AddUserName));
+            ltlAddDate.Text = DateUtils.GetDateAndTimeString(SqlUtils.EvalDateTime(e.Item.DataItem, nameof(TemplateLogInfo.AddDate)));
+            ltlContentLength.Text = SqlUtils.EvalInt(e.Item.DataItem, nameof(TemplateLogInfo.ContentLength)).ToString();
+            ltlView.Text =
+                $@"<a href=""javascript:;"" onclick=""{ModalTemplateView.GetOpenWindowString(SiteId,
+                    logId)}"">查看</a>";
         }
     }
 }

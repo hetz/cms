@@ -1,103 +1,87 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.AuxiliaryTable;
-using BaiRong.Core.Data;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Enumerations;
-using SiteServer.Plugin.Models;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.Utils;
+using SiteServer.Plugin;
 
 namespace SiteServer.BackgroundPages.Settings
 {
 	public class ModalTableMetadataAdd : BasePageCms
     {
-		public TextBox AttributeName;
+		public TextBox TbAttributeName;
 		public DropDownList DdlDataType;
-		public TextBox DataLength;
+        public PlaceHolder PhDataLength;
+        public TextBox TbDataLength;
 
         private string _tableName;
-        private EAuxiliaryTableType _tableType;
 
-        public static string GetOpenWindowStringToAdd(string tableName, EAuxiliaryTableType tableType)
+        public static string GetOpenWindowStringToAdd(string tableName)
         {
-            return PageUtils.GetOpenWindowString("添加辅助表字段", PageUtils.GetSettingsUrl(nameof(ModalTableMetadataAdd), new NameValueCollection
+            return LayerUtils.GetOpenScript("添加内容表字段", PageUtils.GetSettingsUrl(nameof(ModalTableMetadataAdd), new NameValueCollection
             {
-                {"TableName", tableName},
-                {"TableType", EAuxiliaryTableTypeUtils.GetValue(tableType)}
-            }), 400, 360);
+                {"TableName", tableName}
+            }), 600, 320);
         }
 
-        public static string GetOpenWindowStringToEdit(string tableName, EAuxiliaryTableType tableType, int tableMetadataId)
+        public static string GetOpenWindowStringToEdit(string tableName, int tableMetadataId)
         {
-            return PageUtils.GetOpenWindowString("修改辅助表字段", PageUtils.GetSettingsUrl(nameof(ModalTableMetadataAdd), new NameValueCollection
+            return LayerUtils.GetOpenScript("修改内容表字段", PageUtils.GetSettingsUrl(nameof(ModalTableMetadataAdd), new NameValueCollection
             {
                 {"TableName", tableName},
-                {"TableType", EAuxiliaryTableTypeUtils.GetValue(tableType)},
                 {"TableMetadataID", tableMetadataId.ToString()}
-            }), 400, 360);
+            }), 600, 320);
         }
 
 		public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("TableName", "TableType");
+            PageUtils.CheckRequestParameter("TableName");
 
-            _tableName = Body.GetQueryString("TableName");
-            _tableType = EAuxiliaryTableTypeUtils.GetEnumType(Body.GetQueryString("TableType"));
+            _tableName = AuthRequest.GetQueryString("TableName");
 
-            if (!IsPostBack)
+            if (IsPostBack) return;
+
+            DataTypeUtils.AddListItems(DdlDataType);
+
+            if (AuthRequest.IsQueryExists("TableMetadataID"))
             {
-                DataTypeUtils.AddListItemsToAuxiliaryTable(DdlDataType);
-
-                if (Body.IsQueryExists("TableMetadataID"))
+                var tableMetadataId = AuthRequest.GetQueryInt("TableMetadataID");
+                var info = DataProvider.TableMetadataDao.GetTableMetadataInfo(tableMetadataId);
+                if (info != null)
                 {
-                    var tableMetadataId = Body.GetQueryInt("TableMetadataID");
-                    var info = BaiRongDataProvider.TableMetadataDao.GetTableMetadataInfo(tableMetadataId);
-                    if (info != null)
-                    {
-                        AttributeName.Text = info.AttributeName;
-                        AttributeName.Enabled = false;
-                        ControlUtils.SelectListItemsIgnoreCase(DdlDataType, info.DataType.ToString());
-                        DataLength.Text = info.DataLength.ToString();
-                    }
+                    TbAttributeName.Text = info.AttributeName;
+                    TbAttributeName.Enabled = false;
+                    ControlUtils.SelectSingleItemIgnoreCase(DdlDataType, info.DataType.ToString());
+                    TbDataLength.Text = info.DataLength.ToString();
                 }
             }
-		}
+        }
 
+        public void DdlDataType_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            PhDataLength.Visible = DataTypeUtils.GetEnumType(DdlDataType.SelectedValue) == DataType.VarChar;
+        }
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
             var isChanged = false;
 
-            if (Body.IsQueryExists("TableMetadataID"))
+            if (AuthRequest.IsQueryExists("TableMetadataID"))
             {
-                var tableMetadataId = Body.GetQueryInt("TableMetadataID");
+                var tableMetadataId = AuthRequest.GetQueryInt("TableMetadataID");
 
-                var info = BaiRongDataProvider.TableMetadataDao.GetTableMetadataInfo(tableMetadataId);
-                info.AuxiliaryTableEnName = _tableName;
-                info.AttributeName = AttributeName.Text;
+                var info = DataProvider.TableMetadataDao.GetTableMetadataInfo(tableMetadataId);
+                info.TableName = _tableName;
+                info.AttributeName = TbAttributeName.Text;
                 info.DataType = DataTypeUtils.GetEnumType(DdlDataType.SelectedValue);
 
-                var hashtable = new Hashtable
-                {
-                    [DataType.DateTime] = new[] {"8", "false"},
-                    [DataType.Integer] = new[] {"4", "false"},
-                    [DataType.Text] = new[] {"16", "false"},
-                    [DataType.VarChar] = new[] {"255", "true"}
-                };
-
-                var strArr = (string[])hashtable[DataTypeUtils.GetEnumType(DdlDataType.SelectedValue)];
-                if (strArr[1].Equals("false"))
-                {
-                    DataLength.Text = strArr[0];
-                }
-
-                info.DataLength = int.Parse(DataLength.Text);
                 if (info.DataType == DataType.VarChar)
                 {
+                    info.DataLength = TranslateUtils.ToInt(TbDataLength.Text);
                     var maxLength = SqlUtils.GetMaxLengthForNVarChar();
                     if (info.DataLength <= 0 || info.DataLength > maxLength)
                     {
@@ -108,10 +92,10 @@ namespace SiteServer.BackgroundPages.Settings
 
                 try
                 {
-                    BaiRongDataProvider.TableMetadataDao.Update(info);
+                    DataProvider.TableMetadataDao.Update(info);
 
-                    Body.AddAdminLog("修改辅助表字段",
-                        $"辅助表:{_tableName},字段名:{info.AttributeName}");
+                    AuthRequest.AddAdminLog("修改内容表字段",
+                        $"内容表:{_tableName},字段名:{info.AttributeName}");
 
                     isChanged = true;
                 }
@@ -122,14 +106,14 @@ namespace SiteServer.BackgroundPages.Settings
             }
             else
             {
-                var tableStyle = EAuxiliaryTableTypeUtils.GetTableStyle(_tableType);
-                var attributeNameList = TableManager.GetAttributeNameList(tableStyle, _tableName, true);
-                attributeNameList.AddRange(TableManager.GetHiddenAttributeNameList(tableStyle));
-                if (attributeNameList.IndexOf(AttributeName.Text.Trim().ToLower()) != -1)
+                var attributeNameList = TableMetadataManager.GetAttributeNameList(_tableName, true);
+
+                var attributeNameLowercase = TbAttributeName.Text.Trim().ToLower();
+                if (attributeNameList.Contains(attributeNameLowercase) || ContentAttribute.AllAttributesLowercase.Contains(attributeNameLowercase))
                 {
                     FailMessage("字段添加失败，字段名已存在！");
                 }
-                else if (!SqlUtils.IsAttributeNameCompliant(AttributeName.Text))
+                else if (!SqlUtils.IsAttributeNameCompliant(TbAttributeName.Text))
                 {
                     FailMessage("字段名不符合系统要求！");
                 }
@@ -137,28 +121,14 @@ namespace SiteServer.BackgroundPages.Settings
                 {
                     var info = new TableMetadataInfo
                     {
-                        AuxiliaryTableEnName = _tableName,
-                        AttributeName = AttributeName.Text,
+                        TableName = _tableName,
+                        AttributeName = TbAttributeName.Text,
                         DataType = DataTypeUtils.GetEnumType(DdlDataType.SelectedValue)
                     };
 
-                    var hashtable = new Hashtable
-                    {
-                        [DataType.DateTime] = new[] {"8", "false"},
-                        [DataType.Integer] = new[] {"4", "false"},
-                        [DataType.Text] = new[] {"16", "false"},
-                        [DataType.VarChar] = new[] {"255", "true"}
-                    };
-
-                    var strArr = (string[])hashtable[DataTypeUtils.GetEnumType(DdlDataType.SelectedValue)];
-                    if (strArr[1].Equals("false"))
-                    {
-                        DataLength.Text = strArr[0];
-                    }
-
-                    info.DataLength = int.Parse(DataLength.Text);
                     if (info.DataType == DataType.VarChar)
                     {
+                        info.DataLength = TranslateUtils.ToInt(TbDataLength.Text);
                         var maxLength = SqlUtils.GetMaxLengthForNVarChar();
                         if (info.DataLength <= 0 || info.DataLength > maxLength)
                         {
@@ -170,10 +140,10 @@ namespace SiteServer.BackgroundPages.Settings
 
                     try
                     {
-                        BaiRongDataProvider.TableMetadataDao.Insert(info);
+                        DataProvider.TableMetadataDao.Insert(info);
 
-                        Body.AddAdminLog("添加辅助表字段",
-                            $"辅助表:{_tableName},字段名:{info.AttributeName}");
+                        AuthRequest.AddAdminLog("添加内容表字段",
+                            $"内容表:{_tableName},字段名:{info.AttributeName}");
 
                         isChanged = true;
                     }
@@ -186,7 +156,7 @@ namespace SiteServer.BackgroundPages.Settings
 
             if (isChanged)
             {
-                PageUtils.CloseModalPage(Page);
+                LayerUtils.Close(Page);
             }
 		}
 

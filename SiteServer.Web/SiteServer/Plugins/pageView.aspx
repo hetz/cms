@@ -1,167 +1,193 @@
 ﻿<%@ Page Language="C#" Inherits="SiteServer.BackgroundPages.Plugins.PageView" %>
-<!DOCTYPE html>
-<html>
+  <!DOCTYPE html>
+  <html>
 
-<head>
-  <meta charset="utf-8">
-  <link href="../assets/css/bootstrap.min.css" rel="stylesheet" type="text/css" />
-  <link href="../assets/css/core.css" rel="stylesheet" type="text/css">
-  <link href="../assets/css/ionicons.min.css" rel="stylesheet" type="text/css" />
-  <link href="../assets/css/components.css" rel="stylesheet" type="text/css" />
-  <link href="../assets/css/pages.css" rel="stylesheet" type="text/css" />
-  <link href="../assets/css/menu.css" rel="stylesheet" type="text/css" />
-  <style>
-    .readme img {
-      max-width: 100%;
-    }
-  </style>
-</head>
+  <head>
+    <meta charset="utf-8">
+    <!--#include file="../inc/head.html"-->
+    <link href="../assets/showLoading/css/showLoading.css" rel="stylesheet" />
+    <script type="text/javascript" src="../assets/showLoading/js/jquery.showLoading.js"></script>
+  </head>
 
-<body class="fixed-left">
-  <form class="form-inline" runat="server">
-  <div id="wrapper">
+  <body>
+    <form id="main" class="m-l-15 m-r-15" runat="server">
 
-    <div class="row" style="margin-top: 100px" v-bind:style="{ display: plugin ? 'none' : '' }">
-      <div class="col-sm-4"></div>
-      <div class="col-sm-4">
-        <div class="card-box">
-          <div class="row">
-            <h4 class="header-title m-t-0">载入中，请稍后...</h4>
-            <div class="progress progress-lg m-b-5">
-              <div class="progress-bar progress-bar-warning progress-bar-striped active" role="progressbar" aria-valuenow="100" aria-valuemin="0"
-                aria-valuemax="100" style="width: 100%;"></div>
-            </div>
-          </div>
-        </div>
+      <div class="text-center" style="margin-top: 100px" v-bind:style="{ display: package.id ? 'none' : '' }">
+        <img class="mt-3" src="../assets/images/loading.gif" />
+        <p class="lead mt-3 text-nowrap">载入中，请稍后...</p>
       </div>
-      <div class="col-sm-4"></div>
-    </div>
 
-    <div class="topbar" v-bind:style="{ display: plugin ? '' : 'none' }">
-      <div class="navbar navbar-default" role="navigation">
-        <div class="container">
-          <div class="pull-left">
-            <a href="pageAdd.aspx" class="button-menu-mobile open-left">
-                <i class="ion-android-arrow-back"></i>
-            </a>
-            <span class="clearfix"></span>
-          </div>
-          <div class="pull-right">
-            <asp:Button class="btn btn-success waves-light" onClick="BtnInstall_Click" id="BtnInstall" Text="安装插件" style="margin-top: 16px;" runat="server" />
-            <span class="clearfix"></span>
-          </div>
-        </div>
-      </div>
-    </div>
+      <div v-bind:style="{ display: package.id ? '' : 'none' }" style="display: none">
 
-    <div class="container" style="margin-top: 100px; width: 720px" v-bind:style="{ display: plugin ? '' : 'none' }">
+        <div class="card-box widget-icon">
+          <div>
+            <img v-bind:src="package.iconUrl" style="height: 100px; width: 100px;" class="img-responsive float-left">
+            <div class="wid-icon-info" style="margin-left: 120px;">
+              <p class="text-muted m-b-5 font-13">
+                {{ package.id }}.{{ package.version }}
+              </p>
+              <h4 class="m-t-0 m-b-5 counter">{{ package.title }}</h4>
+              <hr />
+              <p class="lead">
+                {{ package.description }}
+              </p>
 
-      <asp:PlaceHolder id="PhFailure" visible="false" runat="server">
-        <div class="panel panel-border panel-danger">
-            <div class="panel-heading">
-                <h3 class="panel-title">插件安装失败</h3>
-            </div>
-            <div class="panel-body">
-                <p><asp:Literal id="LtlErrorMessage" runat="server" /></p>
-            </div>
-        </div>
-      </asp:PlaceHolder>
+              <div class="alert alert-warning" v-bind:style="{ display: installed && isShouldUpdate ? '' : 'none' }">
+                系统检测到插件新版本，当前版本：{{ installedVersion }}，新版本：{{ package.version }}
+                <input v-on:click="location.href='install.cshtml?isUpdate=true&packageIds=' + package.id;return false;" type="button" value="升级插件"
+                  class="btn btn-primary">
+              </div>
 
-      <asp:PlaceHolder id="PhSuccess" visible="false" runat="server">
-        <div class="panel panel-border panel-primary">
-            <div class="panel-heading">
-                <h3 class="panel-title">插件安装成功</h3>
-            </div>
-            <div class="panel-body">
-                <p>恭喜，插件安装成功</p>
-            </div>
-        </div>
-      </asp:PlaceHolder>
+              <div>
+                <input v-on:click="location.href='install.cshtml?packageIds=' + package.id;return false;"
+                  type="button" value="安装插件" class="btn btn-primary" v-bind:style="{ display: !installed ? '' : 'none' }">
+                <input type="button" disabled="disabled" value="插件已安装" class="btn m-l-5" v-bind:style="{ display: installed && installedVersion == package.version ? '' : 'none' }">
 
-      <div class="row">
-        <div class="col-sm-12">
-          <div class="card-box m-t-20">
-            <div class="widget-user" style="min-height: auto">
-                <img v-bind:src="'http://plugins.siteserver.cn/files/' + plugin.publisher + '-' + plugin.name + '/' + plugin.icon" class="img-responsive" alt="user">
-                <div class="wid-u-info">
-                  <h4 class="m-t-0 m-b-5">
-                    {{ plugin.displayName }}
-                    <code>{{ plugin.publisher + '-' + plugin.name }}</code>
-                  </h4>
-                  <p class="text-muted m-b-5 font-13" v-bind:title="plugin.description">{{ plugin.description }}</p>
-                  <span title="插件安装量">
-                    <i class="ion-ios-cloud-download-outline" style="font-size: 18px;"></i> 
-                    <small style="font-size: 14px;">33K </small>
-                  </span>
-                  <span style="margin: 0 5px"></span>
-                  <span title="插件综合评分">
-                    <i class="ion-ios-star" style="color: #ffb900;font-size: 18px"></i>
-                    <i class="ion-ios-star" style="color: #ffb900;font-size: 18px"></i>
-                    <i class="ion-ios-star" style="color: #ffb900;font-size: 18px"></i>
-                    <i class="ion-ios-star-half" style="color: #ffb900;font-size: 18px"></i>
-                    <i class="ion-ios-star-outline" style="color: #ffb900;font-size: 18px"></i>
-                  </span>
-                </div>
-            </div>
-            <hr>
-
-            <div class="media m-b-30 ">
-              <div class="media-body">
-                <a v-bind:style="{ display: plugin.homepage ? '' : 'none' }" v-bind:href="plugin.homepage" class="media-meta pull-right">插件主页</a>
-                <h4 class="text-primary m-0">作者：{{ plugin.publisher }}</h4>
-                <small class="text-muted">版本号：{{ plugin.version }}</small>
+                <a class="btn btn-success m-l-5" v-bind:style="{ display: package.projectUrl ? '' : 'none' }" target="_blank" v-bind:href="package.projectUrl">插件主页</a>
+                <asp:Button class="btn m-l-5" onClick="Return_Click" Text="返 回" runat="server" />
               </div>
             </div>
+          </div>
+        </div>
 
-            <div class="row">
-              <div v-html="plugin.readme" class="readme col-md-12  m-b-30"></div>
-            </div>
+        <!-- <div class="card-box">
+          <div v-html="package.readme" class="readme m-b-10"></div>
+        </div> -->
+
+        <div class="card-box">
+          <div class="page-title-box">
+            <h4 class="page-title">插件详情</h4>
           </div>
 
+          <table class="table m-0 m-t-25">
+            <tbody>
+              <tr>
+                <th scope="row">版本发行说明</th>
+                <td>{{ package.releaseNotes }}</td>
+              </tr>
+              <tr>
+                <th scope="row">更新日期</th>
+                <td>{{ package.published }}</td>
+              </tr>
+              <tr>
+                <th scope="row">插件Id</th>
+                <td>{{ package.id }}</td>
+              </tr>
+              <tr>
+                <th scope="row">版本号</th>
+                <td>{{ package.version }}</td>
+              </tr>
+              <tr>
+                <th scope="row">作者</th>
+                <td>{{ package.authors ? package.authors.join(',') : '' }}</td>
+              </tr>
+              <tr>
+                <th scope="row">标签</th>
+                <td>{{ package.tags }}</td>
+              </tr>
+              <tr>
+                <th scope="row">插件项目链接</th>
+                <td>
+                  <a v-bind:style="{ display: package.projectUrl ? '' : 'none' }" target="_blank" v-bind:href="package.projectUrl">
+                    {{ package.projectUrl }}
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">插件许可链接</th>
+                <td>
+                  <a v-bind:style="{ display: package.licenseUrl ? '' : 'none' }" target="_blank" v-bind:href="package.licenseUrl">
+                    {{ package.licenseUrl }}
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">版权</th>
+                <td>{{ package.copyright }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
+
+        <div class="card-box" v-if="(package.pluginReferences && package.pluginReferences.length > 0) || (package.packageReferences && package.packageReferences.length > 0)">
+          <div class="page-title-box">
+            <h4 class="page-title">
+              依赖项
+            </h4>
+          </div>
+
+          <p class="text-muted font-13 m-b-25">
+            此插件依赖的类库以及其他插件
+          </p>
+          <table class="table m-0">
+            <thead>
+              <tr>
+                <th>依赖项</th>
+                <th>版本</th>
+                <th>类型</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="reference in package.pluginReferences">
+                <td>{{ reference.id }}</td>
+                <td>{{ reference.version }}</td>
+                <td>插件</td>
+              </tr>
+              <tr v-for="reference in package.packageReferences">
+                <td>{{ reference.id }}</td>
+                <td>{{ reference.version }}</td>
+                <td>类库</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
       </div>
+    </form>
+  </body>
 
-    </div>
+  </html>
 
-  </div>
-  </form>
-</body>
+  <script src="../assets/vue/vue.min.js"></script>
+  <script src="../assets/js/apiUtils.js"></script>
+  <script src="../assets/js/compareversion.js"></script>
+  <script>
+    var ssApi = new apiUtils.Api();
+    var isNightly = <%=IsNightly%>;
+    var version = '<%=Version%>';
+    var pluginId = ssApi.getQueryStringByName('pluginId');
 
-</html>
+    var data = {
+      installed: <%=Installed%>,
+      installedVersion: '<%=InstalledVersion%>',
+      package: <%=Package%> || {},
+      isShouldUpdate: false
+    };
 
-<script src="../assets/vue/vue.min.js"></script>
-<script src="../assets/cloudUtils.js"></script>
-<script>
-  // var api = new cloudUtils.Api('http://localhost:5000/api');
-  var api = new cloudUtils.Api('http://cloud.siteserver.cn/api');
-  var pluginId = api.getQueryStringByName('pluginId');
+    ssApi.get({
+      isNightly: isNightly,
+      version: version
+    }, function (err, res) {
+      if (err || !res || !res.value) return;
 
-  var data = {
-    plugin: null,
-  };
+      data.package = res.value;
+      data.isShouldUpdate = compareversion('<%=InstalledVersion%>', data.package.version) == -1;
+    }, 'packages/' + pluginId);
 
-  api.get(null, function (err, res) {
-    if (!err && res) {
-      data.plugin = res
-    }
-  }, 'plugins/' + pluginId);
-
-  new Vue({
-    el: '#wrapper',
-    data: data,
-    methods: {
-      search: function (event) {
-        if (this.word) {
-          this.searching = true;
-          api.get(null, function (err, res) {
-            data.searching = false;
-            data.searchPlugins = res;
-          }, 'plugins/search/' + this.word);
-        } else {
-          this.searching = false;
-          data.searchPlugins = null;
+    new Vue({
+      el: '#main',
+      data: data
+    });
+  </script>
+  <!--#include file="../inc/foot.html"-->
+  <script>
+    var validate = window.Page_ClientValidate;
+    $(function () {
+      $('.btn-primary').click(function () {
+        if (!validate || validate()) {
+          $('#main').showLoading();
         }
-      }
-    }
-  });
-</script>
+        return true;
+      });
+    });
+  </script>

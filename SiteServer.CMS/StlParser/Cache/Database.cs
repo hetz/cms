@@ -1,4 +1,5 @@
-using BaiRong.Core;
+using System.Data;
+using SiteServer.CMS.Core;
 
 namespace SiteServer.CMS.StlParser.Cache
 {
@@ -18,7 +19,7 @@ namespace SiteServer.CMS.StlParser.Cache
                 retval = StlCacheUtils.GetIntCache(cacheKey);
                 if (retval == -1)
                 {
-                    retval = BaiRongDataProvider.DatabaseDao.GetPageTotalCount(sqlString);
+                    retval = DataProvider.DatabaseDao.GetPageTotalCount(sqlString);
                     StlCacheUtils.SetCache(cacheKey, retval);
                 }
             }
@@ -38,7 +39,7 @@ namespace SiteServer.CMS.StlParser.Cache
                 retval = StlCacheUtils.GetCache<string>(cacheKey);
                 if (retval == null)
                 {
-                    retval = BaiRongDataProvider.DatabaseDao.GetStlPageSqlString(sqlString, orderByString, totalNum, pageNum,
+                    retval = DataProvider.DatabaseDao.GetStlPageSqlString(sqlString, orderByString, totalNum, pageNum,
                     currentPageIndex);
                     StlCacheUtils.SetCache(cacheKey, retval);
                 }
@@ -59,7 +60,47 @@ namespace SiteServer.CMS.StlParser.Cache
                 retval = StlCacheUtils.GetCache<string>(cacheKey);
                 if (retval == null)
                 {
-                    retval = BaiRongDataProvider.DatabaseDao.GetString(connectionString, queryString);
+                    retval = DataProvider.DatabaseDao.GetString(connectionString, queryString);
+                    StlCacheUtils.SetCache(cacheKey, retval);
+                }
+            }
+
+            return retval;
+        }
+
+        public static DataSet GetDataSet(string connectionString, string queryString)
+        {
+            var cacheKey = StlCacheUtils.GetCacheKey(nameof(Database), nameof(GetDataSet),
+                connectionString, queryString);
+            var retval = StlCacheUtils.GetCache<DataSet>(cacheKey);
+            if (retval != null) return retval;
+
+            lock (LockObject)
+            {
+                retval = StlCacheUtils.GetCache<DataSet>(cacheKey);
+                if (retval == null)
+                {
+                    retval = DataProvider.DatabaseDao.GetDataSet(connectionString, queryString);
+                    StlCacheUtils.SetCache(cacheKey, retval);
+                }
+            }
+
+            return retval;
+        }
+
+        public static DataTable GetDataTable(string connectionString, string queryString)
+        {
+            var cacheKey = StlCacheUtils.GetCacheKey(nameof(Database), nameof(GetDataTable),
+                connectionString, queryString);
+            var retval = StlCacheUtils.GetCache<DataTable>(cacheKey);
+            if (retval != null) return retval;
+
+            lock (LockObject)
+            {
+                retval = StlCacheUtils.GetCache<DataTable>(cacheKey);
+                if (retval == null)
+                {
+                    retval = DataProvider.DatabaseDao.GetDataTable(connectionString, queryString);
                     StlCacheUtils.SetCache(cacheKey, retval);
                 }
             }

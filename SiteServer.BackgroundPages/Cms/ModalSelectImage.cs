@@ -3,19 +3,19 @@ using System.Collections;
 using System.Collections.Specialized;
 using System.Text;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.IO.FileManagement;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Model;
+using SiteServer.Utils.Enumerations;
+using SiteServer.Utils.IO;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class ModalSelectImage : BasePageCms
     {
-        public Literal ltlCurrentDirectory;
-        public Literal ltlFileSystems;
-        public HyperLink hlUploadLink;
+        public Literal LtlCurrentDirectory;
+        public Literal LtlFileSystems;
+        public Button BtnUpload;
 
         private string _currentRootPath;
         private string _textBoxClientId;
@@ -26,109 +26,101 @@ namespace SiteServer.BackgroundPages.Cms
 
         private string GetRedirectUrl(string path)
         {
-            return PageUtils.GetCmsUrl(nameof(ModalSelectImage), new NameValueCollection
+            return PageUtils.GetCmsUrl(SiteId, nameof(ModalSelectImage), new NameValueCollection
             {
-                {"PublishmentSystemID", PublishmentSystemId.ToString()},
                 {"RootPath", _rootPath},
                 {"CurrentRootPath", path},
                 {"TextBoxClientID", _textBoxClientId}
             });
         }
 
-        public string PublishmentSystemUrl => PublishmentSystemInfo.Additional.WebUrl;
+        public string SiteUrl => SiteInfo.Additional.WebUrl;
 
         public string RootUrl => PageUtils.ApplicationPath;
 
-        public static string GetOpenWindowString(PublishmentSystemInfo publishmentSystemInfo, string textBoxClientId)
+        public static string GetOpenWindowString(SiteInfo siteInfo, string textBoxClientId)
         {
-            return PageUtils.GetOpenWindowString("选择图片", PageUtils.GetCmsUrl(nameof(ModalSelectImage), new NameValueCollection
-            {
-                {"PublishmentSystemID", publishmentSystemInfo.PublishmentSystemId.ToString()},
-                {"RootPath", "@"},
-                {"CurrentRootPath", publishmentSystemInfo.Additional.ImageUploadDirectoryName},
-                {"TextBoxClientID", textBoxClientId}
-            }), 550, 480, true);
+            return LayerUtils.GetOpenScript("选择图片",
+                PageUtils.GetCmsUrl(siteInfo.Id, nameof(ModalSelectImage), new NameValueCollection
+                {
+                    {"RootPath", "@"},
+                    {"CurrentRootPath", siteInfo.Additional.ImageUploadDirectoryName},
+                    {"TextBoxClientID", textBoxClientId}
+                }));
         }
 
         public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID", "RootPath", "CurrentRootPath", "TextBoxClientID");
+            PageUtils.CheckRequestParameter("siteId", "RootPath", "CurrentRootPath", "TextBoxClientID");
 
-            _rootPath = Body.GetQueryString("RootPath").TrimEnd('/');
-            _currentRootPath = Body.GetQueryString("CurrentRootPath");
-            _textBoxClientId = Body.GetQueryString("TextBoxClientID");
+            _rootPath = AuthRequest.GetQueryString("RootPath").TrimEnd('/');
+            _currentRootPath = AuthRequest.GetQueryString("CurrentRootPath");
+            _textBoxClientId = AuthRequest.GetQueryString("TextBoxClientID");
 
             if (string.IsNullOrEmpty(_currentRootPath))
             {
-                _currentRootPath = PublishmentSystemInfo.Additional.ConfigSelectImageCurrentUrl.TrimEnd('/');
+                _currentRootPath = SiteInfo.Additional.ConfigSelectImageCurrentUrl.TrimEnd('/');
             }
             else
             {
-                PublishmentSystemInfo.Additional.ConfigSelectImageCurrentUrl = _currentRootPath;
-                DataProvider.PublishmentSystemDao.Update(PublishmentSystemInfo);
+                SiteInfo.Additional.ConfigSelectImageCurrentUrl = _currentRootPath;
+                DataProvider.SiteDao.Update(SiteInfo);
             }
             _currentRootPath = _currentRootPath.TrimEnd('/');
 
-            _directoryPath = PathUtility.MapPath(PublishmentSystemInfo, _currentRootPath);
+            _directoryPath = PathUtility.MapPath(SiteInfo, _currentRootPath);
             DirectoryUtils.CreateDirectoryIfNotExists(_directoryPath);
 
-            if (!Page.IsPostBack)
-            {
-                hlUploadLink.NavigateUrl = "javascript:;";
-                hlUploadLink.Attributes.Add("onclick", ModalUploadImageSingle.GetOpenWindowStringToList(PublishmentSystemId, _currentRootPath));
+            if (Page.IsPostBack) return;
 
-                var previousUrls = Session["PreviousUrls"] as ArrayList;
-                if (previousUrls == null)
-                {
-                    previousUrls = new ArrayList();
-                }
-                var currentUrl = GetRedirectUrl(_currentRootPath);
-                if (previousUrls.Count > 0)
-                {
-                    var url = previousUrls[previousUrls.Count - 1] as string;
-                    if (!string.Equals(url, currentUrl))
-                    {
-                        previousUrls.Add(currentUrl);
-                        Session["PreviousUrls"] = previousUrls;
-                    }
-                }
-                else
+            BtnUpload.Attributes.Add("onclick", ModalUploadImageSingle.GetOpenWindowStringToList(SiteId, _currentRootPath));
+
+            var previousUrls = Session["PreviousUrls"] as ArrayList ?? new ArrayList();
+            var currentUrl = GetRedirectUrl(_currentRootPath);
+            if (previousUrls.Count > 0)
+            {
+                var url = previousUrls[previousUrls.Count - 1] as string;
+                if (!string.Equals(url, currentUrl))
                 {
                     previousUrls.Add(currentUrl);
                     Session["PreviousUrls"] = previousUrls;
                 }
-
-                var navigationBuilder = new StringBuilder();
-                var directoryNames = _currentRootPath.Split('/');
-                var linkCurrentRootPath = _rootPath;
-                foreach (var directoryName in directoryNames)
-                {
-                    if (!string.IsNullOrEmpty(directoryName))
-                    {
-                        if (directoryName.Equals("~"))
-                        {
-                            navigationBuilder.Append($"<a href='{GetRedirectUrl(_rootPath)}'>根目录</a>");
-                        }
-                        else if (directoryName.Equals("@"))
-                        {
-                            navigationBuilder.Append(
-                                $"<a href='{GetRedirectUrl(_rootPath)}'>{PublishmentSystemInfo.PublishmentSystemDir}</a>");
-                        }
-                        else
-                        {
-                            linkCurrentRootPath += "/" + directoryName;
-                            navigationBuilder.Append(
-                                $"<a href='{GetRedirectUrl(linkCurrentRootPath)}'>{directoryName}</a>");
-                        }
-                        navigationBuilder.Append("\\");
-                    }
-                }
-                ltlCurrentDirectory.Text = navigationBuilder.ToString();
-
-                FillFileSystemsToImage(false);
             }
+            else
+            {
+                previousUrls.Add(currentUrl);
+                Session["PreviousUrls"] = previousUrls;
+            }
+
+            var navigationBuilder = new StringBuilder();
+            var directoryNames = _currentRootPath.Split('/');
+            var linkCurrentRootPath = _rootPath;
+            foreach (var directoryName in directoryNames)
+            {
+                if (string.IsNullOrEmpty(directoryName)) continue;
+
+                if (directoryName.Equals("~"))
+                {
+                    navigationBuilder.Append($"<a href='{GetRedirectUrl(_rootPath)}'>根目录</a>");
+                }
+                else if (directoryName.Equals("@"))
+                {
+                    navigationBuilder.Append(
+                        $"<a href='{GetRedirectUrl(_rootPath)}'>{SiteInfo.SiteDir}</a>");
+                }
+                else
+                {
+                    linkCurrentRootPath += "/" + directoryName;
+                    navigationBuilder.Append(
+                        $"<a href='{GetRedirectUrl(linkCurrentRootPath)}'>{directoryName}</a>");
+                }
+                navigationBuilder.Append("\\");
+            }
+            LtlCurrentDirectory.Text = navigationBuilder.ToString();
+
+            FillFileSystemsToImage(false);
         }
 
         public void LinkButton_Command(object sender, CommandEventArgs e)
@@ -151,7 +143,7 @@ namespace SiteServer.BackgroundPages.Cms
                 {
                     if (_currentRootPath.StartsWith(_rootPath) && _currentRootPath.Length > _rootPath.Length)
                     {
-                        var index = _currentRootPath.LastIndexOf("/");
+                        var index = _currentRootPath.LastIndexOf("/", StringComparison.Ordinal);
                         if (index != -1)
                         {
                             _currentRootPath = _currentRootPath.Substring(0, index);
@@ -176,7 +168,7 @@ namespace SiteServer.BackgroundPages.Cms
             var builder = new StringBuilder();
             builder.Append(@"<table class=""table table-noborder table-hover"">");
 
-            var directoryUrl = PageUtility.GetPublishmentSystemUrlByPhysicalPath(PublishmentSystemInfo, _directoryPath, true);
+            var directoryUrl = PageUtility.GetSiteUrlByPhysicalPath(SiteInfo, _directoryPath, true);
             var backgroundImageUrl = SiteServerAssets.GetIconUrl("filesystem/management/background.gif");
             var directoryImageUrl = SiteServerAssets.GetFileSystemIconUrl(EFileSystemType.Directory, true);
 
@@ -220,7 +212,7 @@ namespace SiteServer.BackgroundPages.Cms
 
             foreach (FileSystemInfoExtend fileInfo in fileSystemInfoExtendCollection.Files)
             {
-                if (!PathUtility.IsImageExtenstionAllowed(PublishmentSystemInfo, fileInfo.Type))
+                if (!PathUtility.IsImageExtenstionAllowed(SiteInfo, fileInfo.Type))
                 {
                     continue;
                 }
@@ -266,7 +258,7 @@ namespace SiteServer.BackgroundPages.Cms
                     fileImageUrl = SiteServerAssets.GetFileSystemIconUrl(fileSystemType, true);
                 }
 
-                var textBoxUrl = PageUtility.GetVirtualUrl(PublishmentSystemInfo, linkUrl);
+                var textBoxUrl = PageUtility.GetVirtualUrl(SiteInfo, linkUrl);
 
                 builder.Append($@"
 <td onmouseover=""this.className='tdbg-dark';"" onmouseout=""this.className='';"">
@@ -296,7 +288,7 @@ namespace SiteServer.BackgroundPages.Cms
             }
 
             builder.Append("</table>");
-            ltlFileSystems.Text = builder.ToString();
+            LtlFileSystems.Text = builder.ToString();
         }
 
         #endregion

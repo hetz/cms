@@ -1,10 +1,15 @@
 bin/
 obj/
+home/
+/channels/
+/contents/
 SiteFiles/BackupFiles/
 SiteFiles/Plugins/
+SiteFiles/packages/
 SiteFiles/SiteTemplates/
 SiteFiles/TemporaryFiles/
 SiteFiles/UserFiles/test/
+Template
 test1/
 test2/
 test3/
@@ -34,4 +39,5 @@ test26/
 test27/
 test28/
 test29/
-tmwcn/
+upload
+T_*.html

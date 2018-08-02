@@ -1,67 +1,60 @@
 ﻿using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.Text;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Model;
-using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Plugin;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
 	public class PageTemplateMatch : BasePageCms
     {
-		public ListBox NodeIDCollectionToMatch;
-		public ListBox ChannelTemplateID;
-		public ListBox ContentTemplateID;
-        public PlaceHolder phCreate;
-		
-		bool[] IsLastNodeArray;
-		string defaultChannelTemplateName;
-		string defaultContentTemplateName;
+		public ListBox LbChannelId;
+		public ListBox LbChannelTemplateId;
+		public ListBox LbContentTemplateId;
+        public Button BtnCreateChannelTemplate;
+        public Button BtnCreateSubChannelTemplate;
+        public Button BtnCreateContentTemplate;
+        public Button BtnCreateSubContentTemplate;
 
-        public string GetTitle(NodeInfo nodeInfo)
+        private bool[] _isLastNodeArray;
+        private string _defaultChannelTemplateName;
+		private string _defaultContentTemplateName;
+
+        public static string GetRedirectUrl(int siteId)
+        {
+            return PageUtils.GetCmsUrl(siteId, nameof(PageTemplateMatch), null);
+        }
+
+        public string GetTitle(ChannelInfo nodeInfo)
 		{
 			var str = string.Empty;
-			if (nodeInfo.NodeId == PublishmentSystemId)
+			if (nodeInfo.Id == SiteId)
 			{
                 nodeInfo.IsLastNode = true;
 			}
             if (nodeInfo.IsLastNode == false)
 			{
-                IsLastNodeArray[nodeInfo.ParentsCount] = false;
+                _isLastNodeArray[nodeInfo.ParentsCount] = false;
 			}
 			else
 			{
-                IsLastNodeArray[nodeInfo.ParentsCount] = true;
+                _isLastNodeArray[nodeInfo.ParentsCount] = true;
 			}
             for (var i = 0; i < nodeInfo.ParentsCount; i++)
-			{
-				if (IsLastNodeArray[i])
-				{
-					str = string.Concat(str, "　");
-				}
-				else
-				{
-					str = string.Concat(str, "│");
-				}
-			}
-            if (nodeInfo.IsLastNode)
-			{
-				str = string.Concat(str, "└");
-			}
-			else
-			{
-				str = string.Concat(str, "├");
-			}
-            str = string.Concat(str, StringUtils.MaxLengthText(nodeInfo.NodeName, 8));
+            {
+                str = string.Concat(str, _isLastNodeArray[i] ? "　" : "│");
+            }
+		    str = string.Concat(str, nodeInfo.IsLastNode ? "└" : "├");
+		    str = string.Concat(str, StringUtils.MaxLengthText(nodeInfo.ChannelName, 8));
 
-
-            if (nodeInfo.NodeType == ENodeType.BackgroundPublishNode)
+            if (nodeInfo.ParentId == 0)
 			{
-                var indexTemplateId = TemplateManager.GetDefaultTemplateId(PublishmentSystemId, ETemplateType.IndexPageTemplate);
-                var indexTemplateName = TemplateManager.GetTemplateName(PublishmentSystemId, indexTemplateId);
+                var indexTemplateId = TemplateManager.GetDefaultTemplateId(SiteId, TemplateType.IndexPageTemplate);
+                var indexTemplateName = TemplateManager.GetTemplateName(SiteId, indexTemplateId);
 				str = string.Concat(str, $" ({indexTemplateName})");
             }
             else
@@ -72,22 +65,22 @@ namespace SiteServer.BackgroundPages.Cms
                 var channelTemplateName = string.Empty;
                 if (channelTemplateId != 0)
                 {
-                    channelTemplateName = TemplateManager.GetTemplateName(PublishmentSystemId, channelTemplateId);
+                    channelTemplateName = TemplateManager.GetTemplateName(SiteId, channelTemplateId);
                 }
                 if (string.IsNullOrEmpty(channelTemplateName))
                 {
-                    channelTemplateName = defaultChannelTemplateName;
+                    channelTemplateName = _defaultChannelTemplateName;
                 }
                 str = string.Concat(str, $" ({channelTemplateName})");
 
                 var contentTemplateName = string.Empty;
                 if (contentTemplateId != 0)
                 {
-                    contentTemplateName = TemplateManager.GetTemplateName(PublishmentSystemId, contentTemplateId);
+                    contentTemplateName = TemplateManager.GetTemplateName(SiteId, contentTemplateId);
                 }
                 if (string.IsNullOrEmpty(contentTemplateName))
                 {
-                    contentTemplateName = defaultContentTemplateName;
+                    contentTemplateName = _defaultContentTemplateName;
                 }
                 str = string.Concat(str, $" ({contentTemplateName})");
             }
@@ -99,148 +92,131 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID");
+            PageUtils.CheckRequestParameter("siteId");
 
-            var defaultChannelTemplateId = TemplateManager.GetDefaultTemplateId(PublishmentSystemId, ETemplateType.ChannelTemplate);
-            defaultChannelTemplateName = TemplateManager.GetTemplateName(PublishmentSystemId, defaultChannelTemplateId);
+            var defaultChannelTemplateId = TemplateManager.GetDefaultTemplateId(SiteId, TemplateType.ChannelTemplate);
+            _defaultChannelTemplateName = TemplateManager.GetTemplateName(SiteId, defaultChannelTemplateId);
 
-            var defaultContentTemplateId = TemplateManager.GetDefaultTemplateId(PublishmentSystemId, ETemplateType.ContentTemplate);
-            defaultContentTemplateName = TemplateManager.GetTemplateName(PublishmentSystemId, defaultContentTemplateId);
+            var defaultContentTemplateId = TemplateManager.GetDefaultTemplateId(SiteId, TemplateType.ContentTemplate);
+            _defaultContentTemplateName = TemplateManager.GetTemplateName(SiteId, defaultContentTemplateId);
 
-			if (!IsPostBack)
-            {
-                BreadCrumb(AppManager.Cms.LeftMenu.IdTemplate, "匹配模板", AppManager.Permissions.WebSite.Template);
+            if (IsPostBack) return;
 
-                ChannelTemplateID.Attributes.Add("onfocus", "$('ContentTemplateID').selectedIndex = -1");
-                ContentTemplateID.Attributes.Add("onfocus", "$('ChannelTemplateID').selectedIndex = -1");
+            VerifySitePermissions(ConfigManager.WebSitePermissions.Template);
 
-				BindListBox();
-			}
-		}
+            LbChannelTemplateId.Attributes.Add("onfocus", "$('#LbContentTemplateId option:selected').removeAttr('selected')");
+            LbContentTemplateId.Attributes.Add("onfocus", "$('#LbChannelTemplateId option:selected').removeAttr('selected')");
+
+            BindListBox();
+
+            BtnCreateChannelTemplate.OnClientClick = $"{AlertUtils.Confirm("创建栏目模板", "此操作将创建空的栏目模板并匹配选中栏目，确认吗？", "创 建", "$('#BtnCreateChannelTemplateReal').click()")}";
+            BtnCreateSubChannelTemplate.OnClientClick = $"{AlertUtils.Confirm("创建下级栏目模版", "此操作将创建空的栏目模板并匹配选中栏目的下级栏目，确认吗？", "创 建", "$('#BtnCreateSubChannelTemplateReal').click()")}";
+            BtnCreateContentTemplate.OnClientClick = $"{AlertUtils.Confirm("创建内容模版", "此操作将创建空的内容模板并匹配选中栏目，确认吗？", "创 建", "$('#BtnCreateContentTemplateReal').click()")}";
+            BtnCreateSubContentTemplate.OnClientClick = $"{AlertUtils.Confirm("创建下级内容模版", "此操作将创建空的内容模板并匹配选中栏目的下级栏目，确认吗？", "创 建", "$('#BtnCreateSubContentTemplateReal').click()")}";
+        }
 
 
 		public void BindListBox()
 		{
-			var selectedNodeIdArrayList = new ArrayList();
-			foreach (ListItem listitem in NodeIDCollectionToMatch.Items)
+			var selectedChannelIdList = new List<string>();
+			foreach (ListItem listitem in LbChannelId.Items)
 			{
-				if (listitem.Selected) selectedNodeIdArrayList.Add(listitem.Value);
+				if (listitem.Selected) selectedChannelIdList.Add(listitem.Value);
 			}
-			var selectedChannelTemplateId = ChannelTemplateID.SelectedValue;
-			var selectedContentTemplateId = ContentTemplateID.SelectedValue;
+			var selectedChannelTemplateId = LbChannelTemplateId.SelectedValue;
+			var selectedContentTemplateId = LbContentTemplateId.SelectedValue;
 
-			NodeIDCollectionToMatch.Items.Clear();
-			ChannelTemplateID.Items.Clear();
-			ContentTemplateID.Items.Clear();
-			var nodeIdList = DataProvider.NodeDao.GetNodeIdListByPublishmentSystemId(PublishmentSystemId);
-            var nodeCount = nodeIdList.Count;
-			IsLastNodeArray = new bool[nodeCount];
-            foreach (var theNodeId in nodeIdList)
+            LbChannelId.Items.Clear();
+            LbChannelTemplateId.Items.Clear();
+            LbContentTemplateId.Items.Clear();
+			var channelIdList = ChannelManager.GetChannelIdList(SiteId);
+            var nodeCount = channelIdList.Count;
+			_isLastNodeArray = new bool[nodeCount];
+            foreach (var theChannelId in channelIdList)
 			{
-                var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, theNodeId);
-                var listitem = new ListItem(GetTitle(nodeInfo), nodeInfo.NodeId.ToString());
-				NodeIDCollectionToMatch.Items.Add(listitem);
+                var nodeInfo = ChannelManager.GetChannelInfo(SiteId, theChannelId);
+                var listitem = new ListItem(GetTitle(nodeInfo), nodeInfo.Id.ToString());
+                LbChannelId.Items.Add(listitem);
 			}
 
-            ChannelTemplateID.DataSource = DataProvider.TemplateDao.GetDataSourceByType(PublishmentSystemId, ETemplateType.ChannelTemplate);
-            ContentTemplateID.DataSource = DataProvider.TemplateDao.GetDataSourceByType(PublishmentSystemId, ETemplateType.ContentTemplate);
+            LbChannelTemplateId.DataSource = DataProvider.TemplateDao.GetDataSourceByType(SiteId, TemplateType.ChannelTemplate);
+            LbContentTemplateId.DataSource = DataProvider.TemplateDao.GetDataSourceByType(SiteId, TemplateType.ContentTemplate);
 			DataBind();
 
-			var stringArray = new string[selectedNodeIdArrayList.Count];
-			selectedNodeIdArrayList.CopyTo(stringArray);
-			ControlUtils.SelectListItems(NodeIDCollectionToMatch, stringArray);
-			ControlUtils.SelectListItems(ChannelTemplateID, selectedChannelTemplateId);
-			ControlUtils.SelectListItems(ContentTemplateID, selectedContentTemplateId);
+			ControlUtils.SelectMultiItems(LbChannelId, selectedChannelIdList);
+			ControlUtils.SelectSingleItem(LbChannelTemplateId, selectedChannelTemplateId);
+			ControlUtils.SelectSingleItem(LbContentTemplateId, selectedContentTemplateId);
 		}
-
 
 		public void MatchChannelTemplateButton_OnClick(object sender, EventArgs e)
 		{
-			if (Page.IsPostBack && Page.IsValid)
-			{
-				if (Validate(true, true))
-				{
-					var nodeIdArrayList = new ArrayList();
-					foreach (ListItem item in NodeIDCollectionToMatch.Items)
-					{
-						if (item.Selected)
-						{
-							var nodeId = int.Parse(item.Value);
-							nodeIdArrayList.Add(nodeId);
-						}
-					}
-					var channelTemplateId = int.Parse(ChannelTemplateID.SelectedValue);
-					Process(nodeIdArrayList, channelTemplateId, true);
-				}
-			}
+		    if (!Page.IsPostBack || !Page.IsValid || !Validate(true, true)) return;
+
+		    var channelIdList = new List<int>();
+		    foreach (ListItem item in LbChannelId.Items)
+		    {
+		        if (item.Selected)
+		        {
+		            var channelId = int.Parse(item.Value);
+                    channelIdList.Add(channelId);
+		        }
+		    }
+		    var channelTemplateId = int.Parse(LbChannelTemplateId.SelectedValue);
+		    Process(channelIdList, channelTemplateId, true);
 		}
 
 		public void RemoveChannelTemplateButton_OnClick(object sender, EventArgs e)
 		{
-			if (Page.IsPostBack && Page.IsValid)
-			{
-				if (Validate(false, true))
-				{
-					var nodeIdArrayList = new ArrayList();
-					foreach (ListItem item in NodeIDCollectionToMatch.Items)
-					{
-						if (item.Selected)
-						{
-							var nodeId = int.Parse(item.Value);
-							nodeIdArrayList.Add(nodeId);
-						}
-					}
-					var channelTemplateID = 0;
-					Process(nodeIdArrayList, channelTemplateID, true);
-				}
-			}
+		    if (!Page.IsPostBack || !Page.IsValid || !Validate(false, true)) return;
+
+		    var channelIdList = new List<int>();
+		    foreach (ListItem item in LbChannelId.Items)
+		    {
+		        if (item.Selected)
+		        {
+		            var channelId = int.Parse(item.Value);
+		            channelIdList.Add(channelId);
+		        }
+		    }
+		    Process(channelIdList, 0, true);
 		}
 
 		public void MatchContentTemplateButton_OnClick(object sender, EventArgs e)
 		{
-			if (Page.IsPostBack && Page.IsValid)
-			{
-				if (Validate(true, false))
-				{
-					var nodeIdArrayList = new ArrayList();
-					foreach (ListItem item in NodeIDCollectionToMatch.Items)
-					{
-						if (item.Selected)
-						{
-							var nodeId = int.Parse(item.Value);
-							nodeIdArrayList.Add(nodeId);
-						}
-					}
-					var contentTemplateId = int.Parse(ContentTemplateID.SelectedValue);
-					Process(nodeIdArrayList, contentTemplateId, false);
-				}
-			}
+		    if (!Page.IsPostBack || !Page.IsValid || !Validate(true, false)) return;
+
+		    var channelIdList = new List<int>();
+		    foreach (ListItem item in LbChannelId.Items)
+		    {
+		        if (item.Selected)
+		        {
+		            var channelId = int.Parse(item.Value);
+		            channelIdList.Add(channelId);
+		        }
+		    }
+		    var contentTemplateId = int.Parse(LbContentTemplateId.SelectedValue);
+		    Process(channelIdList, contentTemplateId, false);
 		}
 
 		public void RemoveContentTemplateButton_OnClick(object sender, EventArgs e)
 		{
-			if (Page.IsPostBack && Page.IsValid)
-			{
-				if (Validate(false, false))
-				{
-					var nodeIdArrayList = new ArrayList();
-					foreach (ListItem item in NodeIDCollectionToMatch.Items)
-					{
-						if (item.Selected)
-						{
-							var nodeId = int.Parse(item.Value);
-							nodeIdArrayList.Add(nodeId);
-						}
-					}
-					var contentTemplateID = 0;
-					Process(nodeIdArrayList, contentTemplateID, false);
-				}
-			}
+		    if (!Page.IsPostBack || !Page.IsValid || !Validate(false, false)) return;
+
+		    var channelIdList = new List<int>();
+		    foreach (ListItem item in LbChannelId.Items)
+		    {
+		        if (item.Selected)
+		        {
+		            var channelId = int.Parse(item.Value);
+		            channelIdList.Add(channelId);
+		        }
+		    }
+		    Process(channelIdList, 0, false);
 		}
 
 		private bool Validate(bool isMatch, bool isChannelTemplate)
 		{
-			if (NodeIDCollectionToMatch.SelectedIndex < 0)
+			if (LbChannelId.SelectedIndex < 0)
 			{
                 FailMessage("请选择栏目！");
 				return false;
@@ -249,7 +225,7 @@ namespace SiteServer.BackgroundPages.Cms
 			{
 				if (isChannelTemplate)
 				{
-					if (ChannelTemplateID.SelectedIndex < 0)
+					if (LbChannelTemplateId.SelectedIndex < 0)
 					{
                         FailMessage("请选择栏目模板！");
 						return false;
@@ -257,7 +233,7 @@ namespace SiteServer.BackgroundPages.Cms
 				}
 				else
 				{
-					if (ContentTemplateID.SelectedIndex < 0)
+					if (LbContentTemplateId.SelectedIndex < 0)
 					{
                         FailMessage("请选择内容模板！");
 						return false;
@@ -267,34 +243,34 @@ namespace SiteServer.BackgroundPages.Cms
 			return true;
 		}
 
-		private void Process(ArrayList nodeIdArrayList, int templateId, bool isChannelTemplate)
+		private void Process(List<int> channelIdList, int templateId, bool isChannelTemplate)
 		{
-			if (nodeIdArrayList != null && nodeIdArrayList.Count > 0)
+			if (channelIdList != null && channelIdList.Count > 0)
 			{
                 if (isChannelTemplate)
                 {
-                    foreach (int nodeId in nodeIdArrayList)
+                    foreach (var channelId in channelIdList)
                     {
-                        TemplateManager.UpdateChannelTemplateId(PublishmentSystemId, nodeId, templateId);
+                        TemplateManager.UpdateChannelTemplateId(SiteId, channelId, templateId);
                     }
                 }
                 else
                 {
-                    foreach (int nodeId in nodeIdArrayList)
+                    foreach (var channelId in channelIdList)
                     {
-                        TemplateManager.UpdateContentTemplateId(PublishmentSystemId, nodeId, templateId);
+                        TemplateManager.UpdateContentTemplateId(SiteId, channelId, templateId);
                     }
                 }
 			}
 			
 			if (templateId == 0)
 			{
-                Body.AddSiteLog(PublishmentSystemId, "取消模板匹配", $"栏目:{GetNodeNames()}");
+                AuthRequest.AddSiteLog(SiteId, "取消模板匹配", $"栏目:{GetNodeNames()}");
 				SuccessMessage("取消匹配成功！");
 			}
 			else
 			{
-                Body.AddSiteLog(PublishmentSystemId, "模板匹配", $"栏目:{GetNodeNames()}");
+                AuthRequest.AddSiteLog(SiteId, "模板匹配", $"栏目:{GetNodeNames()}");
 				SuccessMessage("模板匹配成功！");
 			}
             
@@ -304,7 +280,7 @@ namespace SiteServer.BackgroundPages.Cms
         private string GetNodeNames()
         {
             var builder = new StringBuilder();
-            foreach (ListItem listItem in NodeIDCollectionToMatch.Items)
+            foreach (ListItem listItem in LbChannelId.Items)
             {
                 if (listItem.Selected)
                 {
@@ -322,206 +298,186 @@ namespace SiteServer.BackgroundPages.Cms
 
 		public void CreateChannelTemplate_Click(object sender, EventArgs e)
 		{
-			if (Page.IsPostBack && Page.IsValid)
-			{
-				if (Validate(false, false))
-				{
-                    var defaultChannelTemplateId = TemplateManager.GetDefaultTemplateId(PublishmentSystemId, ETemplateType.ChannelTemplate);
-                    var relatedFileNameList = DataProvider.TemplateDao.GetLowerRelatedFileNameList(PublishmentSystemId, ETemplateType.ChannelTemplate);
-                    var templateNameList = DataProvider.TemplateDao.GetTemplateNameList(PublishmentSystemId, ETemplateType.ChannelTemplate);
-					foreach (ListItem item in NodeIDCollectionToMatch.Items)
-					{
-						if (item.Selected)
-						{
-							var nodeId = int.Parse(item.Value);
-							var channelTemplateId = -1;
+		    if (!Page.IsPostBack || !Page.IsValid || !Validate(false, false)) return;
 
-                            var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, nodeId);
-							if (nodeInfo.NodeType != ENodeType.BackgroundPublishNode)
-							{
-                                channelTemplateId = nodeInfo.ChannelTemplateId;
-							}
+		    var defaultChannelTemplateId = TemplateManager.GetDefaultTemplateId(SiteId, TemplateType.ChannelTemplate);
+		    var relatedFileNameList = DataProvider.TemplateDao.GetLowerRelatedFileNameList(SiteId, TemplateType.ChannelTemplate);
+		    var templateNameList = DataProvider.TemplateDao.GetTemplateNameList(SiteId, TemplateType.ChannelTemplate);
+		    foreach (ListItem item in LbChannelId.Items)
+		    {
+		        if (!item.Selected) continue;
 
-							if (channelTemplateId != -1 && channelTemplateId != 0 && channelTemplateId != defaultChannelTemplateId)
-							{
-                                if (TemplateManager.GetTemplateInfo(PublishmentSystemId, channelTemplateId) == null)
-								{
-									channelTemplateId = -1;
-								}
-							}
+		        var channelId = int.Parse(item.Value);
+		        var channelTemplateId = -1;
 
-							if (channelTemplateId != -1)
-							{
-                                var templateInfo = new TemplateInfo(0, PublishmentSystemId, nodeInfo.NodeName, ETemplateType.ChannelTemplate, "T_" + nodeInfo.NodeName + ".html", "index.html", ".html", ECharsetUtils.GetEnumType(PublishmentSystemInfo.Additional.Charset), false);
+		        var nodeInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
+		        if (nodeInfo.ParentId > 0)
+		        {
+		            channelTemplateId = nodeInfo.ChannelTemplateId;
+		        }
+
+		        if (channelTemplateId != -1 && channelTemplateId != 0 && channelTemplateId != defaultChannelTemplateId)
+		        {
+		            if (TemplateManager.GetTemplateInfo(SiteId, channelTemplateId) == null)
+		            {
+		                channelTemplateId = -1;
+		            }
+		        }
+
+		        if (channelTemplateId != -1)
+		        {
+		            var templateInfo = new TemplateInfo(0, SiteId, nodeInfo.ChannelName, TemplateType.ChannelTemplate, "T_" + nodeInfo.ChannelName + ".html", "index.html", ".html", ECharsetUtils.GetEnumType(SiteInfo.Additional.Charset), false);
 								
-								if (relatedFileNameList.Contains(templateInfo.RelatedFileName.ToLower()))
-								{
-									continue;
-								}
-								else if (templateNameList.Contains(templateInfo.TemplateName))
-								{
-									continue;
-								}
-								var insertedTemplateId = DataProvider.TemplateDao.Insert(templateInfo, string.Empty, Body.AdminName);
-                                if (nodeInfo.NodeType != ENodeType.BackgroundPublishNode)
-                                {
-                                    TemplateManager.UpdateChannelTemplateId(PublishmentSystemId, nodeId, insertedTemplateId);
-                                    //DataProvider.BackgroundNodeDAO.UpdateChannelTemplateID(nodeID, insertedTemplateID);
-                                }
+		            if (relatedFileNameList.Contains(templateInfo.RelatedFileName.ToLower()))
+		            {
+		                continue;
+		            }
+		            if (templateNameList.Contains(templateInfo.TemplateName))
+		            {
+		                continue;
+		            }
+		            var insertedTemplateId = DataProvider.TemplateDao.Insert(templateInfo, string.Empty, AuthRequest.AdminName);
+		            if (nodeInfo.ParentId > 0)
+		            {
+		                TemplateManager.UpdateChannelTemplateId(SiteId, channelId, insertedTemplateId);
+		                //DataProvider.BackgroundNodeDAO.UpdateChannelTemplateID(channelId, insertedTemplateID);
+		            }
 								
-							}
-						}
-					}
+		        }
+		    }
 
-                    Body.AddSiteLog(PublishmentSystemId, "生成并匹配栏目模版", $"栏目:{GetNodeNames()}");
+		    AuthRequest.AddSiteLog(SiteId, "生成并匹配栏目模版", $"栏目:{GetNodeNames()}");
 
-					SuccessMessage("生成栏目模版并匹配成功！");
+		    SuccessMessage("生成栏目模版并匹配成功！");
 
-                    BindListBox();
-				}
-			}
+		    BindListBox();
 		}
 
 		public void CreateSubChannelTemplate_Click(object sender, EventArgs e)
 		{
-			if (Page.IsPostBack && Page.IsValid)
-			{
-				if (Validate(false, false))
-				{
-                    var relatedFileNameList = DataProvider.TemplateDao.GetLowerRelatedFileNameList(PublishmentSystemId, ETemplateType.ChannelTemplate);
-                    var templateNameList = DataProvider.TemplateDao.GetTemplateNameList(PublishmentSystemId, ETemplateType.ChannelTemplate);
-					foreach (ListItem item in NodeIDCollectionToMatch.Items)
-					{
-						if (item.Selected)
-						{
-							var nodeId = int.Parse(item.Value);
-                            var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, nodeId);
+		    if (!Page.IsPostBack || !Page.IsValid || !Validate(false, false)) return;
 
-                            var templateInfo = new TemplateInfo(0, PublishmentSystemId, nodeInfo.NodeName + "_下级", ETemplateType.ChannelTemplate, "T_" + nodeInfo.NodeName + "_下级.html", "index.html", ".html", ECharsetUtils.GetEnumType(PublishmentSystemInfo.Additional.Charset), false);
+		    var relatedFileNameList = DataProvider.TemplateDao.GetLowerRelatedFileNameList(SiteId, TemplateType.ChannelTemplate);
+		    var templateNameList = DataProvider.TemplateDao.GetTemplateNameList(SiteId, TemplateType.ChannelTemplate);
+		    foreach (ListItem item in LbChannelId.Items)
+		    {
+		        if (!item.Selected) continue;
+
+		        var channelId = int.Parse(item.Value);
+		        var nodeInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
+
+		        var templateInfo = new TemplateInfo(0, SiteId, nodeInfo.ChannelName + "_下级", TemplateType.ChannelTemplate, "T_" + nodeInfo.ChannelName + "_下级.html", "index.html", ".html", ECharsetUtils.GetEnumType(SiteInfo.Additional.Charset), false);
 								
-							if (relatedFileNameList.Contains(templateInfo.RelatedFileName.ToLower()))
-							{
-								continue;
-							}
-							else if (templateNameList.Contains(templateInfo.TemplateName))
-							{
-								continue;
-							}
-							var insertedTemplateId = DataProvider.TemplateDao.Insert(templateInfo, string.Empty, Body.AdminName);
-							var childNodeIdArrayList = DataProvider.NodeDao.GetNodeIdListForDescendant(nodeId);
-							foreach (var childNodeId in childNodeIdArrayList)
-							{
-                                TemplateManager.UpdateChannelTemplateId(PublishmentSystemId, childNodeId, insertedTemplateId);
-								//DataProvider.BackgroundNodeDAO.UpdateChannelTemplateID(childNodeID, insertedTemplateID);
-							}
-						}
-					}
+		        if (relatedFileNameList.Contains(templateInfo.RelatedFileName.ToLower()))
+		        {
+		            continue;
+		        }
+		        if (templateNameList.Contains(templateInfo.TemplateName))
+		        {
+		            continue;
+		        }
+		        var insertedTemplateId = DataProvider.TemplateDao.Insert(templateInfo, string.Empty, AuthRequest.AdminName);
+		        var childChannelIdList = ChannelManager.GetChannelIdList(ChannelManager.GetChannelInfo(SiteId, channelId), EScopeType.Descendant, string.Empty, string.Empty, string.Empty);
+		        foreach (var childChannelId in childChannelIdList)
+		        {
+		            TemplateManager.UpdateChannelTemplateId(SiteId, childChannelId, insertedTemplateId);
+		            //DataProvider.BackgroundNodeDAO.UpdateChannelTemplateID(childChannelId, insertedTemplateID);
+		        }
+		    }
 
-                    Body.AddSiteLog(PublishmentSystemId, "生成并匹配下级栏目模版", $"栏目:{GetNodeNames()}");
+		    AuthRequest.AddSiteLog(SiteId, "生成并匹配下级栏目模版", $"栏目:{GetNodeNames()}");
 
-					SuccessMessage("生成下级栏目模版并匹配成功！");
+		    SuccessMessage("生成下级栏目模版并匹配成功！");
 
-                    BindListBox();
-				}
-			}
+		    BindListBox();
 		}
 
 		public void CreateContentTemplate_Click(object sender, EventArgs e)
 		{
-			if (Page.IsPostBack && Page.IsValid)
-			{
-				if (Validate(false, false))
-				{
-                    var defaultContentTemplateId = TemplateManager.GetDefaultTemplateId(PublishmentSystemId, ETemplateType.ContentTemplate);
-                    var relatedFileNameList = DataProvider.TemplateDao.GetLowerRelatedFileNameList(PublishmentSystemId, ETemplateType.ContentTemplate);
-                    var templateNameList = DataProvider.TemplateDao.GetTemplateNameList(PublishmentSystemId, ETemplateType.ContentTemplate);
-					foreach (ListItem item in NodeIDCollectionToMatch.Items)
-					{
-						if (item.Selected)
-						{
-							var nodeId = int.Parse(item.Value);
+		    if (!Page.IsPostBack || !Page.IsValid || !Validate(false, false)) return;
 
-                            var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, nodeId);
+		    var defaultContentTemplateId = TemplateManager.GetDefaultTemplateId(SiteId, TemplateType.ContentTemplate);
+		    var relatedFileNameList = DataProvider.TemplateDao.GetLowerRelatedFileNameList(SiteId, TemplateType.ContentTemplate);
+		    var templateNameList = DataProvider.TemplateDao.GetTemplateNameList(SiteId, TemplateType.ContentTemplate);
+		    foreach (ListItem item in LbChannelId.Items)
+		    {
+		        if (!item.Selected) continue;
 
-                            var contentTemplateId = nodeInfo.ContentTemplateId;                            
+		        var channelId = TranslateUtils.ToInt(item.Value);
 
-							if (contentTemplateId != 0 && contentTemplateId != defaultContentTemplateId)
-							{
-                                if (TemplateManager.GetTemplateInfo(PublishmentSystemId, contentTemplateId) == null)
-								{
-									contentTemplateId = -1;
-								}
-							}
+		        var nodeInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
 
-							if (contentTemplateId != -1)
-							{
-                                var templateInfo = new TemplateInfo(0, PublishmentSystemId, nodeInfo.NodeName, ETemplateType.ContentTemplate, "T_" + nodeInfo.NodeName + ".html", "index.html", ".html", ECharsetUtils.GetEnumType(PublishmentSystemInfo.Additional.Charset), false);
-								if (relatedFileNameList.Contains(templateInfo.RelatedFileName.ToLower()))
-								{
-									continue;
-								}
-								else if (templateNameList.Contains(templateInfo.TemplateName))
-								{
-									continue;
-								}
-								var insertedTemplateId = DataProvider.TemplateDao.Insert(templateInfo, string.Empty, Body.AdminName);
-                                TemplateManager.UpdateContentTemplateId(PublishmentSystemId, nodeId, insertedTemplateId);
-								//DataProvider.BackgroundNodeDAO.UpdateContentTemplateID(nodeID, insertedTemplateID);
-							}
-						}
-					}
+		        var contentTemplateId = nodeInfo.ContentTemplateId;                            
 
-                    Body.AddSiteLog(PublishmentSystemId, "生成并匹配内容模版", $"栏目:{GetNodeNames()}");
+		        if (contentTemplateId != 0 && contentTemplateId != defaultContentTemplateId)
+		        {
+		            if (TemplateManager.GetTemplateInfo(SiteId, contentTemplateId) == null)
+		            {
+		                contentTemplateId = -1;
+		            }
+		        }
+
+		        if (contentTemplateId != -1)
+		        {
+		            var templateInfo = new TemplateInfo(0, SiteId, nodeInfo.ChannelName, TemplateType.ContentTemplate, "T_" + nodeInfo.ChannelName + ".html", "index.html", ".html", ECharsetUtils.GetEnumType(SiteInfo.Additional.Charset), false);
+		            if (relatedFileNameList.Contains(templateInfo.RelatedFileName.ToLower()))
+		            {
+		                continue;
+		            }
+		            if (templateNameList.Contains(templateInfo.TemplateName))
+		            {
+		                continue;
+		            }
+		            var insertedTemplateId = DataProvider.TemplateDao.Insert(templateInfo, string.Empty, AuthRequest.AdminName);
+		            TemplateManager.UpdateContentTemplateId(SiteId, channelId, insertedTemplateId);
+		            //DataProvider.BackgroundNodeDAO.UpdateContentTemplateID(channelId, insertedTemplateID);
+		        }
+		    }
+
+		    AuthRequest.AddSiteLog(SiteId, "生成并匹配内容模版", $"栏目:{GetNodeNames()}");
 					
-					SuccessMessage("生成内容模版并匹配成功！");
+		    SuccessMessage("生成内容模版并匹配成功！");
                     
-                    BindListBox();
-				}
-			}
+		    BindListBox();
 		}
 
 		public void CreateSubContentTemplate_Click(object sender, EventArgs e)
 		{
-			if (Page.IsPostBack && Page.IsValid)
-			{
-				if (Validate(false, false))
-				{
-                    var relatedFileNameList = DataProvider.TemplateDao.GetLowerRelatedFileNameList(PublishmentSystemId, ETemplateType.ContentTemplate);
-                    var templateNameList = DataProvider.TemplateDao.GetTemplateNameList(PublishmentSystemId, ETemplateType.ContentTemplate);
-					foreach (ListItem item in NodeIDCollectionToMatch.Items)
-					{
-						if (item.Selected)
-						{
-							var nodeId = int.Parse(item.Value);
-                            var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, nodeId);
+		    if (!Page.IsPostBack || !Page.IsValid || !Validate(false, false)) return;
 
-                            var templateInfo = new TemplateInfo(0, PublishmentSystemId, nodeInfo.NodeName + "_下级", ETemplateType.ContentTemplate, "T_" + nodeInfo.NodeName + "_下级.html", "index.html", ".html", ECharsetUtils.GetEnumType(PublishmentSystemInfo.Additional.Charset), false);
+		    var relatedFileNameList = DataProvider.TemplateDao.GetLowerRelatedFileNameList(SiteId, TemplateType.ContentTemplate);
+		    var templateNameList = DataProvider.TemplateDao.GetTemplateNameList(SiteId, TemplateType.ContentTemplate);
+		    foreach (ListItem item in LbChannelId.Items)
+		    {
+		        if (!item.Selected) continue;
+
+		        var channelId = int.Parse(item.Value);
+		        var nodeInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
+
+		        var templateInfo = new TemplateInfo(0, SiteId, nodeInfo.ChannelName + "_下级", TemplateType.ContentTemplate, "T_" + nodeInfo.ChannelName + "_下级.html", "index.html", ".html", ECharsetUtils.GetEnumType(SiteInfo.Additional.Charset), false);
 								
-							if (relatedFileNameList.Contains(templateInfo.RelatedFileName.ToLower()))
-							{
-								continue;
-							}
-							else if (templateNameList.Contains(templateInfo.TemplateName))
-							{
-								continue;
-							}
-							var insertedTemplateId = DataProvider.TemplateDao.Insert(templateInfo, string.Empty, Body.AdminName);
-							var childNodeIdList = DataProvider.NodeDao.GetNodeIdListForDescendant(nodeId);
-							foreach (var childNodeId in childNodeIdList)
-							{
-                                TemplateManager.UpdateContentTemplateId(PublishmentSystemId, childNodeId, insertedTemplateId);
-								//DataProvider.BackgroundNodeDAO.UpdateContentTemplateID(childNodeID, insertedTemplateID);
-							}
-						}
-					}
+		        if (relatedFileNameList.Contains(templateInfo.RelatedFileName.ToLower()))
+		        {
+		            continue;
+		        }
+		        if (templateNameList.Contains(templateInfo.TemplateName))
+		        {
+		            continue;
+		        }
+		        var insertedTemplateId = DataProvider.TemplateDao.Insert(templateInfo, string.Empty, AuthRequest.AdminName);
+                var childChannelIdList = ChannelManager.GetChannelIdList(ChannelManager.GetChannelInfo(SiteId, channelId), EScopeType.Descendant, string.Empty, string.Empty, string.Empty);
+                foreach (var childChannelId in childChannelIdList)
+		        {
+		            TemplateManager.UpdateContentTemplateId(SiteId, childChannelId, insertedTemplateId);
+		            //DataProvider.BackgroundNodeDAO.UpdateContentTemplateID(childChannelId, insertedTemplateID);
+		        }
+		    }
 
-                    Body.AddSiteLog(PublishmentSystemId, "生成并匹配下级内容模版", $"栏目:{GetNodeNames()}");
+		    AuthRequest.AddSiteLog(SiteId, "生成并匹配下级内容模版", $"栏目:{GetNodeNames()}");
 					
-					SuccessMessage("生成下级内容模版并匹配成功！");
+		    SuccessMessage("生成下级内容模版并匹配成功！");
                     
-                    BindListBox();
-				}
-			}
+		    BindListBox();
 		}
 	}
 }

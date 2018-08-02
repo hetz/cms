@@ -1,61 +1,57 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Attributes;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class ModalContentTidyUp : BasePageCms
     {
-        public RadioButtonList rblAttributeName;
-        public RadioButtonList rblIsDesc;
+        public DropDownList DdlAttributeName;
+        public DropDownList DdlIsDesc;
         
         private string _tableName;
         private string _returnUrl;
 
-        public static string GetOpenWindowString(int publishmentSystemId, int nodeId, string returnUrl)
+        public static string GetOpenWindowString(int siteId, int channelId, string returnUrl)
         {
-            return PageUtils.GetOpenWindowStringWithCheckBoxValue("重新排序", PageUtils.GetCmsUrl(nameof(ModalContentTidyUp), new NameValueCollection
+            return LayerUtils.GetOpenScriptWithCheckBoxValue("整理排序", PageUtils.GetCmsUrl(siteId, nameof(ModalContentTidyUp), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
-                {"NodeID", nodeId.ToString()},
+                {"channelId", channelId.ToString()},
                 {"ReturnUrl", StringUtils.ValueToUrl(returnUrl)}
-            }), "ContentIDCollection", "", 430, 280);
+            }), "contentIdCollection", "", 460, 320);
         }
 
         public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            _returnUrl = StringUtils.ValueFromUrl(Body.GetQueryString("ReturnUrl")).Replace("&DateFrom=&SearchType=&Keyword=&taxisByAddDate=", "");
-            if (!IsPostBack)
-            {
-                var listItem = new ListItem("内容ID", ContentAttribute.Id);
-                listItem.Selected = true;
-                rblAttributeName.Items.Add(listItem);
-                listItem = new ListItem("添加日期", ContentAttribute.AddDate);
-                rblAttributeName.Items.Add(listItem);
+            _returnUrl = StringUtils.ValueFromUrl(AuthRequest.GetQueryString("ReturnUrl")).Replace("&DateFrom=&SearchType=&Keyword=&taxisByAddDate=", "");
+            if (IsPostBack) return;
 
-                listItem = new ListItem("正序", false.ToString());
-                rblIsDesc.Items.Add(listItem);
-                listItem = new ListItem("倒序", true.ToString());
-                listItem.Selected = true;
-                rblIsDesc.Items.Add(listItem);
-            }
+            var listItem = new ListItem("内容Id", ContentAttribute.Id) {Selected = true};
+            DdlAttributeName.Items.Add(listItem);
+            listItem = new ListItem("添加日期", ContentAttribute.AddDate);
+            DdlAttributeName.Items.Add(listItem);
+
+            listItem = new ListItem("正序", false.ToString());
+            DdlIsDesc.Items.Add(listItem);
+            listItem = new ListItem("倒序", true.ToString()) {Selected = true};
+            DdlIsDesc.Items.Add(listItem);
         }
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
-            var nodeID = Body.GetQueryInt("NodeID");
-            var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, nodeID);
-            _tableName = NodeManager.GetTableName(PublishmentSystemInfo, nodeInfo);
+            var channelId = AuthRequest.GetQueryInt("channelId");
+            var channelInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
+            _tableName = ChannelManager.GetTableName(SiteInfo, channelInfo);
 
-            DataProvider.ContentDao.TidyUp(_tableName, nodeID, rblAttributeName.SelectedValue, TranslateUtils.ToBool(rblIsDesc.SelectedValue));
+            DataProvider.ContentDao.TidyUp(_tableName, channelId, DdlAttributeName.SelectedValue, TranslateUtils.ToBool(DdlIsDesc.SelectedValue));
 
-            PageUtils.CloseModalPageAndRedirect(Page, _returnUrl);
+            LayerUtils.CloseAndRedirect(Page, _returnUrl);
         }
     }
 }

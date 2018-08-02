@@ -515,6 +515,7 @@
  =============*/
 .checkbox {
   padding-left: 20px;
+  margin-left: 5px;
 }
 .checkbox label {
   display: inline-block;
@@ -533,6 +534,7 @@
   height: 17px;
   left: 0;
   margin-left: -20px;
+  margin-top: 5px;
   position: absolute;
   transition: 0.3s ease-in-out;
   width: 17px;
@@ -565,8 +567,8 @@
   outline: none;
 }
 .checkbox input[type="checkbox"]:checked + label::after {
-  content: "\f00c";
-  font-family: 'FontAwesome';
+  content: "\f122";
+  font-family: "Ionicons";
 }
 .checkbox input[type="checkbox"]:disabled + label::before {
   background-color: #eeeeee;
@@ -587,6 +589,7 @@
 }
 .checkbox-primary input[type="checkbox"]:checked + label::after {
   color: #ffffff;
+  margin-top: 4px;
 }
 .checkbox-danger input[type="checkbox"]:checked + label::before {
   background-color: #ef5350;
@@ -639,11 +642,14 @@
 }
 .radio {
   padding-left: 20px;
+  margin-left: 10px;
+  margin-top: 5px;
 }
 .radio label {
   display: inline-block;
   padding-left: 5px;
   position: relative;
+  margin-right: 25px;
 }
 .radio label::before {
   -o-transition: border 0.5s ease-in-out;
@@ -656,6 +662,7 @@
   height: 17px;
   left: 0;
   margin-left: -20px;
+  margin-top: 5px;
   outline: none !important;
   position: absolute;
   transition: border 0.5s ease-in-out;
@@ -718,6 +725,7 @@
 }
 .radio-primary input[type="radio"]:checked + label::after {
   background-color: #00b19d;
+  margin-top: 5px;
 }
 .radio-danger input[type="radio"] + label::after {
   background-color: #ef5350;
@@ -1620,4 +1628,33 @@ table.dataTable td.focus {
 .modalPage, .modalPage form-horizontal{
  margin-left: 5px;
  margin-right: 5px;
+}
+
+.navbar-nav {
+  flex-direction: inherit;
+}
+
+.scroll {
+  overflow-x: scroll !important;
+}
+
+.table-tree a {
+  color: #55565d !important;
+}
+.table-tree i{
+  font-size: 18px;
+  color: #7a7b80 !important;
+}
+
+.table-tree>tbody>tr>td,
+.table-tree>tbody>tr>th {
+  border-top: none !important;
+}
+
+.table-tree a,
+.table-tree span,
+.table-tree div {
+  font-size: 14px !important;
+  margin-top: -5px !important;
+  display: inline-block !important;
 }

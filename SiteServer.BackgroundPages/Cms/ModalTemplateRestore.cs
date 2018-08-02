@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class ModalTemplateRestore : BasePageCms
     {
+        public PlaceHolder PhContent;
         public DropDownList DdlLogId;
         public TextBox TbContent;
 
@@ -17,11 +18,10 @@ namespace SiteServer.BackgroundPages.Cms
 
         protected override bool IsSinglePage => true;
 
-	    public static string GetOpenLayerString(int publishmentSystemId, int templateId, string includeUrl)
+	    public static string GetOpenWindowString(int siteId, int templateId, string includeUrl)
         {
-            return PageUtils.GetOpenLayerString("还原历史版本", PageUtils.GetCmsUrl(nameof(ModalTemplateRestore), new NameValueCollection
+            return LayerUtils.GetOpenScript("还原历史版本", PageUtils.GetCmsUrl(siteId, nameof(ModalTemplateRestore), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"templateID", templateId.ToString()},
                 {"includeUrl", includeUrl}
             }));
@@ -31,15 +31,18 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID");
+            PageUtils.CheckRequestParameter("siteId");
 
-            _templateId = Body.GetQueryInt("templateID");
-            _includeUrl = Body.GetQueryString("includeUrl");
-            _logId = Body.GetQueryInt("logID");
-           
-			if (!IsPostBack)
-			{
-                var logDictionary = DataProvider.TemplateLogDao.GetLogIdWithNameDictionary(PublishmentSystemId, _templateId);
+            _templateId = AuthRequest.GetQueryInt("templateID");
+            _includeUrl = AuthRequest.GetQueryString("includeUrl");
+            _logId = AuthRequest.GetQueryInt("logID");
+
+            if (IsPostBack) return;
+
+            var logDictionary = DataProvider.TemplateLogDao.GetLogIdWithNameDictionary(SiteId, _templateId);
+            if (logDictionary.Count > 0)
+            {
+                PhContent.Visible = true;
                 foreach (var value in logDictionary)
                 {
                     var listItem = new ListItem(value.Value, value.Key.ToString());
@@ -47,25 +50,26 @@ namespace SiteServer.BackgroundPages.Cms
                 }
                 if (_logId > 0)
                 {
-                    ControlUtils.SelectListItems(DdlLogId, _logId.ToString());
+                    ControlUtils.SelectSingleItem(DdlLogId, _logId.ToString());
                 }
 
-                if (DdlLogId.Items.Count > 0)
+                if (_logId == 0)
                 {
-                    if (_logId == 0)
-                    {
-                        _logId = TranslateUtils.ToInt(DdlLogId.Items[0].Value);
-                    }
-                    TbContent.Text = DataProvider.TemplateLogDao.GetTemplateContent(_logId);
+                    _logId = TranslateUtils.ToInt(DdlLogId.Items[0].Value);
                 }
-			}
-		}
+                TbContent.Text = DataProvider.TemplateLogDao.GetTemplateContent(_logId);
+            }
+            else
+            {
+                PhContent.Visible = false;
+                InfoMessage("当前模板不存在历史版本，无法进行还原");
+            }
+        }
 
         public void DdlLogId_SelectedIndexChanged(object sender, EventArgs e)
         {
-            PageUtils.Redirect(PageUtils.GetCmsUrl(nameof(ModalTemplateRestore), new NameValueCollection
+            PageUtils.Redirect(PageUtils.GetCmsUrl(SiteId, nameof(ModalTemplateRestore), new NameValueCollection
             {
-                {"PublishmentSystemID", PublishmentSystemId.ToString()},
                 {"templateID", _templateId.ToString()},
                 {"includeUrl", _includeUrl},
                 {"logID", DdlLogId.SelectedValue}
@@ -81,7 +85,7 @@ namespace SiteServer.BackgroundPages.Cms
             }
             else
             {
-                PageUtils.CloseModalPageAndRedirect(Page, PageTemplateAdd.GetRedirectUrlToRestore(PublishmentSystemId, _templateId, templateLogId));
+                LayerUtils.CloseAndRedirect(Page, PageTemplateAdd.GetRedirectUrlToRestore(SiteId, _templateId, templateLogId));
             }
         }
 	}

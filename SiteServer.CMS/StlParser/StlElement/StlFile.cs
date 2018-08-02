@@ -1,39 +1,27 @@
-using System.Collections.Generic;
 using System.Text;
-using BaiRong.Core;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Attributes;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
-    [Stl(Usage = "文件下载链接", Description = "通过 stl:file 标签在模板中显示文件下载链接")]
+    [StlClass(Usage = "文件下载链接", Description = "通过 stl:file 标签在模板中显示文件下载链接")]
     public class StlFile
 	{
 	    private StlFile() { }
 
 	    public const string ElementName = "stl:file";
 
-        public const string AttributeNo = "no";
-		public const string AttributeSrc = "src";
-        public const string AttributeIsFilesize = "isFileSize";
-        public const string AttributeIsCount = "isCount";
-        public const string AttributeType = "type";
-        public const string AttributeLeftText = "leftText";
-        public const string AttributeRightText = "rightText";
-
-	    public static SortedList<string, string> AttributeList => new SortedList<string, string>
-        {
-	        {AttributeNo, "显示字段的顺序"},
-	        {AttributeSrc, "需要下载的文件地址"},
-	        {AttributeIsFilesize, "显示文件大小"},
-	        {AttributeIsCount, "是否记录文件下载次数"},
-	        {AttributeType, "指定存储附件的字段"},
-	        {AttributeLeftText, "显示在信息前的文字"},
-	        {AttributeRightText, "显示在信息后的文字"}
-	    };
+        private static readonly Attr No = new Attr("no", "显示字段的顺序");
+		private static readonly Attr Src = new Attr("src", "需要下载的文件地址");
+        private static readonly Attr IsFileSize = new Attr("isFileSize", "显示文件大小");
+        private static readonly Attr IsCount = new Attr("isCount", "是否记录文件下载次数");
+        private static readonly Attr Type = new Attr("type", "指定存储附件的字段");
+        private static readonly Attr LeftText = new Attr("leftText", "显示在信息前的文字");
+        private static readonly Attr RightText = new Attr("rightText", "显示在信息后的文字");
 
         public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
         {
@@ -45,35 +33,35 @@ namespace SiteServer.CMS.StlParser.StlElement
             var leftText = string.Empty;
             var rightText = string.Empty;
 
-            foreach (var name in contextInfo.Attributes.Keys)
+            foreach (var name in contextInfo.Attributes.AllKeys)
             {
                 var value = contextInfo.Attributes[name];
 
-                if (StringUtils.EqualsIgnoreCase(name, AttributeNo))
+                if (StringUtils.EqualsIgnoreCase(name, No.Name))
                 {
                     no = TranslateUtils.ToInt(value);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeSrc))
+                else if (StringUtils.EqualsIgnoreCase(name, Src.Name))
                 {
                     src = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeIsFilesize))
+                else if (StringUtils.EqualsIgnoreCase(name, IsFileSize.Name))
                 {
                     isFilesize = TranslateUtils.ToBool(value);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeIsCount))
+                else if (StringUtils.EqualsIgnoreCase(name, IsCount.Name))
                 {
                     isCount = TranslateUtils.ToBool(value);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeType))
+                else if (StringUtils.EqualsIgnoreCase(name, Type.Name))
                 {
                     type = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeLeftText))
+                else if (StringUtils.EqualsIgnoreCase(name, LeftText.Name))
                 {
                     leftText = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeRightText))
+                else if (StringUtils.EqualsIgnoreCase(name, RightText.Name))
                 {
                     rightText = value;
                 }
@@ -84,11 +72,11 @@ namespace SiteServer.CMS.StlParser.StlElement
 
         private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, string type, int no, string src, bool isFilesize, bool isCount, string leftText, string rightText)
         {
-            if (!string.IsNullOrEmpty(contextInfo.InnerXml))
+            if (!string.IsNullOrEmpty(contextInfo.InnerHtml))
             {
-                var innerBuilder = new StringBuilder(contextInfo.InnerXml);
+                var innerBuilder = new StringBuilder(contextInfo.InnerHtml);
                 StlParserManager.ParseInnerContent(innerBuilder, pageInfo, contextInfo);
-                contextInfo.InnerXml = innerBuilder.ToString();
+                contextInfo.InnerHtml = innerBuilder.ToString();
             }
 
             var fileUrl = string.Empty;
@@ -142,22 +130,22 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
             }
 
-            var parsedContent = InputParserUtility.GetFileHtmlWithoutCount(pageInfo.PublishmentSystemInfo, fileUrl, contextInfo.Attributes, contextInfo.InnerXml, contextInfo.IsCurlyBrace);
+            var parsedContent = InputParserUtility.GetFileHtmlWithoutCount(pageInfo.SiteInfo, fileUrl, contextInfo.Attributes, contextInfo.InnerHtml, contextInfo.IsStlEntity);
 
             if (isFilesize)
             {
-                var filePath = PathUtility.MapPath(pageInfo.PublishmentSystemInfo, fileUrl);
+                var filePath = PathUtility.MapPath(pageInfo.SiteInfo, fileUrl);
                 parsedContent += " (" + FileUtils.GetFileSizeByFilePath(filePath) + ")";
             }
             else
             {
                 if (isCount && contextInfo.ContentInfo != null)
                 {
-                    parsedContent = InputParserUtility.GetFileHtmlWithCount(pageInfo.PublishmentSystemInfo, contextInfo.ContentInfo.NodeId, contextInfo.ContentInfo.Id, fileUrl, contextInfo.Attributes, contextInfo.InnerXml, contextInfo.IsCurlyBrace);
+                    parsedContent = InputParserUtility.GetFileHtmlWithCount(pageInfo.SiteInfo, contextInfo.ContentInfo.ChannelId, contextInfo.ContentInfo.Id, fileUrl, contextInfo.Attributes, contextInfo.InnerHtml, contextInfo.IsStlEntity);
                 }
                 else
                 {
-                    parsedContent = InputParserUtility.GetFileHtmlWithoutCount(pageInfo.PublishmentSystemInfo, fileUrl, contextInfo.Attributes, contextInfo.InnerXml, contextInfo.IsCurlyBrace);
+                    parsedContent = InputParserUtility.GetFileHtmlWithoutCount(pageInfo.SiteInfo, fileUrl, contextInfo.Attributes, contextInfo.InnerHtml, contextInfo.IsStlEntity);
                 }                
             }
 

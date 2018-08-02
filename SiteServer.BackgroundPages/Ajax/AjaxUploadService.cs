@@ -1,39 +1,30 @@
 ﻿using System;
 using System.Collections.Specialized;
-using BaiRong.Core;
-using BaiRong.Core.Images;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
+using SiteServer.Utils.Images;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Office;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Ajax
 {
     public class AjaxUploadService : BasePageCms
     {
-        public static string GetContentPhotoUploadSingleUrl(int publishmentSystemId)
+        public static string GetContentPhotoUploadSingleUrl(int siteId)
         {
             return PageUtils.GetAjaxUrl(nameof(AjaxUploadService), new NameValueCollection
             {
-                {"publishmentSystemID", publishmentSystemId.ToString()},
+                {"siteID", siteId.ToString()},
                 {"isContentPhoto", true.ToString()}
             });
         }
 
-        public static string GetContentPhotoUploadMultipleUrl(int publishmentSystemId)
+        public static string GetContentPhotoUploadMultipleUrl(int siteId)
         {
             return PageUtils.GetAjaxUrl(nameof(AjaxUploadService), new NameValueCollection
             {
-                {"publishmentSystemID", publishmentSystemId.ToString()},
+                {"siteID", siteId.ToString()},
                 {"isContentPhotoSwfUpload", true.ToString()}
-            });
-        }
-
-        public static string GetUploadWordMultipleUrl(int publishmentSystemId)
-        {
-            return PageUtils.GetAjaxUrl(nameof(AjaxUploadService), new NameValueCollection
-            {
-                {"publishmentSystemID", publishmentSystemId.ToString()},
-                {"isWordSwfUpload", true.ToString()}
             });
         }
 
@@ -71,15 +62,6 @@ namespace SiteServer.BackgroundPages.Ajax
                 jsonAttributes.Add("middleUrl", middleUrl);
                 jsonAttributes.Add("largeUrl", largeUrl);
             }
-            else if (TranslateUtils.ToBool(Request.QueryString["isWordSwfUpload"]))
-            {
-                string message;
-                string fileName;
-                var success = UploadWordSwfUpload(out message, out fileName);
-                jsonAttributes.Add("success", success.ToString().ToLower());
-                jsonAttributes.Add("message", message);
-                jsonAttributes.Add("fileName", fileName);
-            }
             else if (TranslateUtils.ToBool(Request.QueryString["isResume"]))
             {
                 string message;
@@ -109,9 +91,9 @@ namespace SiteServer.BackgroundPages.Ajax
 
             try
             {
-                var fileName = PathUtility.GetUploadFileName(PublishmentSystemInfo, postedFile.FileName);
+                var fileName = PathUtility.GetUploadFileName(SiteInfo, postedFile.FileName);
                 var fileExtName = PathUtils.GetExtension(fileName).ToLower();
-                var directoryPath = PathUtility.GetUploadDirectoryPath(PublishmentSystemInfo, fileExtName);
+                var directoryPath = PathUtility.GetUploadDirectoryPath(SiteInfo, fileExtName);
                 var fileNameSmall = "small_" + fileName;
                 var fileNameMiddle = "middle_" + fileName;
                 var filePath = PathUtils.Combine(directoryPath, fileName);
@@ -120,7 +102,7 @@ namespace SiteServer.BackgroundPages.Ajax
 
                 if (EFileSystemTypeUtils.IsImageOrFlashOrPlayer(fileExtName))
                 {
-                    if (!PathUtility.IsImageSizeAllowed(PublishmentSystemInfo, postedFile.ContentLength))
+                    if (!PathUtility.IsImageSizeAllowed(SiteInfo, postedFile.ContentLength))
                     {
                         message = "上传失败，上传图片超出规定文件大小！";
                         return false;
@@ -128,19 +110,19 @@ namespace SiteServer.BackgroundPages.Ajax
 
                     postedFile.SaveAs(filePath);
 
-                    FileUtility.AddWaterMark(PublishmentSystemInfo, filePath);
+                    FileUtility.AddWaterMark(SiteInfo, filePath);
 
-                    var widthSmall = PublishmentSystemInfo.Additional.PhotoSmallWidth;
+                    var widthSmall = SiteInfo.Additional.PhotoSmallWidth;
                     ImageUtils.MakeThumbnail(filePath, filePathSamll, widthSmall, 0, true);
 
-                    var widthMiddle = PublishmentSystemInfo.Additional.PhotoMiddleWidth;
+                    var widthMiddle = SiteInfo.Additional.PhotoMiddleWidth;
                     ImageUtils.MakeThumbnail(filePath, filePathMiddle, widthMiddle, 0, true);
 
-                    url = PageUtility.GetPublishmentSystemUrlByPhysicalPath(PublishmentSystemInfo, filePathSamll, true);
+                    url = PageUtility.GetSiteUrlByPhysicalPath(SiteInfo, filePathSamll, true);
 
-                    smallUrl = PageUtility.GetVirtualUrl(PublishmentSystemInfo, url);
-                    middleUrl = PageUtility.GetVirtualUrl(PublishmentSystemInfo, PageUtility.GetPublishmentSystemUrlByPhysicalPath(PublishmentSystemInfo, filePathMiddle, true));
-                    largeUrl = PageUtility.GetVirtualUrl(PublishmentSystemInfo, PageUtility.GetPublishmentSystemUrlByPhysicalPath(PublishmentSystemInfo, filePath, true));
+                    smallUrl = PageUtility.GetVirtualUrl(SiteInfo, url);
+                    middleUrl = PageUtility.GetVirtualUrl(SiteInfo, PageUtility.GetSiteUrlByPhysicalPath(SiteInfo, filePathMiddle, true));
+                    largeUrl = PageUtility.GetVirtualUrl(SiteInfo, PageUtility.GetSiteUrlByPhysicalPath(SiteInfo, filePath, true));
                     return true;
                 }
                 message = "您必须上传图片文件！";
@@ -161,9 +143,9 @@ namespace SiteServer.BackgroundPages.Ajax
 
             try
             {
-                var fileName = PathUtility.GetUploadFileName(PublishmentSystemInfo, postedFile.FileName);
+                var fileName = PathUtility.GetUploadFileName(SiteInfo, postedFile.FileName);
                 var fileExtName = PathUtils.GetExtension(fileName).ToLower();
-                var directoryPath = PathUtility.GetUploadDirectoryPath(PublishmentSystemInfo, fileExtName);
+                var directoryPath = PathUtility.GetUploadDirectoryPath(SiteInfo, fileExtName);
                 var fileNameSmall = "small_" + fileName;
                 var fileNameMiddle = "middle_" + fileName;
                 var filePath = PathUtils.Combine(directoryPath, fileName);
@@ -172,7 +154,7 @@ namespace SiteServer.BackgroundPages.Ajax
 
                 if (EFileSystemTypeUtils.IsImageOrFlashOrPlayer(fileExtName))
                 {
-                    if (!PathUtility.IsImageSizeAllowed(PublishmentSystemInfo, postedFile.ContentLength))
+                    if (!PathUtility.IsImageSizeAllowed(SiteInfo, postedFile.ContentLength))
                     {
                         message = "上传失败，上传图片超出规定文件大小！";
                         return false;
@@ -180,48 +162,22 @@ namespace SiteServer.BackgroundPages.Ajax
 
                     postedFile.SaveAs(filePath);
 
-                    FileUtility.AddWaterMark(PublishmentSystemInfo, filePath);
+                    FileUtility.AddWaterMark(SiteInfo, filePath);
 
-                    var widthSmall = PublishmentSystemInfo.Additional.PhotoSmallWidth;
+                    var widthSmall = SiteInfo.Additional.PhotoSmallWidth;
                     ImageUtils.MakeThumbnail(filePath, filePathSmall, widthSmall, 0, true);
 
-                    var widthMiddle = PublishmentSystemInfo.Additional.PhotoMiddleWidth;
+                    var widthMiddle = SiteInfo.Additional.PhotoMiddleWidth;
                     ImageUtils.MakeThumbnail(filePath, filePathMiddle, widthMiddle, 0, true);
 
-                    url = PageUtility.GetPublishmentSystemUrlByPhysicalPath(PublishmentSystemInfo, filePathSmall, true);
+                    url = PageUtility.GetSiteUrlByPhysicalPath(SiteInfo, filePathSmall, true);
 
-                    smallUrl = PageUtility.GetVirtualUrl(PublishmentSystemInfo, url);
-                    middleUrl = PageUtility.GetVirtualUrl(PublishmentSystemInfo, PageUtility.GetPublishmentSystemUrlByPhysicalPath(PublishmentSystemInfo, filePathMiddle, true));
-                    largeUrl = PageUtility.GetVirtualUrl(PublishmentSystemInfo, PageUtility.GetPublishmentSystemUrlByPhysicalPath(PublishmentSystemInfo, filePath, true));
+                    smallUrl = PageUtility.GetVirtualUrl(SiteInfo, url);
+                    middleUrl = PageUtility.GetVirtualUrl(SiteInfo, PageUtility.GetSiteUrlByPhysicalPath(SiteInfo, filePathMiddle, true));
+                    largeUrl = PageUtility.GetVirtualUrl(SiteInfo, PageUtility.GetSiteUrlByPhysicalPath(SiteInfo, filePath, true));
                     return true;
                 }
                 message = "您必须上传图片文件！";
-            }
-            catch (Exception ex)
-            {
-                message = ex.Message;
-            }
-            return false;
-        }
-
-        public bool UploadWordSwfUpload(out string message, out string fileName)
-        {
-            message = fileName = string.Empty;
-
-            if (Request.Files["Filedata"] == null) return false;
-            var postedFile = Request.Files["Filedata"];
-
-            try
-            {
-                fileName = postedFile.FileName;
-                var extendName = fileName.Substring(fileName.LastIndexOf(".", StringComparison.Ordinal)).ToLower();
-                if (extendName == ".doc" || extendName == ".docx")
-                {
-                    var filePath = WordUtils.GetWordFilePath(fileName);
-                    postedFile.SaveAs(filePath);
-                    return true;
-                }
-                message = "请选择Word文件上传！";
             }
             catch (Exception ex)
             {
@@ -241,16 +197,16 @@ namespace SiteServer.BackgroundPages.Ajax
             try
             {
                 var fileExtName = PathUtils.GetExtension(filePath).ToLower();
-                var localDirectoryPath = PathUtility.GetUploadDirectoryPath(PublishmentSystemInfo, fileExtName);
-                var localFileName = PathUtility.GetUploadFileName(PublishmentSystemInfo, filePath);
+                var localDirectoryPath = PathUtility.GetUploadDirectoryPath(SiteInfo, fileExtName);
+                var localFileName = PathUtility.GetUploadFileName(SiteInfo, filePath);
                 var localFilePath = PathUtils.Combine(localDirectoryPath, localFileName);
 
-                if (!PathUtility.IsImageExtenstionAllowed(PublishmentSystemInfo, fileExtName))
+                if (!PathUtility.IsImageExtenstionAllowed(SiteInfo, fileExtName))
                 {
                     message = "上传失败，上传图片格式不正确！";
                     return false;
                 }
-                if (!PathUtility.IsImageSizeAllowed(PublishmentSystemInfo, postedFile.ContentLength))
+                if (!PathUtility.IsImageSizeAllowed(SiteInfo, postedFile.ContentLength))
                 {
                     message = "上传失败，上传图片超出规定文件大小！";
                     return false;
@@ -258,8 +214,8 @@ namespace SiteServer.BackgroundPages.Ajax
 
                 postedFile.SaveAs(localFilePath);
 
-                url = PageUtility.GetPublishmentSystemUrlByPhysicalPath(PublishmentSystemInfo, localFilePath, true);
-                value = PageUtility.GetVirtualUrl(PublishmentSystemInfo, url);
+                url = PageUtility.GetSiteUrlByPhysicalPath(SiteInfo, localFilePath, true);
+                value = PageUtility.GetVirtualUrl(SiteInfo, url);
                 return true;
             }
             catch (Exception ex)

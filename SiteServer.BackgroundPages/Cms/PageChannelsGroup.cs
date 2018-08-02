@@ -1,22 +1,22 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class PageChannelsGroup : BasePageCms
     {
         public Literal LtlChannelGroupName;
-
         public Repeater RptContents;
+        private string _nodeGroupName;
 
-        public static string GetRedirectUrl(int publishmentSystemId, string nodeGroupName)
+        public static string GetRedirectUrl(int siteId, string nodeGroupName)
         {
-            return PageUtils.GetCmsUrl(nameof(PageChannelsGroup), new NameValueCollection
+            return PageUtils.GetCmsUrl(siteId, nameof(PageChannelsGroup), new NameValueCollection
             {
-                {"publishmentSystemID", publishmentSystemId.ToString()},
                 {"nodeGroupName", nodeGroupName}
             });
         }
@@ -25,15 +25,16 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            var nodeGroupName = Body.GetQueryString("nodeGroupName");
+            _nodeGroupName = AuthRequest.GetQueryString("nodeGroupName");
 
             if (IsPostBack) return;
 
-            BreadCrumb(AppManager.Cms.LeftMenu.IdConfigration, "查看栏目组", AppManager.Permissions.WebSite.Configration);
+            VerifySitePermissions(ConfigManager.WebSitePermissions.Configration);
 
-            LtlChannelGroupName.Text = "栏目组：" + nodeGroupName;
+            LtlChannelGroupName.Text = "栏目组：" + _nodeGroupName;
 
-            RptContents.DataSource = DataProvider.NodeDao.GetNodeIdListByGroupName(PublishmentSystemId, nodeGroupName);
+            var channelInfo = ChannelManager.GetChannelInfo(SiteId, SiteId);
+            RptContents.DataSource = ChannelManager.GetChannelIdList(channelInfo, EScopeType.All, _nodeGroupName, string.Empty, string.Empty);
             RptContents.ItemDataBound += RptContents_ItemDataBound;
             RptContents.DataBind();
         }
@@ -42,8 +43,8 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-            var nodeId = (int)e.Item.DataItem;
-            var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, nodeId);
+            var channelId = (int)e.Item.DataItem;
+            var nodeInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
 
             if (nodeInfo == null)
             {
@@ -55,14 +56,22 @@ namespace SiteServer.BackgroundPages.Cms
             var ltlItemChannelIndex = (Literal)e.Item.FindControl("ltlItemChannelIndex");
             var ltlItemAddDate = (Literal)e.Item.FindControl("ltlItemAddDate");
 
-            ltlItemChannelName.Text = NodeManager.GetNodeNameNavigation(PublishmentSystemId, nodeId);
-            ltlItemChannelIndex.Text = nodeInfo.NodeIndexName;
+            ltlItemChannelName.Text = ChannelManager.GetChannelNameNavigation(SiteId, channelId);
+            ltlItemChannelIndex.Text = nodeInfo.IndexName;
             ltlItemAddDate.Text = DateUtils.GetDateString(nodeInfo.AddDate);
+
+            if (IsOwningChannelId(channelId))
+            {
+                if (HasChannelPermissions(nodeInfo.Id, ConfigManager.ChannelPermissions.ChannelEdit))
+                {
+                    ltlItemChannelName.Text = $@"<a href=""javascript:;"" onclick=""{ModalChannelEdit.GetOpenWindowString(nodeInfo.SiteId, nodeInfo.Id, GetRedirectUrl(nodeInfo.SiteId, _nodeGroupName))}"">{ltlItemChannelName.Text}</a>";
+                }
+            }
         }
 
         public void Return_OnClick(object sender, EventArgs e)
         {
-            PageUtils.Redirect(PageNodeGroup.GetRedirectUrl(PublishmentSystemId));
+            PageUtils.Redirect(PageNodeGroup.GetRedirectUrl(SiteId));
         }
     }
 }

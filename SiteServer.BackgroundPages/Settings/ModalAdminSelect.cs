@@ -1,16 +1,17 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Core;
+using SiteServer.CMS.Core;
 
 namespace SiteServer.BackgroundPages.Settings
 {
 	public class ModalAdminSelect : BasePage
     {
-        public Repeater rptDepartment;
-        public Literal ltlDepartment;
-        public Repeater rptUser;
+        public Repeater RptDepartment;
+        public Literal LtlDepartment;
+        public Repeater RptUser;
 
         private readonly NameValueCollection _additional = new NameValueCollection();
         private int _departmentId;
@@ -18,17 +19,17 @@ namespace SiteServer.BackgroundPages.Settings
 
         public static string GetShowPopWinString(int departmentId, string scriptName)
         {
-            return PageUtils.GetOpenWindowString("管理员选择", PageUtils.GetSettingsUrl(nameof(ModalAdminSelect), new NameValueCollection
+            return LayerUtils.GetOpenScript("管理员选择", PageUtils.GetSettingsUrl(nameof(ModalAdminSelect), new NameValueCollection
             {
                 {"departmentID", departmentId.ToString()},
                 {"scriptName", scriptName}
-            }), 460, 400, true);
+            }), 460, 400);
         }
 
 		public void Page_Load(object sender, EventArgs e)
 		{
-            _departmentId = Body.GetQueryInt("departmentID");
-            _scriptName = Body.GetQueryString("ScriptName");
+            _departmentId = AuthRequest.GetQueryInt("departmentID");
+            _scriptName = AuthRequest.GetQueryString("ScriptName");
 		    var url = PageUtils.GetSettingsUrl(nameof(ModalAdminSelect), new NameValueCollection
             {
                 {"scriptName", _scriptName}
@@ -37,22 +38,22 @@ namespace SiteServer.BackgroundPages.Settings
 
 			if (!IsPostBack)
 			{
-                ltlDepartment.Text = "管理员列表";
-                if (Body.IsQueryExists("UserName"))
+                LtlDepartment.Text = "管理员列表";
+                if (AuthRequest.IsQueryExists("UserName"))
                 {
-                    var userName = Body.GetQueryString("UserName");
+                    var userName = AuthRequest.GetQueryString("UserName");
                     var displayName = AdminManager.GetDisplayName(userName, true);
                     string scripts = $"window.parent.{_scriptName}('{displayName}', '{userName}');";
-                    PageUtils.CloseModalPageWithoutRefresh(Page, scripts);
+                    LayerUtils.CloseWithoutRefresh(Page, scripts);
                 }
-                else if (Body.IsQueryExists("departmentID"))
+                else if (AuthRequest.IsQueryExists("departmentID"))
                 {
                     if (_departmentId > 0)
                     {
-                        ltlDepartment.Text = DepartmentManager.GetDepartmentName(_departmentId);
-                        rptUser.DataSource = BaiRongDataProvider.AdministratorDao.GetUserNameArrayList(_departmentId, false);
-                        rptUser.ItemDataBound += rptUser_ItemDataBound;
-                        rptUser.DataBind();
+                        LtlDepartment.Text = DepartmentManager.GetDepartmentName(_departmentId);
+                        RptUser.DataSource = DataProvider.AdministratorDao.GetUserNameList(_departmentId, false);
+                        RptUser.ItemDataBound += RptUser_ItemDataBound;
+                        RptUser.DataBind();
                     }
                 }
                 else
@@ -66,16 +67,9 @@ namespace SiteServer.BackgroundPages.Settings
 
         public void BindGrid()
         {
-            try
-            {
-                rptDepartment.DataSource = BaiRongDataProvider.DepartmentDao.GetDepartmentIdListByParentId(0);
-                rptDepartment.ItemDataBound += rptDepartment_ItemDataBound;
-                rptDepartment.DataBind();
-            }
-            catch (Exception ex)
-            {
-                PageUtils.RedirectToErrorPage(ex.Message);
-            }
+            RptDepartment.DataSource = DataProvider.DepartmentDao.GetIdListByParentId(0);
+            RptDepartment.ItemDataBound += rptDepartment_ItemDataBound;
+            RptDepartment.DataBind();
         }
 
         private void rptDepartment_ItemDataBound(object sender, RepeaterItemEventArgs e)
@@ -87,11 +81,11 @@ namespace SiteServer.BackgroundPages.Settings
 
             if (ltlHtml != null)
             {
-                ltlHtml.Text = PageDepartment.GetDepartmentRowHtml(departmentInfo, EDepartmentLoadingType.DepartmentSelect, _additional);
+                ltlHtml.Text = PageAdminDepartment.GetDepartmentRowHtml(departmentInfo, EDepartmentLoadingType.DepartmentSelect, _additional);
             }
         }
 
-        private void rptUser_ItemDataBound(object sender, RepeaterItemEventArgs e)
+        private void RptUser_ItemDataBound(object sender, RepeaterItemEventArgs e)
         {
             var userName = (string)e.Item.DataItem;
 

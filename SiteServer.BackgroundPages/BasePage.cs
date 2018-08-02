@@ -1,16 +1,13 @@
 ﻿using System;
 using System.Web.UI;
-using System.Web.UI.WebControls;
-using BaiRong.Core;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Core.Permissions;
+using SiteServer.Utils;
+using SiteServer.CMS.Plugin;
 
 namespace SiteServer.BackgroundPages
 {
     public class BasePage : Page
     {
-        public Literal LtlBreadCrumb; // 面包屑(头部导航 + 左边一级二级菜单 + 其他)
-
         private MessageUtils.Message.EMessageType _messageType;
         private string _message = string.Empty;
         private string _scripts = string.Empty;
@@ -19,9 +16,15 @@ namespace SiteServer.BackgroundPages
 
         protected virtual bool IsSinglePage => false; // 是否为单页（即是否需要放在框架页内运行,false表示需要）
 
+        protected virtual bool IsInstallerPage => false; // 是否为系统安装页面
+
+        public string IsNightly => WebConfigUtils.IsNightlyUpdate.ToString().ToLower(); // 系统是否允许升级到最新的开发版本
+
+        public string Version => SystemManager.PluginVersion; // 系统采用的插件API版本号
+
         protected bool IsForbidden { get; private set; }
 
-        public RequestBody Body { get; private set; }
+        public AuthRequest AuthRequest { get; private set; }
 
         private void SetMessage(MessageUtils.Message.EMessageType messageType, Exception ex, string message)
         {
@@ -33,12 +36,33 @@ namespace SiteServer.BackgroundPages
         {
             base.OnInit(e);
 
-            Body = new RequestBody();
+            AuthRequest = new AuthRequest(Request);
 
-            if (!IsAccessable && !Body.IsAdminLoggin) // 如果页面不能直接访问且又没有登录则直接跳登录页
+            if (!IsInstallerPage)
             {
-                IsForbidden = true;
-                PageUtils.RedirectToLoginPage();
+                if (string.IsNullOrEmpty(WebConfigUtils.ConnectionString))
+                {
+                    PageUtils.Redirect(PageUtils.GetAdminDirectoryUrl("Installer"));
+                    return;
+                }
+
+#if !DEBUG
+                if (ConfigManager.Instance.IsInitialized && ConfigManager.Instance.DatabaseVersion != SystemManager.Version)
+                {
+                    PageUtils.Redirect(PageSyncDatabase.GetRedirectUrl());
+                    return;
+                }
+#endif
+            }
+
+            if (!IsAccessable) // 如果页面不能直接访问且又没有登录则直接跳登录页
+            {
+                if (!AuthRequest.IsAdminLoggin || AuthRequest.AdminInfo == null || AuthRequest.AdminInfo.IsLockedOut) // 检测管理员是否登录，检测管理员帐号是否被锁定
+                {
+                    IsForbidden = true;
+                    PageUtils.RedirectToLoginPage();
+                    return;
+                }
             }
 
             //防止csrf攻击
@@ -67,7 +91,7 @@ if (window.top.location.href.toLowerCase().indexOf(""main.aspx"") == -1){{
 
             if (!string.IsNullOrEmpty(_scripts))
             {
-                writer.Write(@"<script type=""text/javascript"">{0}</script>", _scripts);
+                writer.Write($@"<script type=""text/javascript"">{_scripts}</script>");
             }
         }
 
@@ -82,7 +106,15 @@ if (window.top.location.href.toLowerCase().indexOf(""main.aspx"") == -1){{
 setTimeout(function() {{
     location.href = '{redirectUrl}';
 }}, 1500);
-$('.operation-area').hide();
+";
+        }
+
+        public void AddWaitAndReloadMainPage()
+        {
+            _scripts += @"
+setTimeout(function() {{
+    window.top.location.reload(true);
+}}, 1500);
 ";
         }
 
@@ -92,7 +124,6 @@ $('.operation-area').hide();
 setTimeout(function() {{
     {scripts}
 }}, 1500);
-$('.operation-area').hide();
 ";
         }
 
@@ -171,37 +202,19 @@ $('.operation-area').hide();
             return ControlUtils.FindControlBySelfAndChildren(controlId, this);
         }
 
-        public void BreadCrumbPlugins(string pageTitle, string permission)
+        public void VerifySystemPermissions(params string[] permissionArray)
         {
-            if (LtlBreadCrumb != null)
+            if (AuthRequest.AdminPermissions.HasSystemPermissions(permissionArray))
             {
-                var pageUrl = PathUtils.GetFileName(Request.FilePath);
-                LtlBreadCrumb.Text = StringUtils.GetBreadCrumbHtml(AppManager.IdPlugins, pageUrl, pageTitle, string.Empty);
+                return;
             }
-
-            if (!string.IsNullOrEmpty(permission))
-            {
-                PermissionsManager.VerifyAdministratorPermissions(Body.AdminName, permission);
-            }
-        }
-
-        public void BreadCrumbSettings(string pageTitle, string permission)
-        {
-            if (LtlBreadCrumb != null)
-            {
-                var pageUrl = PathUtils.GetFileName(Request.FilePath);
-                LtlBreadCrumb.Text = StringUtils.GetBreadCrumbHtml(AppManager.IdSettings, pageUrl, pageTitle, string.Empty);
-            }
-
-            if (!string.IsNullOrEmpty(permission))
-            {
-                PermissionsManager.VerifyAdministratorPermissions(Body.AdminName, permission);
-            }
+            AuthRequest.AdminLogout();
+            PageUtils.Redirect(PageUtils.GetAdminDirectoryUrl(string.Empty));
         }
 
         public virtual void Submit_OnClick(object sender, EventArgs e)
         {
-            PageUtils.CloseModalPage(Page);
+            LayerUtils.Close(Page);
         }
 
         public static string GetShowHintScript()
@@ -240,40 +253,15 @@ $('.operation-area').hide();
             return ClientScript.IsStartupScriptRegistered(key);
         }
 
-        public static string GetShowImageScript(string imageClientId, string publishmentSystemUrl)
+        public static string GetShowImageScript(string imageClientId, string siteUrl)
         {
-            return GetShowImageScript("this", imageClientId, publishmentSystemUrl);
+            return GetShowImageScript("this", imageClientId, siteUrl);
         }
 
-        public static string GetShowImageScript(string objString, string imageClientId, string publishmentSystemUrl)
+        public static string GetShowImageScript(string objString, string imageClientId, string siteUrl)
         {
             return
-                $"showImage({objString}, '{imageClientId}', '{PageUtils.ApplicationPath}', '{publishmentSystemUrl}')";
-        }
-
-        public string SwalError(string title, string message)
-        {
-            var script = $@"swal({{
-  title: '{title}',
-  text: '{StringUtils.ReplaceNewline(message, string.Empty)}',
-  icon: 'error',
-  button: '关 闭',
-}});";
-            ClientScript.RegisterClientScriptBlock(GetType(), nameof(SwalError), script, true);
-
-            return script;
-        }
-
-        public string SwalDom(string title, string elementId)
-        {
-            var script = $@"swal({{
-  title: '{title}',
-  content: $('#{elementId}')[0],
-  button: '关 闭',
-}});";
-            ClientScript.RegisterClientScriptBlock(GetType(), nameof(SwalDom), script, true);
-
-            return script;
+                $"showImage({objString}, '{imageClientId}', '{PageUtils.ApplicationPath}', '{siteUrl}')";
         }
     }
 }

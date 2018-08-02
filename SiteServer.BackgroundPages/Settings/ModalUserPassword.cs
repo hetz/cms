@@ -1,69 +1,68 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.CMS.Core;
+using SiteServer.Utils;
 
 namespace SiteServer.BackgroundPages.Settings
 {
 	public class ModalUserPassword : BasePage
     {
-		public Label ltlUserName;
-		public TextBox tbPassword;
+		public Literal LtlUserName;
+		public TextBox TbPassword;
 
         private string _userName;
 
         public static string GetOpenWindowString(string userName)
         {
-            return PageUtils.GetOpenWindowString("重设密码", PageUtils.GetSettingsUrl(nameof(ModalUserPassword), new NameValueCollection
+            return LayerUtils.GetOpenScript("重设密码", PageUtils.GetSettingsUrl(nameof(ModalUserPassword), new NameValueCollection
             {
                 {"userName", userName}
-            }), 400, 300);
+            }), 450, 290);
         }
         
 		public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            _userName = Body.GetQueryString("userName");
+            _userName = AuthRequest.GetQueryString("userName");
 
-			if (!IsPostBack)
-			{
-                if (!string.IsNullOrEmpty(_userName))
-                {
-                    ltlUserName.Text = _userName;
-                }
-                else
-                {
-                    FailMessage("此帐户不存在！");
-                }
-			}
-		}
+            if (IsPostBack) return;
+
+            if (!string.IsNullOrEmpty(_userName))
+            {
+                LtlUserName.Text = _userName;
+            }
+            else
+            {
+                FailMessage("此帐户不存在！");
+            }
+        }
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
-			if (IsPostBack && IsValid)
-			{
-				try
-				{
-				    string errorMessage;
-				    if (BaiRongDataProvider.UserDao.ChangePassword(_userName, tbPassword.Text, out errorMessage))
-				    {
-				        SuccessMessage("重设密码成功！");
-				    }
-				    else
-				    {
-                        FailMessage(errorMessage);
-				        return;
-				    }
+            if (!IsPostBack || !IsValid) return;
 
-                    PageUtils.CloseModalPage(Page);
-				}
-				catch(Exception ex)
-				{
-                    FailMessage(ex, "重设密码失败！");
-				}
-			}
-		}
+            try
+            {
+                string errorMessage;
+                if (DataProvider.UserDao.ChangePassword(_userName, TbPassword.Text, out errorMessage))
+                {
+                    SuccessMessage("重设密码成功！");
+                }
+                else
+                {
+                    FailMessage(errorMessage);
+                    return;
+                }
+
+                LayerUtils.Close(Page);
+            }
+            catch(Exception ex)
+            {
+                FailMessage(ex, "重设密码失败！");
+            }
+        }
 
 	}
 }

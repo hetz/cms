@@ -2,9 +2,8 @@
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Text;
-using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Core;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Model.Enumerations;
@@ -13,91 +12,84 @@ namespace SiteServer.BackgroundPages.Cms
 {
 	public class PageContentTranslate : BasePageCms
     {
-        public Literal ltlContents;
-        public HtmlControl divTranslateAdd;
-        public RadioButtonList ddlTranslateType;
+        public Literal LtlContents;
+        public Button BtnTranslateAdd;
+        public RadioButtonList RblTranslateType;
 
         private Dictionary<int, List<int>> _idsDictionary = new Dictionary<int, List<int>>();
         private string _returnUrl;
 
-        public static string GetRedirectUrl(int publishmentSystemId, int nodeId, string returnUrl)
+        public static string GetRedirectUrl(int siteId, int channelId, string returnUrl)
         {
-            return PageUtils.GetCmsUrl(nameof(PageContentTranslate), new NameValueCollection
+            return PageUtils.GetCmsUrl(siteId, nameof(PageContentTranslate), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
-                {"NodeID", nodeId.ToString()},
+                {"channelId", channelId.ToString()},
                 {"ReturnUrl", StringUtils.ValueToUrl(returnUrl)}
             });
         }
 
-        public static string GetRedirectClickStringForMultiChannels(int publishmentSystemId, string returnUrl)
+        public static string GetRedirectClickStringForMultiChannels(int siteId, string returnUrl)
         {
-            var redirectUrl = PageUtils.GetCmsUrl(nameof(PageContentTranslate), new NameValueCollection
+            var redirectUrl = PageUtils.GetCmsUrl(siteId, nameof(PageContentTranslate), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"ReturnUrl", StringUtils.ValueToUrl(returnUrl)}
             });
             return PageUtils.GetRedirectStringWithCheckBoxValue(redirectUrl, "IDsCollection", "IDsCollection", "请选择需要转移的内容！");
         }
 
-        public static string GetRedirectClickString(int publishmentSystemId, int nodeId, string returnUrl)
+        public static string GetRedirectClickString(int siteId, int channelId, string returnUrl)
         {
-            var redirectUrl = PageUtils.GetCmsUrl(nameof(PageContentTranslate), new NameValueCollection
+            var redirectUrl = PageUtils.GetCmsUrl(siteId, nameof(PageContentTranslate), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
-                {"NodeID", nodeId.ToString()},
+                {"channelId", channelId.ToString()},
                 {"ReturnUrl", StringUtils.ValueToUrl(returnUrl)}
             });
-            return PageUtils.GetRedirectStringWithCheckBoxValue(redirectUrl, "ContentIDCollection", "ContentIDCollection", "请选择需要转移的内容！");
+            return PageUtils.GetRedirectStringWithCheckBoxValue(redirectUrl, "contentIdCollection", "contentIdCollection", "请选择需要转移的内容！");
         }
 
 		public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-			PageUtils.CheckRequestParameter("PublishmentSystemID", "ReturnUrl");
-            _returnUrl = StringUtils.ValueFromUrl(Body.GetQueryString("ReturnUrl"));
-            //if (!base.HasChannelPermissions(this.nodeID, AppManager.CMS.Permission.Channel.ContentTranslate))
+			PageUtils.CheckRequestParameter("siteId", "ReturnUrl");
+            _returnUrl = StringUtils.ValueFromUrl(AuthRequest.GetQueryString("ReturnUrl"));
+            //if (!base.HasChannelPermissions(this.channelId, AppManager.CMS.Permission.Channel.ContentTranslate))
             //{
             //    PageUtils.RedirectToErrorPage("您没有此栏目的内容转移权限！");
             //    return;
             //}
 
-            //bool isCut = base.HasChannelPermissions(this.nodeID, AppManager.CMS.Permission.Channel.ContentDelete);
+            //bool isCut = base.HasChannelPermissions(this.channelId, AppManager.CMS.Permission.Channel.ContentDelete);
             const bool isCut = true;
             _idsDictionary = ContentUtility.GetIDsDictionary(Request.QueryString);
 
-			if (!IsPostBack)
-            {
-                BreadCrumb(AppManager.Cms.LeftMenu.IdContent, "内容转移", string.Empty);
+            if (IsPostBack) return;
 
-                var builder = new StringBuilder();
-                foreach (var nodeId in _idsDictionary.Keys)
+            var builder = new StringBuilder();
+            foreach (var channelId in _idsDictionary.Keys)
+            {
+                var tableName = ChannelManager.GetTableName(SiteInfo, channelId);
+                var contentIdArrayList = _idsDictionary[channelId];
+                if (contentIdArrayList != null)
                 {
-                    var tableStyle = NodeManager.GetTableStyle(PublishmentSystemInfo, nodeId);
-                    var tableName = NodeManager.GetTableName(PublishmentSystemInfo, nodeId);
-                    var contentIdArrayList = _idsDictionary[nodeId];
-                    if (contentIdArrayList != null)
+                    foreach (int contentId in contentIdArrayList)
                     {
-                        foreach (int contentId in contentIdArrayList)
+                        var contentInfo = DataProvider.ContentDao.GetContentInfo(tableName, contentId);
+                        if (contentInfo != null)
                         {
-                            var contentInfo = DataProvider.ContentDao.GetContentInfo(tableStyle, tableName, contentId);
-                            if (contentInfo != null)
-                            {
-                                builder.Append(
-                                    $@"{WebUtils.GetContentTitle(PublishmentSystemInfo, contentInfo, _returnUrl)}<br />");
-                            }
+                            builder.Append(
+                                $@"{WebUtils.GetContentTitle(SiteInfo, contentInfo, _returnUrl)}<br />");
                         }
                     }
                 }
-                ltlContents.Text = builder.ToString();
+            }
+            LtlContents.Text = builder.ToString();
 
-                divTranslateAdd.Attributes.Add("onclick", ModalChannelMultipleSelect.GetOpenWindowString(PublishmentSystemId, true));
+            BtnTranslateAdd.Attributes.Add("onclick", ModalChannelMultipleSelect.GetOpenWindowString(SiteId, true));
 
-                ETranslateContentTypeUtils.AddListItems(ddlTranslateType, isCut);
-                ControlUtils.SelectListItems(ddlTranslateType, ETranslateContentTypeUtils.GetValue(ETranslateContentType.Copy));
-			}
-		}
+            ETranslateContentTypeUtils.AddListItems(RblTranslateType, isCut);
+            ControlUtils.SelectSingleItem(RblTranslateType, ETranslateContentTypeUtils.GetValue(ETranslateContentType.Copy));
+        }
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
@@ -107,21 +99,21 @@ namespace SiteServer.BackgroundPages.Cms
             {
                 try
                 {
-                    var translateType = ETranslateContentTypeUtils.GetEnumType(ddlTranslateType.SelectedValue);
+                    var translateType = ETranslateContentTypeUtils.GetEnumType(RblTranslateType.SelectedValue);
 
-                    foreach (var nodeId in _idsDictionary.Keys)
+                    foreach (var channelId in _idsDictionary.Keys)
                     {
-                        var contentIdArrayList = _idsDictionary[nodeId];
-                        if (contentIdArrayList != null)
+                        var contentIdList = _idsDictionary[channelId];
+                        if (contentIdList != null)
                         {
-                            contentIdArrayList.Reverse();
-                            if (contentIdArrayList.Count > 0)
+                            contentIdList.Reverse();
+                            if (contentIdList.Count > 0)
                             {
-                                foreach (var contentId in contentIdArrayList)
+                                foreach (var contentId in contentIdList)
                                 {
-                                    ContentUtility.Translate(PublishmentSystemInfo, nodeId, contentId, Request.Form["translateCollection"], translateType, Body.AdminName);
+                                    ContentUtility.Translate(SiteInfo, channelId, contentId, Request.Form["translateCollection"], translateType, AuthRequest.AdminName);
 
-                                    Body.AddSiteLog(PublishmentSystemInfo.PublishmentSystemId, nodeId, contentId, "转移内容", string.Empty);
+                                    AuthRequest.AddSiteLog(SiteInfo.Id, channelId, contentId, "转移内容", string.Empty);
                                 }
                             }
                         }
@@ -132,7 +124,7 @@ namespace SiteServer.BackgroundPages.Cms
                 }
                 catch (Exception ex)
                 {
-                    LogUtils.AddSystemErrorLog(ex);
+                    LogUtils.AddErrorLog(ex);
                     FailMessage(ex, "内容转移失败！");
                 }
             }

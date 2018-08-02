@@ -2,21 +2,19 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Text;
-using System.Web.UI;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.AuxiliaryTable;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Attributes;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Ajax;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Model;
 using SiteServer.BackgroundPages.Cms;
-using SiteServer.CMS.Controllers.Sys.Editors;
-using SiteServer.CMS.Controllers.Sys.Stl;
+using SiteServer.CMS.Api;
+using SiteServer.CMS.Api.Sys.Editors;
+using SiteServer.CMS.Api.Sys.Stl;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.Model.Enumerations;
-using SiteServer.Plugin.Models;
+using SiteServer.Plugin;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Core
 {
@@ -27,187 +25,180 @@ namespace SiteServer.BackgroundPages.Core
         }
 
         public const string Current = "{Current}";
+        public const string Value = "{Value}";
 
-        public static string Parse(PublishmentSystemInfo publishmentSystemInfo, int nodeId, TableStyleInfo styleInfo, ETableStyle tableStyle, string attributeName, NameValueCollection formCollection, bool isEdit, bool isPostBack, string additionalAttributes, NameValueCollection pageScripts, bool isValidate)
+        public static string Parse(SiteInfo siteInfo, int channelId, TableStyleInfo styleInfo, IAttributes attributes, NameValueCollection pageScripts, out string extraHtml)
         {
             var retval = string.Empty;
-
-            var isAddAndNotPostBack = !isEdit && !isPostBack;
-
-            var oriIsValidate = styleInfo.Additional.IsValidate;
-            if (!isValidate)
+            var extraBuilder = new StringBuilder();
+            if (!string.IsNullOrEmpty(styleInfo.HelpText))
             {
-                styleInfo.Additional.IsValidate = false;
+                extraBuilder.Append($@"<small class=""form-text text-muted"">{styleInfo.HelpText}</small>");
             }
 
-            if (InputTypeUtils.Equals(styleInfo.InputType, InputType.Text))
+            var inputType = styleInfo.InputType;
+
+            if (inputType == InputType.Text)
             {
-                retval = ParseText(publishmentSystemInfo, nodeId, attributeName, formCollection, isAddAndNotPostBack, additionalAttributes, styleInfo, tableStyle);
+                retval = ParseText(attributes, siteInfo, channelId, styleInfo, extraBuilder);
             }
-            else if (InputTypeUtils.Equals(styleInfo.InputType, InputType.TextArea))
+            else if (inputType == InputType.TextArea)
             {
-                retval = ParseTextArea(attributeName, formCollection, isAddAndNotPostBack, additionalAttributes, styleInfo);
+                retval = ParseTextArea(attributes, styleInfo, extraBuilder);
             }
-            else if (InputTypeUtils.Equals(styleInfo.InputType, InputType.TextEditor))
+            else if (inputType == InputType.TextEditor)
             {
-                retval = ParseTextEditor(publishmentSystemInfo, attributeName, formCollection, isAddAndNotPostBack, pageScripts, styleInfo);
+                retval = ParseTextEditor(attributes, styleInfo.AttributeName, siteInfo, pageScripts, extraBuilder);
             }
-            else if (InputTypeUtils.Equals(styleInfo.InputType, InputType.SelectOne))
+            else if (inputType == InputType.SelectOne)
             {
-                retval = ParseSelectOne(attributeName, formCollection, isAddAndNotPostBack, styleInfo);
+                retval = ParseSelectOne(attributes, styleInfo, extraBuilder);
             }
-            else if (InputTypeUtils.Equals(styleInfo.InputType, InputType.SelectMultiple))
+            else if (inputType == InputType.SelectMultiple)
             {
-                retval = ParseSelectMultiple(attributeName, formCollection, isAddAndNotPostBack, styleInfo);
+                retval = ParseSelectMultiple(attributes, styleInfo, extraBuilder);
             }
-            else if (InputTypeUtils.Equals(styleInfo.InputType, InputType.CheckBox))
+            else if (inputType == InputType.SelectCascading)
             {
-                retval = ParseCheckBox(attributeName, formCollection, isAddAndNotPostBack, styleInfo);
+                retval = ParseSelectCascading(attributes, siteInfo, styleInfo, extraBuilder);
             }
-            else if (InputTypeUtils.Equals(styleInfo.InputType, InputType.Radio))
+            else if (inputType == InputType.CheckBox)
             {
-                retval = ParseRadio(attributeName, formCollection, isAddAndNotPostBack, styleInfo);
+                retval = ParseCheckBox(attributes, styleInfo, extraBuilder);
             }
-            else if (InputTypeUtils.Equals(styleInfo.InputType, InputType.Date))
+            else if (inputType == InputType.Radio)
             {
-                retval = ParseDate(attributeName, formCollection, isAddAndNotPostBack, additionalAttributes, pageScripts, styleInfo);
+                retval = ParseRadio(attributes, styleInfo, extraBuilder);
             }
-            else if (InputTypeUtils.Equals(styleInfo.InputType, InputType.DateTime))
+            else if (inputType == InputType.Date)
             {
-                retval = ParseDateTime(attributeName, formCollection, isAddAndNotPostBack, additionalAttributes, pageScripts, styleInfo);
+                retval = ParseDate(attributes, pageScripts, styleInfo, extraBuilder);
             }
-            else if (InputTypeUtils.Equals(styleInfo.InputType, InputType.Image))
+            else if (inputType == InputType.DateTime)
             {
-                retval = ParseImage(publishmentSystemInfo, attributeName, formCollection, isAddAndNotPostBack, additionalAttributes, styleInfo, tableStyle);
+                retval = ParseDateTime(attributes, pageScripts, styleInfo, extraBuilder);
             }
-            else if (InputTypeUtils.Equals(styleInfo.InputType, InputType.Video))
+            else if (inputType == InputType.Image)
             {
-                retval = ParseVideo(publishmentSystemInfo, attributeName, formCollection, isAddAndNotPostBack, additionalAttributes, styleInfo, tableStyle);
+                retval = ParseImage(attributes, siteInfo, channelId, styleInfo, extraBuilder);
             }
-            else if (InputTypeUtils.Equals(styleInfo.InputType, InputType.File))
+            else if (inputType == InputType.Video)
             {
-                retval = ParseFile(publishmentSystemInfo, attributeName, formCollection, isAddAndNotPostBack, additionalAttributes, styleInfo, tableStyle);
+                retval = ParseVideo(attributes, siteInfo, channelId, styleInfo, extraBuilder);
             }
-            else if (InputTypeUtils.Equals(styleInfo.InputType, InputType.RelatedField))
+            else if (inputType == InputType.File)
             {
-                retval = ParseRelatedField(publishmentSystemInfo, attributeName, formCollection, styleInfo);
+                retval = ParseFile(attributes, siteInfo, channelId, styleInfo, extraBuilder);
+            }
+            else if (inputType == InputType.Customize)
+            {
+                retval = ParseCustomize(attributes, styleInfo, extraBuilder);
+            }
+            else if (inputType == InputType.Hidden)
+            {
+                retval = string.Empty;
+                extraBuilder.Clear();
             }
 
-            styleInfo.Additional.IsValidate = oriIsValidate;
-
+            extraHtml = extraBuilder.ToString();
             return retval;
         }
 
-        public static string ParseText(PublishmentSystemInfo publishmentSystemInfo, int nodeId, string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, string additionalAttributes, TableStyleInfo styleInfo, ETableStyle tableStyle)
+        public static string ParseText(IAttributes attributes, SiteInfo siteInfo, int channelId, TableStyleInfo styleInfo, StringBuilder extraBuilder)
         {
-            var builder = new StringBuilder();
-
             var validateAttributes = InputParserUtils.GetValidateAttributes(styleInfo.Additional.IsValidate, styleInfo.DisplayName, styleInfo.Additional.IsRequired, styleInfo.Additional.MinNum, styleInfo.Additional.MaxNum, styleInfo.Additional.ValidateType, styleInfo.Additional.RegExp, styleInfo.Additional.ErrorMessage);
-
-            var value = GetValue(attributeName, formCollection, isAddAndNotPostBack, styleInfo.DefaultValue);
-            value = StringUtils.HtmlDecode(value);
-
-            var width = styleInfo.Additional.Width;
-            if (string.IsNullOrEmpty(width))
-            {
-                width = styleInfo.IsSingleLine ? "380px" : "220px";
-            }
-            string style = $@"style=""width:{TranslateUtils.ToWidth(width)};""";
-            builder.Append(
-                $@"<input id=""{attributeName}"" name=""{attributeName}"" type=""text"" class=""input_text"" value=""{value}"" {additionalAttributes} {style} {validateAttributes} />");
-
-            AddHelpText(builder, styleInfo.HelpText);
 
             if (styleInfo.Additional.IsValidate)
             {
-                builder.Append(
-                    $@"&nbsp;<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span>");
-                builder.Append(
-                    $@"<script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>");
+                extraBuilder.Append(
+                    $@"<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span><script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>");
             }
 
             if (styleInfo.Additional.IsFormatString)
             {
-                var isFormatted = false;
                 var formatStrong = false;
                 var formatEm = false;
                 var formatU = false;
                 var formatColor = string.Empty;
-                if (!isAddAndNotPostBack)
+                var formatValues = attributes.GetString(ContentAttribute.GetFormatStringAttributeName(styleInfo.AttributeName));
+                if (!string.IsNullOrEmpty(formatValues))
                 {
-                    if (formCollection?[ContentAttribute.GetFormatStringAttributeName(attributeName)] != null)
-                    {
-                        isFormatted = ContentUtility.SetTitleFormatControls(formCollection[ContentAttribute.GetFormatStringAttributeName(attributeName)], out formatStrong, out formatEm, out formatU, out formatColor);
-                    }
+                    ContentUtility.SetTitleFormatControls(formatValues, out formatStrong, out formatEm, out formatU, out formatColor);
                 }
 
-                builder.Append(string.Format(@"<a class=""btn"" href=""javascript:;"" onclick=""$('#div_{0}').toggle();return false;""><i class=""icon-text-height""></i></a>
+                extraBuilder.Append(
+                    $@"<a class=""btn"" href=""javascript:;"" onclick=""$('#div_{styleInfo.AttributeName}').toggle();return false;""><i class=""icon-text-height""></i></a>
 <script type=""text/javascript"">
-function {0}_strong(e){{
+function {styleInfo.AttributeName}_strong(e){{
 var e = $(e);
-if ($('#{0}_formatStrong').val() == 'true'){{
-$('#{0}_formatStrong').val('false');
+if ($('#{styleInfo.AttributeName}_formatStrong').val() == 'true'){{
+$('#{styleInfo.AttributeName}_formatStrong').val('false');
 e.removeClass('btn-success');
 }}else{{
-$('#{0}_formatStrong').val('true');
+$('#{styleInfo.AttributeName}_formatStrong').val('true');
 e.addClass('btn-success');
 }}
 }}
-function {0}_em(e){{
+function {styleInfo.AttributeName}_em(e){{
 var e = $(e);
-if ($('#{0}_formatEM').val() == 'true'){{
-$('#{0}_formatEM').val('false');
+if ($('#{styleInfo.AttributeName}_formatEM').val() == 'true'){{
+$('#{styleInfo.AttributeName}_formatEM').val('false');
 e.removeClass('btn-success');
 }}else{{
-$('#{0}_formatEM').val('true');
+$('#{styleInfo.AttributeName}_formatEM').val('true');
 e.addClass('btn-success');
 }}
 }}
-function {0}_u(e){{
+function {styleInfo.AttributeName}_u(e){{
 var e = $(e);
-if ($('#{0}_formatU').val() == 'true'){{
-$('#{0}_formatU').val('false');
+if ($('#{styleInfo.AttributeName}_formatU').val() == 'true'){{
+$('#{styleInfo.AttributeName}_formatU').val('false');
 e.removeClass('btn-success');
 }}else{{
-$('#{0}_formatU').val('true');
+$('#{styleInfo.AttributeName}_formatU').val('true');
 e.addClass('btn-success');
 }}
 }}
-function {0}_color(){{
-if ($('#{0}_formatColor').val()){{
-$('#{0}_colorBtn').css('color', $('#{0}_formatColor').val());
-$('#{0}_colorBtn').addClass('btn-success');
+function {styleInfo.AttributeName}_color(){{
+if ($('#{styleInfo.AttributeName}_formatColor').val()){{
+$('#{styleInfo.AttributeName}_colorBtn').css('color', $('#{styleInfo.AttributeName}_formatColor').val());
+$('#{styleInfo.AttributeName}_colorBtn').addClass('btn-success');
 }}else{{
-$('#{0}_colorBtn').css('color', '');
-$('#{0}_colorBtn').removeClass('btn-success');
+$('#{styleInfo.AttributeName}_colorBtn').css('color', '');
+$('#{styleInfo.AttributeName}_colorBtn').removeClass('btn-success');
 }}
-$('#{0}_colorContainer').hide();
+$('#{styleInfo.AttributeName}_colorContainer').hide();
 }}
 </script>
-", styleInfo.AttributeName));
+");
 
-                builder.Append(string.Format(@"
-<div id=""div_{0}"" style=""display:{1};margin-top:5px;"">
-<div class=""btn-group"" style=""float:left;"">
-    <button class=""btn{5}"" style=""font-weight:bold;font-size:12px;"" onclick=""{0}_strong(this);return false;"">粗体</button>
-    <button class=""btn{6}"" style=""font-style:italic;font-size:12px;"" onclick=""{0}_em(this);return false;"">斜体</button>
-    <button class=""btn{7}"" style=""text-decoration:underline;font-size:12px;"" onclick=""{0}_u(this);return false;"">下划线</button>
-    <button class=""btn{8}"" style=""font-size:12px;"" id=""{0}_colorBtn"" onclick=""$('#{0}_colorContainer').toggle();return false;"">颜色</button>
+                extraBuilder.Append($@"
+<div class=""btn-group btn-group-sm"" style=""float:left;"">
+    <button class=""btn{(formatStrong ? @" btn-success" : string.Empty)}"" style=""font-weight:bold;font-size:12px;"" onclick=""{styleInfo
+                    .AttributeName}_strong(this);return false;"">粗体</button>
+    <button class=""btn{(formatEm ? " btn-success" : string.Empty)}"" style=""font-style:italic;font-size:12px;"" onclick=""{styleInfo
+                    .AttributeName}_em(this);return false;"">斜体</button>
+    <button class=""btn{(formatU ? " btn-success" : string.Empty)}"" style=""text-decoration:underline;font-size:12px;"" onclick=""{styleInfo
+                    .AttributeName}_u(this);return false;"">下划线</button>
+    <button class=""btn{(!string.IsNullOrEmpty(formatColor) ? " btn-success" : string.Empty)}"" style=""font-size:12px;"" id=""{styleInfo
+                    .AttributeName}_colorBtn"" onclick=""$('#{styleInfo.AttributeName}_colorContainer').toggle();return false;"">颜色</button>
 </div>
-<div id=""{0}_colorContainer"" class=""input-append"" style=""float:left;display:none"">
-    <input id=""{0}_formatColor"" name=""{0}_formatColor"" class=""input-mini color {{required:false}}"" type=""text"" value=""{9}"" placeholder=""颜色值"">
+<div id=""{styleInfo.AttributeName}_colorContainer"" class=""input-append"" style=""float:left;display:none"">
+    <input id=""{styleInfo.AttributeName}_formatColor"" name=""{styleInfo.AttributeName}_formatColor"" class=""input-mini color {{required:false}}"" type=""text"" value=""{formatColor}"" placeholder=""颜色值"">
     <button class=""btn"" type=""button"" onclick=""Title_color();return false;"">确定</button>
 </div>
-<input id=""{0}_formatStrong"" name=""{0}_formatStrong"" type=""hidden"" value=""{2}"" />
-<input id=""{0}_formatEM"" name=""{0}_formatEM"" type=""hidden"" value=""{3}"" />
-<input id=""{0}_formatU"" name=""{0}_formatU"" type=""hidden"" value=""{4}"" />
-</div>
-", styleInfo.AttributeName, isFormatted ? string.Empty : "none", formatStrong.ToString().ToLower(), formatEm.ToString().ToLower(), formatU.ToString().ToLower(), formatStrong ? @" btn-success" : string.Empty, formatEm ? " btn-success" : string.Empty, formatU ? " btn-success" : string.Empty, !string.IsNullOrEmpty(formatColor) ? " btn-success" : string.Empty, formatColor));
+<input id=""{styleInfo.AttributeName}_formatStrong"" name=""{styleInfo.AttributeName}_formatStrong"" type=""hidden"" value=""{formatStrong
+                    .ToString().ToLower()}"" />
+<input id=""{styleInfo.AttributeName}_formatEM"" name=""{styleInfo.AttributeName}_formatEM"" type=""hidden"" value=""{formatEm
+                    .ToString().ToLower()}"" />
+<input id=""{styleInfo.AttributeName}_formatU"" name=""{styleInfo.AttributeName}_formatU"" type=""hidden"" value=""{formatU
+                    .ToString().ToLower()}"" />
+");
             }
 
-            if (nodeId > 0 && tableStyle == ETableStyle.BackgroundContent && styleInfo.AttributeName == ContentAttribute.Title)
+            if (channelId > 0 && styleInfo.AttributeName == ContentAttribute.Title)
             {
-                builder.Append(@"
+                extraBuilder.Append(@"
 <script type=""text/javascript"">
 function getTitles(title){
 	$.get('[url]&title=' + encodeURIComponent(title) + '&channelID=' + $('#channelID').val() + '&r=' + Math.random(), function(data) {
@@ -245,703 +236,194 @@ $('#Title').keyup(function (e) {
 })});
 </script>
 <div id=""titleTips"" class=""inputTips""></div>");
-                builder.Replace("[url]", AjaxCmsService.GetTitlesUrl(publishmentSystemInfo.PublishmentSystemId, nodeId));
+                extraBuilder.Replace("[url]", AjaxCmsService.GetTitlesUrl(siteInfo.Id, channelId));
             }
 
-            return builder.ToString();
+            var value = StringUtils.HtmlDecode(attributes.GetString(styleInfo.AttributeName));
+
+            return
+                $@"<input id=""{styleInfo.AttributeName}"" name=""{styleInfo.AttributeName}"" type=""text"" class=""form-control"" value=""{value}"" {validateAttributes} />";
         }
 
-        public static string ParseTextArea(string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, string additionalAttributes, TableStyleInfo styleInfo)
+        public static string ParseTextArea(IAttributes attributes, TableStyleInfo styleInfo, StringBuilder extraBuilder)
         {
-            var builder = new StringBuilder();
+            if (styleInfo.Additional.IsValidate)
+            {
+                extraBuilder.Append(
+                $@"<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span><script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>");
+            }
 
             var validateAttributes = InputParserUtils.GetValidateAttributes(styleInfo.Additional.IsValidate, styleInfo.DisplayName, styleInfo.Additional.IsRequired, styleInfo.Additional.MinNum, styleInfo.Additional.MaxNum, styleInfo.Additional.ValidateType, styleInfo.Additional.RegExp, styleInfo.Additional.ErrorMessage);
 
-            var value = GetValue(attributeName, formCollection, isAddAndNotPostBack, styleInfo.DefaultValue);
-            value = StringUtils.HtmlDecode(value);
-
-            var width = styleInfo.Additional.Width;
-            if (string.IsNullOrEmpty(width))
-            {
-                width = styleInfo.IsSingleLine ? "98%" : "220px";
-            }
             var height = styleInfo.Additional.Height;
             if (height == 0)
             {
                 height = 80;
             }
-            string style = $@"style=""width:{TranslateUtils.ToWidth(width)};height:{height}px;""";
+            string style = $@"style=""height:{height}px;""";
 
-            builder.Append(string.Format(@"<textarea id=""{0}"" name=""{0}"" class=""textarea"" {1} {2} {3}>{4}</textarea>", attributeName, additionalAttributes, style, validateAttributes, value));
+            var value = StringUtils.HtmlDecode(attributes.GetString(styleInfo.AttributeName));
 
-            AddHelpText(builder, styleInfo.HelpText);
-
-            if (styleInfo.Additional.IsValidate)
-            {
-                builder.Append(
-                    $@"&nbsp;<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span>");
-                builder.Append($@"
-<script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>
-");
-            }
-
-            return builder.ToString();
+            return
+                $@"<textarea id=""{styleInfo.AttributeName}"" name=""{styleInfo.AttributeName}"" class=""form-control"" {style} {validateAttributes}>{value}</textarea>";
         }
 
-        private static string ParseTextEditor(PublishmentSystemInfo publishmentSystemInfo, string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, NameValueCollection pageScripts, TableStyleInfo styleInfo)
+        public static string ParseTextEditor(IAttributes attributes, string attributeName, SiteInfo siteInfo, NameValueCollection pageScripts, StringBuilder extraBuilder)
         {
-            return ParseTextEditor(publishmentSystemInfo, attributeName, formCollection, isAddAndNotPostBack, pageScripts, styleInfo.DefaultValue, styleInfo.Additional.Width, styleInfo.Additional.Height);
-        }
+            var value = attributes.GetString(attributeName);
 
-        public static string ParseTextEditor(PublishmentSystemInfo publishmentSystemInfo, string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, NameValueCollection pageScripts, string defaultValue, string width, int height)
-        {
-            var value = GetValue(attributeName, formCollection, isAddAndNotPostBack, defaultValue);
-
-            value = ContentUtility.TextEditorContentDecode(publishmentSystemInfo, value, true);
+            value = ContentUtility.TextEditorContentDecode(siteInfo, value, true);
             value = ETextEditorTypeUtils.TranslateToHtml(value);
             value = StringUtils.HtmlEncode(value);
 
-            var builder = new StringBuilder();
-
-            var controllerUrl = UEditor.GetUrl(PageUtils.OuterApiUrl, publishmentSystemInfo.PublishmentSystemId);
-            var editorUrl = SiteFilesAssets.GetUrl(PageUtils.OuterApiUrl, "ueditor");
+            var controllerUrl = ApiRouteUEditor.GetUrl(ApiManager.InnerApiUrl, siteInfo.Id);
+            var editorUrl = SiteFilesAssets.GetUrl(ApiManager.InnerApiUrl, "ueditor");
 
             if (pageScripts["uEditor"] == null)
             {
-                builder.Append(string.Format(@"<script type=""text/javascript"">window.UEDITOR_HOME_URL = ""{0}/"";window.UEDITOR_CONTROLLER_URL = ""{1}"";</script><script type=""text/javascript"" src=""{0}/editor_config.js""></script><script type=""text/javascript"" src=""{0}/ueditor_all_min.js""></script>", editorUrl, controllerUrl));
+                extraBuilder.Append(
+                    $@"<script type=""text/javascript"">window.UEDITOR_HOME_URL = ""{editorUrl}/"";window.UEDITOR_CONTROLLER_URL = ""{controllerUrl}"";</script><script type=""text/javascript"" src=""{editorUrl}/editor_config.js""></script><script type=""text/javascript"" src=""{editorUrl}/ueditor_all_min.js""></script>");
             }
             pageScripts["uEditor"] = string.Empty;
 
-            builder.Append(string.Format(@"
-<textarea id=""{0}"" name=""{0}"" style=""display:none"">{1}</textarea>
+            extraBuilder.Append($@"
 <script type=""text/javascript"">
 $(function(){{
-  UE.getEditor('{0}', {{allowDivTransToP: false}});
-  $('#{0}').show();
+  UE.getEditor('{attributeName}', {ETextEditorTypeUtils.ConfigValues});
+  $('#{attributeName}').show();
 }});
-</script>", attributeName, value));
+</script>");
 
-            return builder.ToString();
+            return $@"<textarea id=""{attributeName}"" name=""{attributeName}"" style=""display:none"">{value}</textarea>";
         }
 
-        private static string ParseDate(string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, string additionalAttributes, NameValueCollection pageScripts, TableStyleInfo styleInfo)
+        private static string ParseSelectOne(IAttributes attributes, TableStyleInfo styleInfo, StringBuilder extraBuilder)
         {
-            var builder = new StringBuilder();
-
-            var dateTime = DateUtils.SqlMinValue;
-            if (isAddAndNotPostBack)
-            {
-                if (!string.IsNullOrEmpty(styleInfo.DefaultValue))
-                {
-                    dateTime = styleInfo.DefaultValue == Current ? DateTime.Now : TranslateUtils.ToDateTime(styleInfo.DefaultValue);
-                }
-            }
-            else
-            {
-                if (formCollection?[attributeName] != null)
-                {
-                    dateTime = TranslateUtils.ToDateTime(formCollection[attributeName]);
-                }
-            }
-
-            if (pageScripts != null)
-            {
-                pageScripts["calendar"] =
-                    $@"<script language=""javascript"" src=""{SiteServerAssets.GetUrl(SiteServerAssets.DatePicker.Js)}""></script>";
-            }
-
-            var value = string.Empty;
-            if (dateTime > DateUtils.SqlMinValue)
-            {
-                value = DateUtils.GetDateString(dateTime);
-            }
-
-            builder.Append(string.Format(@"<input id=""{0}"" name=""{0}"" type=""text"" class=""input_text"" value=""{1}"" {2} onfocus=""{3}"" />", attributeName, value, additionalAttributes, SiteServerAssets.DatePicker.OnFocusDateOnly));
-
-            AddHelpText(builder, styleInfo.HelpText);
-
-            return builder.ToString();
-        }
-
-        private static string ParseDateTime(string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, string additionalAttributes, NameValueCollection pageScripts, TableStyleInfo styleInfo)
-        {
-            var builder = new StringBuilder();
-
-            var dateTime = DateUtils.SqlMinValue;
-            if (isAddAndNotPostBack)
-            {
-                if (!string.IsNullOrEmpty(styleInfo.DefaultValue))
-                {
-                    dateTime = styleInfo.DefaultValue == Current ? DateTime.Now : TranslateUtils.ToDateTime(styleInfo.DefaultValue);
-                }
-            }
-            else
-            {
-                if (formCollection?[attributeName] != null)
-                {
-                    dateTime = TranslateUtils.ToDateTime(formCollection[attributeName]);
-                }
-            }
-
-            if (pageScripts != null)
-            {
-                pageScripts["calendar"] =
-                    $@"<script type=""text/javascript"" src=""{SiteServerAssets.GetUrl(SiteServerAssets.DatePicker.Js)}""></script>";
-            }
-
-            var value = string.Empty;
-            if (dateTime > DateUtils.SqlMinValue)
-            {
-                value = DateUtils.GetDateAndTimeString(dateTime, EDateFormatType.Day, ETimeFormatType.LongTime);
-            }
-
-            builder.Append(string.Format(@"<input id=""{0}"" name=""{0}"" type=""text"" class=""input_text"" value=""{1}"" {2} onfocus=""{3}"" />", attributeName, value, additionalAttributes, SiteServerAssets.DatePicker.OnFocus));
-
-            AddHelpText(builder, styleInfo.HelpText);
-
-            return builder.ToString();
-        }
-
-        private static string ParseCheckBox(string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, TableStyleInfo styleInfo)
-        {
-            var builder = new StringBuilder();
-
-            var styleItems = styleInfo.StyleItems ?? BaiRongDataProvider.TableStyleItemDao.GetStyleItemInfoList(styleInfo.TableStyleId);
-
-            var checkBoxList = new CheckBoxList
-            {
-                CssClass = "checkboxlist",
-                ID = attributeName,
-                RepeatDirection = styleInfo.IsHorizontal ? RepeatDirection.Horizontal : RepeatDirection.Vertical,
-                RepeatColumns = styleInfo.Additional.Columns
-            };
-            var selectedValues = !string.IsNullOrEmpty(formCollection?[attributeName]) ? formCollection[attributeName] : string.Empty;
-            var selectedValueArrayList = TranslateUtils.StringCollectionToStringList(selectedValues);
-
-            //验证属性
-            InputParserUtils.GetValidateAttributesForListItem(checkBoxList, styleInfo.Additional.IsValidate, styleInfo.DisplayName, styleInfo.Additional.IsRequired, styleInfo.Additional.MinNum, styleInfo.Additional.MaxNum, styleInfo.Additional.ValidateType, styleInfo.Additional.RegExp, styleInfo.Additional.ErrorMessage);
-
-            foreach (var styleItem in styleItems)
-            {
-                var isSelected = isAddAndNotPostBack ? styleItem.IsSelected : selectedValueArrayList.Contains(styleItem.ItemValue);
-                var listItem = new ListItem(styleItem.ItemTitle, styleItem.ItemValue)
-                {
-                    Selected = isSelected
-                };
-
-                checkBoxList.Items.Add(listItem);
-            }
-            checkBoxList.Attributes.Add("isListItem", "true");
-            builder.Append(ControlUtils.GetControlRenderHtml(checkBoxList));
-
-            var i = 0;
-            foreach (TableStyleItemInfo styleItem in styleItems)
-            {
-                builder.Replace($@"name=""{attributeName}${i}""",
-                    $@"name=""{attributeName}"" value=""{styleItem.ItemValue}""");
-                i++;
-            }
-
-            AddHelpText(builder, styleInfo.HelpText);
-
             if (styleInfo.Additional.IsValidate)
             {
-                builder.Append(
-                    $@"&nbsp;<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span>");
-                builder.Append($@"
-<script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>
-");
+                extraBuilder.Append(
+                    $@"<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span><script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>");
             }
 
-            return builder.ToString();
-        }
-
-        private static string ParseRadio(string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, TableStyleInfo styleInfo)
-        {
             var builder = new StringBuilder();
+            var styleItems = styleInfo.StyleItems ?? DataProvider.TableStyleItemDao.GetStyleItemInfoList(styleInfo.Id);
 
-            var styleItems = styleInfo.StyleItems ?? BaiRongDataProvider.TableStyleItemDao.GetStyleItemInfoList(styleInfo.TableStyleId);
-            var radioButtonList = new RadioButtonList
-            {
-                CssClass = "radiobuttonlist",
-                ID = attributeName,
-                RepeatDirection = styleInfo.IsHorizontal ? RepeatDirection.Horizontal : RepeatDirection.Vertical,
-                RepeatColumns = styleInfo.Additional.Columns
-            };
-            var selectedValue = !string.IsNullOrEmpty(formCollection?[attributeName]) ? formCollection[attributeName] : null;
+            var selectedValue = attributes.GetString(styleInfo.AttributeName);
 
-            //验证属性
-            InputParserUtils.GetValidateAttributesForListItem(radioButtonList, styleInfo.Additional.IsValidate, styleInfo.DisplayName, styleInfo.Additional.IsRequired, styleInfo.Additional.MinNum, styleInfo.Additional.MaxNum, styleInfo.Additional.ValidateType, styleInfo.Additional.RegExp, styleInfo.Additional.ErrorMessage);
-
-            foreach (var styleItem in styleItems)
-            {
-                bool isSelected;
-                if (isAddAndNotPostBack)
-                {
-                    isSelected = styleItem.IsSelected;
-                }
-                else
-                {
-                    isSelected = (styleItem.ItemValue == selectedValue);
-                }
-                var listItem = new ListItem(styleItem.ItemTitle, styleItem.ItemValue)
-                {
-                    Selected = isSelected
-                };
-                listItem.Attributes.Add("class", "input_radio");
-                radioButtonList.Items.Add(listItem);
-            }
-            radioButtonList.Attributes.Add("isListItem", "true");
-            builder.Append(ControlUtils.GetControlRenderHtml(radioButtonList));
-
-            AddHelpText(builder, styleInfo.HelpText);
-
-
-            if (styleInfo.Additional.IsValidate)
-            {
-                builder.Append(
-                    $@"&nbsp;<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span>");
-                builder.Append($@"
-<script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>
-");
-            }
-
-            return builder.ToString();
-        }
-
-        private static string ParseSelectOne(string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, TableStyleInfo styleInfo)
-        {
-            var builder = new StringBuilder();
-
-            var styleItems = styleInfo.StyleItems ?? BaiRongDataProvider.TableStyleItemDao.GetStyleItemInfoList(styleInfo.TableStyleId);
-
-            var selectedValue = !string.IsNullOrEmpty(formCollection?[attributeName]) ? formCollection[attributeName] : null;
-            //验证属性
             var validateAttributes = InputParserUtils.GetValidateAttributes(styleInfo.Additional.IsValidate, styleInfo.DisplayName, styleInfo.Additional.IsRequired, styleInfo.Additional.MinNum, styleInfo.Additional.MaxNum, styleInfo.Additional.ValidateType, styleInfo.Additional.RegExp, styleInfo.Additional.ErrorMessage);
-            builder.Append(string.Format(@"<select id=""{0}"" name=""{0}"" class=""select""  isListItem=""true"" {1}>", attributeName, validateAttributes));
+            builder.Append($@"<select id=""{styleInfo.AttributeName}"" name=""{styleInfo.AttributeName}"" class=""form-control""  isListItem=""true"" {validateAttributes}>");
+
+            var isTicked = false;
             foreach (var styleItem in styleItems)
             {
-                string isSelected;
-                if (isAddAndNotPostBack)
+                var isOptionSelected = false;
+                if (!isTicked)
                 {
-                    isSelected = styleItem.IsSelected ? "selected" : string.Empty;
-                }
-                else
-                {
-                    isSelected = (styleItem.ItemValue == selectedValue) ? "selected" : string.Empty;
+                    isTicked = isOptionSelected = styleItem.ItemValue == selectedValue;
                 }
 
-                builder.Append($@"<option value=""{styleItem.ItemValue}"" {isSelected}>{styleItem.ItemTitle}</option>");
+                builder.Append($@"<option value=""{styleItem.ItemValue}"" {(isOptionSelected ? "selected" : string.Empty)}>{styleItem.ItemTitle}</option>");
             }
+
             builder.Append("</select>");
 
-            AddHelpText(builder, styleInfo.HelpText);
-            if (styleInfo.Additional.IsValidate)
-            {
-                builder.Append(
-                    $@"&nbsp;<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span>");
-                builder.Append($@"
-<script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>
-");
-            }
             return builder.ToString();
         }
 
-        private static string ParseSelectMultiple(string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, TableStyleInfo styleInfo)
+        private static string ParseSelectMultiple(IAttributes attributes, TableStyleInfo styleInfo, StringBuilder extraBuilder)
         {
+            if (styleInfo.Additional.IsValidate)
+            {
+                extraBuilder.Append(
+                    $@"<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span><script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>");
+            }
+
             var builder = new StringBuilder();
+            var styleItems = styleInfo.StyleItems ?? DataProvider.TableStyleItemDao.GetStyleItemInfoList(styleInfo.Id);
 
-            var styleItems = styleInfo.StyleItems ?? BaiRongDataProvider.TableStyleItemDao.GetStyleItemInfoList(styleInfo.TableStyleId);
+            var selectedValues = TranslateUtils.StringCollectionToStringList(attributes.GetString(styleInfo.AttributeName));
 
-            var selectedValues = !string.IsNullOrEmpty(formCollection?[attributeName]) ? formCollection[attributeName] : string.Empty;
-            var selectedValueArrayList = TranslateUtils.StringCollectionToStringList(selectedValues);
-            //验证属性
             var validateAttributes = InputParserUtils.GetValidateAttributes(styleInfo.Additional.IsValidate, styleInfo.DisplayName, styleInfo.Additional.IsRequired, styleInfo.Additional.MinNum, styleInfo.Additional.MaxNum, styleInfo.Additional.ValidateType, styleInfo.Additional.RegExp, styleInfo.Additional.ErrorMessage);
-            builder.Append(string.Format(@"<select id=""{0}"" name=""{0}"" class=""select_multiple""  isListItem=""true"" multiple  {1}>", attributeName, validateAttributes));
+            builder.Append($@"<select id=""{styleInfo.AttributeName}"" name=""{styleInfo.AttributeName}"" class=""form-control"" isListItem=""true"" multiple  {validateAttributes}>");
+
             foreach (var styleItem in styleItems)
             {
-                string isSelected;
-                if (isAddAndNotPostBack)
-                {
-                    isSelected = styleItem.IsSelected ? "selected" : string.Empty;
-                }
-                else
-                {
-                    isSelected = (selectedValueArrayList.Contains(styleItem.ItemValue)) ? "selected" : string.Empty;
-                }
-
-                builder.Append($@"<option value=""{styleItem.ItemValue}"" {isSelected}>{styleItem.ItemTitle}</option>");
+                var isSelected = selectedValues.Contains(styleItem.ItemValue);
+                builder.Append($@"<option value=""{styleItem.ItemValue}"" {(isSelected ? "selected" : string.Empty)}>{styleItem.ItemTitle}</option>");
             }
+
             builder.Append("</select>");
-
-            AddHelpText(builder, styleInfo.HelpText);
-            if (styleInfo.Additional.IsValidate)
-            {
-                builder.Append(
-                    $@"&nbsp;<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span>");
-                builder.Append($@"
-<script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>
-");
-            }
             return builder.ToString();
         }
 
-        private static string ParseImage(PublishmentSystemInfo publishmentSystemInfo, string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, string additionalAttributes, TableStyleInfo styleInfo, ETableStyle tableStyle)
+        private static string ParseSelectCascading(IAttributes attributes, SiteInfo siteInfo, TableStyleInfo styleInfo, StringBuilder extraBuilder)
         {
-            var builder = new StringBuilder();
-
-            var value = GetValue(attributeName, formCollection, isAddAndNotPostBack, string.Empty);
-
-            var width = styleInfo.Additional.Width;
-            if (string.IsNullOrEmpty(width))
-            {
-                width = styleInfo.IsSingleLine ? "380px" : "220px";
-            }
-            string style = $@"style=""width:{TranslateUtils.ToWidth(width)};""";
-
-            var btnAddHtml = string.Empty;
-            if (ETableStyleUtils.IsContent(tableStyle))
-            {
-                btnAddHtml = $@"
-    <a class=""btn"" href=""javascript:;"" onclick=""add_{attributeName}('',true)"" title=""新增""><i class=""icon-plus""></i></a>
-";
-            }
-
-            builder.Append(string.Format(@"
-<div class=""clearfix"">
-  <div class=""pull-left"">
-    <input id=""{0}"" name=""{0}"" type=""text"" class=""input_text"" value=""{1}"" {2} {3} />&nbsp;
-  </div>
-  <div class=""pull-left btn-group"">
-    <a class=""btn"" href=""javascript:;"" onclick=""{4}"" title=""选择""><i class=""icon-th""></i></a>
-    <a class=""btn"" href=""javascript:;"" onclick=""{5}"" title=""上传""><i class=""icon-arrow-up""></i></a>
-    <a class=""btn"" href=""javascript:;"" onclick=""{6}"" title=""裁切""><i class=""icon-crop""></i></a>
-    <a class=""btn"" href=""javascript:;"" onclick=""{7}"" title=""预览""><i class=""icon-eye-open""></i></a>
-    {8}
-  </div>
-</div>
-", attributeName, value, additionalAttributes, style, ModalSelectImage.GetOpenWindowString(publishmentSystemInfo, attributeName), ModalUploadImage.GetOpenWindowString(publishmentSystemInfo.PublishmentSystemId, attributeName), ModalCuttingImage.GetOpenWindowStringWithTextBox(publishmentSystemInfo.PublishmentSystemId, attributeName), ModalMessage.GetOpenWindowStringToPreviewImage(publishmentSystemInfo.PublishmentSystemId, attributeName), btnAddHtml));
-
-            var extendAttributeName = ContentAttribute.GetExtendAttributeName(attributeName);
-
-            builder.Append(string.Format(@"
-<script type=""text/javascript"">
-function select_{0}(obj, index){{
-  var cmd = ""{1}"".replace('{0}', '{0}_' + index).replace('return false;', '');
-  eval(cmd);
-}}
-function upload_{0}(obj, index){{
-  var cmd = ""{2}"".replace('{0}', '{0}_' + index).replace('return false;', '');
-  eval(cmd);
-}}
-function cutting_{0}(obj, index){{
-  var cmd = ""{3}"".replace('{0}', '{0}_' + index).replace('return false;', '');
-  eval(cmd);
-}}
-function preview_{0}(obj, index){{
-  var cmd = ""{4}"".replace(/{0}/g, '{0}_' + index).replace('return false;', '');
-  eval(cmd);
-}}
-function delete_{0}(obj){{
-  $(obj).closest('tr').remove();
-}}
-var index_{0} = 0;
-function add_{0}(val,foucs){{
-    index_{0}++;
-    var html = '<div class=""clearfix""><div class=""pull-left"">';
-    html += '<input id=""{0}_'+index_{0}+'"" name=""{5}"" type=""text"" class=""input_text"" value=""'+val+'"" {6} {7} />&nbsp;';
-    html += '</div>';
-    html += '<div class=""pull-left btn-group"">';
-    html += '<a class=""btn"" href=""javascript:;"" onclick=""select_{0}(this, '+index_{0}+')"" title=""选择""><i class=""icon-th""></i></a>';
-    html += '<a class=""btn"" href=""javascript:;"" onclick=""upload_{0}(this, '+index_{0}+')"" title=""上传""><i class=""icon-arrow-up""></i></a>';
-    html += '<a class=""btn"" href=""javascript:;"" onclick=""cutting_{0}(this, '+index_{0}+')"" title=""裁切""><i class=""icon-crop""></i></a>';
-    html += '<a class=""btn"" href=""javascript:;"" onclick=""preview_{0}(this, '+index_{0}+')"" title=""预览""><i class=""icon-eye-open""></i></a>';
-    html += '<a class=""btn"" href=""javascript:;"" onclick=""delete_{0}(this)"" title=""删除""><i class=""icon-remove""></i></a>';
-    html += '</div></div>';
-    var tr = $('.{5}').length == 0 ? $('#{0}').closest('tr') : $('.{5}:last');
-    tr.after('<tr class=""{5}""><td>&nbsp;</td><td colspan=""3"">'+html+'</td></tr>');
-    if (foucs) $('#{0}_'+index_{0}).focus();
-}}
-", attributeName, ModalSelectImage.GetOpenWindowString(publishmentSystemInfo, attributeName), ModalUploadImage.GetOpenWindowString(publishmentSystemInfo.PublishmentSystemId, attributeName), ModalCuttingImage.GetOpenWindowStringWithTextBox(publishmentSystemInfo.PublishmentSystemId, attributeName), ModalMessage.GetOpenWindowStringToPreviewImage(publishmentSystemInfo.PublishmentSystemId, attributeName), extendAttributeName, additionalAttributes, style));
-
-            var extendValues = formCollection[extendAttributeName];
-            if (!string.IsNullOrEmpty(extendValues))
-            {
-                foreach (string extendValue in TranslateUtils.StringCollectionToStringList(extendValues))
-                {
-                    if (!string.IsNullOrEmpty(extendValue))
-                    {
-                        builder.Append($"add_{attributeName}('{extendValue}',false);");
-                    }
-                }
-            }
-
-            builder.Append("</script>");
-
-            AddHelpText(builder, styleInfo.HelpText);
-
-            return builder.ToString();
-        }
-
-        public static string GetAttributeNameToUploadForTouGao(string attributeName)
-        {
-            return attributeName + "_uploader";
-        }
-
-        private static string ParseVideo(PublishmentSystemInfo publishmentSystemInfo, string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, string additionalAttributes, TableStyleInfo styleInfo, ETableStyle tableStyle)
-        {
-            var builder = new StringBuilder();
-
-            var value = GetValue(attributeName, formCollection, isAddAndNotPostBack, string.Empty);
-
-            var width = styleInfo.Additional.Width;
-            if (string.IsNullOrEmpty(width))
-            {
-                width = styleInfo.IsSingleLine ? "380px" : "220px";
-            }
-            string style = $@"style=""width:{TranslateUtils.ToWidth(width)};""";
-
-            var btnAddHtml = string.Empty;
-            if (ETableStyleUtils.IsContent(tableStyle))
-            {
-                btnAddHtml = $@"
-    <a class=""btn"" href=""javascript:;"" onclick=""add_{attributeName}('',true)"" title=""新增""><i class=""icon-plus""></i></a>
-";
-            }
-
-            builder.Append(string.Format(@"
-<div class=""clearfix"">
-  <div class=""pull-left"">
-    <input id=""{0}"" name=""{0}"" type=""text"" class=""input_text"" value=""{1}"" {2} {3} />&nbsp;
-  </div>
-  <div class=""pull-left btn-group"">
-    <a class=""btn"" href=""javascript:;"" onclick=""{4}"" title=""选择""><i class=""icon-th""></i></a>
-    <a class=""btn"" href=""javascript:;"" onclick=""{5}"" title=""上传""><i class=""icon-arrow-up""></i></a>
-    <a class=""btn"" href=""javascript:;"" onclick=""{6}"" title=""预览""><i class=""icon-eye-open""></i></a>
-    {7}
-  </div>
-</div>
-", attributeName, value, additionalAttributes, style, ModalSelectVideo.GetOpenWindowString(publishmentSystemInfo, attributeName), ModalUploadVideo.GetOpenWindowStringToTextBox(publishmentSystemInfo.PublishmentSystemId, attributeName), ModalMessage.GetOpenWindowStringToPreviewVideo(publishmentSystemInfo.PublishmentSystemId, attributeName), btnAddHtml));
-
-            var extendAttributeName = ContentAttribute.GetExtendAttributeName(attributeName);
-
-            builder.Append(string.Format(@"
-<script type=""text/javascript"">
-function select_{0}(obj, index){{
-  var cmd = ""{1}"".replace('{0}', '{0}_' + index).replace('return false;', '');
-  eval(cmd);
-}}
-function upload_{0}(obj, index){{
-  var cmd = ""{2}"".replace('{0}', '{0}_' + index).replace('return false;', '');
-  eval(cmd);
-}}
-function preview_{0}(obj, index){{
-  var cmd = ""{3}"".replace(/{0}/g, '{0}_' + index).replace('return false;', '');
-  eval(cmd);
-}}
-function delete_{0}(obj){{
-  $(obj).closest('tr').remove();
-}}
-var index_{0} = 0;
-function add_{0}(val,foucs){{
-    index_{0}++;
-    var html = '<div class=""clearfix""><div class=""pull-left"">';
-    html += '<input id=""{0}_'+index_{0}+'"" name=""{4}"" type=""text"" class=""input_text"" value=""'+val+'"" {5} {6} />&nbsp;';
-    html += '</div>';
-    html += '<div class=""pull-left btn-group"">';
-    html += '<a class=""btn"" href=""javascript:;"" onclick=""select_{0}(this, '+index_{0}+')"" title=""选择""><i class=""icon-th""></i></a>';
-    html += '<a class=""btn"" href=""javascript:;"" onclick=""upload_{0}(this, '+index_{0}+')"" title=""上传""><i class=""icon-arrow-up""></i></a>';
-    html += '<a class=""btn"" href=""javascript:;"" onclick=""preview_{0}(this, '+index_{0}+')"" title=""预览""><i class=""icon-eye-open""></i></a>';
-    html += '<a class=""btn"" href=""javascript:;"" onclick=""delete_{0}(this)"" title=""删除""><i class=""icon-remove""></i></a>';
-    html += '</div></div>';
-    var tr = $('.{4}').length == 0 ? $('#{0}').closest('tr') : $('.{4}:last');
-    tr.after('<tr class=""{4}""><td>&nbsp;</td><td colspan=""3"">'+html+'</td></tr>');
-    if (foucs) $('#{0}_'+index_{0}).focus();
-}}
-", attributeName, ModalSelectVideo.GetOpenWindowString(publishmentSystemInfo, attributeName), ModalUploadVideo.GetOpenWindowStringToTextBox(publishmentSystemInfo.PublishmentSystemId, attributeName), ModalMessage.GetOpenWindowStringToPreviewVideo(publishmentSystemInfo.PublishmentSystemId, attributeName), extendAttributeName, additionalAttributes, style));
-
-            var extendValues = formCollection[extendAttributeName];
-            if (!string.IsNullOrEmpty(extendValues))
-            {
-                foreach (string extendValue in TranslateUtils.StringCollectionToStringList(extendValues))
-                {
-                    if (!string.IsNullOrEmpty(extendValue))
-                    {
-                        builder.Append($"add_{attributeName}('{extendValue}',false);");
-                    }
-                }
-            }
-
-            builder.Append("</script>");
-
-            AddHelpText(builder, styleInfo.HelpText);
-
-            return builder.ToString();
-        }
-
-        private static string ParseFile(PublishmentSystemInfo publishmentSystemInfo, string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, string additionalAttributes, TableStyleInfo styleInfo, ETableStyle tableStyle)
-        {
-            var builder = new StringBuilder();
-
-            var value = GetValue(attributeName, formCollection, isAddAndNotPostBack, string.Empty);
-            var relatedPath = string.Empty;
-            if (!string.IsNullOrEmpty(value))
-            {
-                value = value.Trim('/');
-                var i = value.LastIndexOf('/');
-                if (i != -1)
-                {
-                    relatedPath = value.Substring(0, i + 1);
-                }
-            }
-
-            var width = styleInfo.Additional.Width;
-            if (string.IsNullOrEmpty(width))
-            {
-                width = styleInfo.IsSingleLine ? "380px" : "220px";
-            }
-            string style = $@"style=""width:{TranslateUtils.ToWidth(width)};""";
-
-            var btnAddHtml = string.Empty;
-            if (ETableStyleUtils.IsContent(tableStyle))
-            {
-                btnAddHtml = $@"
-    <a class=""btn"" href=""javascript:;"" onclick=""add_{attributeName}('',true)"" title=""新增""><i class=""icon-plus""></i></a>
-";
-            }
-
-            builder.Append(string.Format(@"
-<div class=""clearfix"">
-  <div class=""pull-left"">
-    <input id=""{0}"" name=""{0}"" type=""text"" class=""input_text"" value=""{1}"" {2} {3} />&nbsp;
-  </div>
-  <div class=""pull-left btn-group"">
-    <a class=""btn"" href=""javascript:;"" onclick=""{4}"" title=""选择""><i class=""icon-th""></i></a>
-    <a class=""btn"" href=""javascript:;"" onclick=""{5}"" title=""上传""><i class=""icon-arrow-up""></i></a>
-    <a class=""btn"" href=""javascript:;"" onclick=""{6}"" title=""查看""><i class=""icon-eye-open""></i></a>
-    {7}
-  </div>
-</div>
-", attributeName, value, additionalAttributes, style, ModalSelectFile.GetOpenWindowString(publishmentSystemInfo.PublishmentSystemId, attributeName, relatedPath), ModalUploadFile.GetOpenWindowStringToTextBox(publishmentSystemInfo.PublishmentSystemId, EUploadType.File, attributeName), ModalFileView.GetOpenWindowStringWithTextBoxValue(publishmentSystemInfo.PublishmentSystemId, attributeName), btnAddHtml));
-
-            var extendAttributeName = ContentAttribute.GetExtendAttributeName(attributeName);
-
-            builder.Append(string.Format(@"
-<script type=""text/javascript"">
-function select_{0}(obj, index){{
-  var cmd = ""{1}"".replace('{0}', '{0}_' + index).replace('return false;', '');
-  eval(cmd);
-}}
-function upload_{0}(obj, index){{
-  var cmd = ""{2}"".replace('{0}', '{0}_' + index).replace('return false;', '');
-  eval(cmd);
-}}
-function preview_{0}(obj, index){{
-  var cmd = ""{3}"".replace(/{0}/g, '{0}_' + index).replace('return false;', '');
-  eval(cmd);
-}}
-function delete_{0}(obj){{
-  $(obj).closest('tr').remove();
-}}
-var index_{0} = 0;
-function add_{0}(val,foucs){{
-    index_{0}++;
-    var html = '<div class=""clearfix""><div class=""pull-left"">';
-    html += '<input id=""{0}_'+index_{0}+'"" name=""{4}"" type=""text"" class=""input_text"" value=""'+val+'"" {5} {6} />&nbsp;';
-    html += '</div>';
-    html += '<div class=""pull-left btn-group"">';
-    html += '<a class=""btn"" href=""javascript:;"" onclick=""select_{0}(this, '+index_{0}+')"" title=""选择""><i class=""icon-th""></i></a>';
-    html += '<a class=""btn"" href=""javascript:;"" onclick=""upload_{0}(this, '+index_{0}+')"" title=""上传""><i class=""icon-arrow-up""></i></a>';
-    html += '<a class=""btn"" href=""javascript:;"" onclick=""preview_{0}(this, '+index_{0}+')"" title=""查看""><i class=""icon-eye-open""></i></a>';
-    html += '<a class=""btn"" href=""javascript:;"" onclick=""delete_{0}(this)"" title=""删除""><i class=""icon-remove""></i></a>';
-    html += '</div></div>';
-    var tr = $('.{4}').length == 0 ? $('#{0}').closest('tr') : $('.{4}:last');
-    tr.after('<tr class=""{4}""><td>&nbsp;</td><td colspan=""3"">'+html+'</td></tr>');
-    if (foucs) $('#{0}_'+index_{0}).focus();
-}}
-", attributeName, ModalSelectFile.GetOpenWindowString(publishmentSystemInfo.PublishmentSystemId, attributeName, relatedPath), ModalUploadFile.GetOpenWindowStringToTextBox(publishmentSystemInfo.PublishmentSystemId, EUploadType.File, attributeName), ModalFileView.GetOpenWindowStringWithTextBoxValue(publishmentSystemInfo.PublishmentSystemId, attributeName), extendAttributeName, additionalAttributes, style));
-
-            var extendValues = formCollection[extendAttributeName];
-            if (!string.IsNullOrEmpty(extendValues))
-            {
-                foreach (string extendValue in TranslateUtils.StringCollectionToStringList(extendValues))
-                {
-                    if (!string.IsNullOrEmpty(extendValue))
-                    {
-                        builder.Append($"add_{attributeName}('{extendValue}',false);");
-                    }
-                }
-            }
-
-            builder.Append("</script>");
-
-            AddHelpText(builder, styleInfo.HelpText);
-
-            return builder.ToString();
-        }
-
-        private static string ParseRelatedField(PublishmentSystemInfo publishmentSystemInfo, string attributeName, NameValueCollection formCollection, TableStyleInfo styleInfo)
-        {
-            var builder = new StringBuilder();
-
+            var attributeName = styleInfo.AttributeName;
             var fieldInfo = DataProvider.RelatedFieldDao.GetRelatedFieldInfo(styleInfo.Additional.RelatedFieldId);
-            if (fieldInfo != null)
+            if (fieldInfo == null) return string.Empty;
+
+            var list = DataProvider.RelatedFieldItemDao.GetRelatedFieldItemInfoList(styleInfo.Additional.RelatedFieldId, 0);
+
+            var prefixes = TranslateUtils.StringCollectionToStringCollection(fieldInfo.Prefixes);
+            var suffixes = TranslateUtils.StringCollectionToStringCollection(fieldInfo.Suffixes);
+
+            var style = ERelatedFieldStyleUtils.GetEnumType(styleInfo.Additional.RelatedFieldStyle);
+
+            var builder = new StringBuilder();
+            builder.Append($@"
+<span id=""c_{attributeName}_1"">
+    {prefixes[0]}
+    <select name=""{attributeName}"" id=""{attributeName}_1"" class=""select"" onchange=""getRelatedField_{fieldInfo.Id}(2);"">
+        <option value="""">请选择</option>");
+
+            var values = attributes.GetString(attributeName);
+            var value = string.Empty;
+            if (!string.IsNullOrEmpty(values))
             {
-                var list = DataProvider.RelatedFieldItemDao.GetRelatedFieldItemInfoList(styleInfo.Additional.RelatedFieldId, 0);
+                value = values.Split(',')[0];
+            }
 
-                var prefixes = TranslateUtils.StringCollectionToStringCollection(fieldInfo.Prefixes);
-                var suffixes = TranslateUtils.StringCollectionToStringCollection(fieldInfo.Suffixes);
-
-                var style = ERelatedFieldStyleUtils.GetEnumType(styleInfo.Additional.RelatedFieldStyle);
-
-                builder.Append(string.Format(@"
-<span id=""c_{0}_1"">{1}<select name=""{0}"" id=""{0}_1"" class=""select"" onchange=""getRelatedField_{2}(2);"">
-	<option value="""">请选择</option>", attributeName, prefixes[0], fieldInfo.RelatedFieldId));
-
-                var values = formCollection[attributeName];
-                var value = string.Empty;
-                if (!string.IsNullOrEmpty(values))
-                {
-                    value = values.Split(',')[0];
-                }
-
-                var isLoad = false;
-                foreach (var itemInfo in list)
-                {
-                    var selected = !string.IsNullOrEmpty(itemInfo.ItemValue) && value == itemInfo.ItemValue ? @" selected=""selected""" : string.Empty;
-                    if (!string.IsNullOrEmpty(selected)) isLoad = true;
-                    builder.Append($@"
-	<option value=""{itemInfo.ItemValue}"" itemID=""{itemInfo.Id}""{selected}>{itemInfo.ItemName}</option>");
-                }
-
+            var isLoad = false;
+            foreach (var itemInfo in list)
+            {
+                var selected = !string.IsNullOrEmpty(itemInfo.ItemValue) && value == itemInfo.ItemValue ? @" selected=""selected""" : string.Empty;
+                if (!string.IsNullOrEmpty(selected)) isLoad = true;
                 builder.Append($@"
+	<option value=""{itemInfo.ItemValue}"" itemID=""{itemInfo.Id}""{selected}>{itemInfo.ItemName}</option>");
+            }
+
+            builder.Append($@"
 </select>{suffixes[0]}</span>");
 
-                if (fieldInfo.TotalLevel > 1)
+            if (fieldInfo.TotalLevel > 1)
+            {
+                for (var i = 2; i <= fieldInfo.TotalLevel; i++)
                 {
-                    for (var i = 2; i <= fieldInfo.TotalLevel; i++)
-                    {
-                        builder.Append($@"<span id=""c_{attributeName}_{i}"" style=""display:none"">");
-                        builder.Append(style == ERelatedFieldStyle.Virtical ? @"<br />" : "&nbsp;");
-                        builder.Append(string.Format(@"
-{0}<select name=""{1}"" id=""{1}_{2}"" class=""select"" onchange=""getRelatedField_{3}({2} + 1);""></select>{4}</span>
-", prefixes[i - 1], attributeName, i, fieldInfo.RelatedFieldId, suffixes[i - 1]));
-                    }
+                    builder.Append($@"<span id=""c_{attributeName}_{i}"" style=""display:none"">");
+                    builder.Append(style == ERelatedFieldStyle.Virtical ? @"<br />" : "&nbsp;");
+                    builder.Append($@"
+{prefixes[i - 1]}
+<select name=""{attributeName}"" id=""{attributeName}_{i}"" class=""select"" onchange=""getRelatedField_{fieldInfo.Id}({i} + 1);""></select>
+{suffixes[i - 1]}
+</span>
+");
                 }
+            }
 
-                builder.Append(string.Format(@"
+            extraBuilder.Append($@"
 <script>
-function getRelatedField_{0}(level){{
-    var attributeName = '{1}';
-    var totalLevel = {2};
+function getRelatedField_{fieldInfo.Id}(level){{
+    var attributeName = '{styleInfo.AttributeName}';
+    var totalLevel = {fieldInfo.TotalLevel};
     for(i=level;i<=totalLevel;i++){{
         $('#c_' + attributeName + '_' + i).hide();
     }}
     var obj = $('#c_' + attributeName + '_' + (level - 1));
     var itemID = $('option:selected', obj).attr('itemID');
     if (itemID){{
-        var url = '{3}' + itemID;
-        var values = '{4}';
+        var url = '{ApiRouteActionsRelatedField.GetUrl(ApiManager.InnerApiUrl, siteInfo.Id,
+                styleInfo.Additional.RelatedFieldId, 0)}' + itemID;
+        var values = '{values}';
         var value = (values) ? values.split(',')[level - 1] : '';
         $.post(url + '&callback=?', '', function(data, textStatus){{
             var $sel = $('#' + attributeName + '_' + level);
@@ -963,84 +445,497 @@ function getRelatedField_{0}(level){{
             }});
             if (show) $('#c_' + attributeName + '_' + level).show();
             if (isLoad && level <= totalLevel){{
-                getRelatedField_{0}(level + 1);
+                getRelatedField_{fieldInfo.Id}(level + 1);
             }}
         }}, 'jsonp');
     }}
 }}
-", fieldInfo.RelatedFieldId, styleInfo.AttributeName, fieldInfo.TotalLevel, ActionsRelatedField.GetUrl(PageUtils.InnerApiUrl, publishmentSystemInfo.PublishmentSystemId, styleInfo.Additional.RelatedFieldId, 0), values));
+");
 
-                if (isLoad)
-                {
-                    builder.Append($@"
+            if (isLoad)
+            {
+                extraBuilder.Append($@"
 $(document).ready(function(){{
-    getRelatedField_{fieldInfo.RelatedFieldId}(2);
+    getRelatedField_{fieldInfo.Id}(2);
 }});
 ");
-                }
-
-                builder.Append("</script>");
-
-                AddHelpText(builder, styleInfo.HelpText);
             }
+
+            extraBuilder.Append("</script>");
+
             return builder.ToString();
         }
 
-        private static void AddHelpText(StringBuilder builder, string helpText)
+        private static string ParseCheckBox(IAttributes attributes, TableStyleInfo styleInfo, StringBuilder extraBuilder)
         {
-            if (!string.IsNullOrEmpty(helpText))
+            if (styleInfo.Additional.IsValidate)
             {
-                builder.Append($@"&nbsp;<span style=""color:#999"">{helpText}</span>");
+                extraBuilder.Append(
+                    $@"<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span><script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>");
             }
+
+            var builder = new StringBuilder();
+
+            var styleItems = styleInfo.StyleItems ?? DataProvider.TableStyleItemDao.GetStyleItemInfoList(styleInfo.Id);
+
+            var checkBoxList = new CheckBoxList
+            {
+                CssClass = "checkbox checkbox-primary",
+                ID = styleInfo.AttributeName,
+                RepeatDirection = styleInfo.IsHorizontal ? RepeatDirection.Horizontal : RepeatDirection.Vertical,
+                RepeatColumns = styleInfo.Additional.Columns
+            };
+
+            var selectedValues = TranslateUtils.StringCollectionToStringList(attributes.GetString(styleInfo.AttributeName));
+
+            InputParserUtils.GetValidateAttributesForListItem(checkBoxList, styleInfo.Additional.IsValidate, styleInfo.DisplayName, styleInfo.Additional.IsRequired, styleInfo.Additional.MinNum, styleInfo.Additional.MaxNum, styleInfo.Additional.ValidateType, styleInfo.Additional.RegExp, styleInfo.Additional.ErrorMessage);
+
+            foreach (var styleItem in styleItems)
+            {
+                var isSelected = selectedValues.Contains(styleItem.ItemValue);
+                var listItem = new ListItem(styleItem.ItemTitle, styleItem.ItemValue)
+                {
+                    Selected = isSelected
+                };
+
+                checkBoxList.Items.Add(listItem);
+            }
+            checkBoxList.Attributes.Add("isListItem", "true");
+            builder.Append(ControlUtils.GetControlRenderHtml(checkBoxList));
+
+            var i = 0;
+            foreach (var styleItem in styleItems)
+            {
+                builder.Replace($@"name=""{styleInfo.AttributeName}${i}""",
+                    $@"name=""{styleInfo.AttributeName}"" value=""{styleItem.ItemValue}""");
+                i++;
+            }
+
+            return builder.ToString();
         }
 
-        //public static void AddValuesToAttributes(ETableStyle tableStyle, string tableName, PublishmentSystemInfo publishmentSystemInfo, List<int> relatedIdentities, Control containerControl, NameValueCollection attributes)
-        //{
-        //    var styleInfoList = TableStyleManager.GetTableStyleInfoList(tableStyle, tableName, relatedIdentities);
-        //    foreach (var styleInfo in styleInfoList)
-        //    {
-        //        if (styleInfo.IsVisible == false) continue;
-        //        var theValue = GetValueByControl(styleInfo, publishmentSystemInfo, containerControl);
-
-        //        if (!InputTypeUtils.EqualsAny(styleInfo.InputType, InputType.TextEditor, InputType.Image, InputType.File, InputType.Video) && styleInfo.AttributeName != BackgroundContentAttribute.LinkUrl)
-        //        {
-        //            theValue = PageUtils.FilterSqlAndXss(theValue);
-        //        }
-
-        //        TranslateUtils.SetOrRemoveAttributeLowerCase(attributes, styleInfo.AttributeName, theValue);
-        //    }
-
-        //    //ArrayList metadataInfoArrayList = TableManager.GetTableMetadataInfoArrayList(tableName);
-        //    //foreach (TableMetadataInfo metadataInfo in metadataInfoArrayList)
-        //    //{
-        //    //    if (!isSystemContained && metadataInfo.IsSystem == EBoolean.True) continue;
-
-        //    //    TableStyleInfo styleInfo = TableStyleManager.GetTableStyleInfo(tableType, metadataInfo, relatedIdentities);
-        //    //    if (styleInfo.IsVisible == EBoolean.False) continue;
-
-        //    //    string theValue = InputTypeParser.GetValueByControl(metadataInfo, styleInfo, publishmentSystemInfo, containerControl);
-        //    //    ExtendedAttributes.SetExtendedAttribute(attributes, metadataInfo.AttributeName, theValue);
-        //    //}
-        //}
-
-        public static void AddValuesToAttributes(ETableStyle tableStyle, string tableName, PublishmentSystemInfo publishmentSystemInfo, List<int> relatedIdentities, NameValueCollection formCollection, NameValueCollection attributes, List<string> dontAddAttributes)
+        private static string ParseRadio(IAttributes attributes, TableStyleInfo styleInfo, StringBuilder extraBuilder)
         {
-            if (dontAddAttributes == null)
+            if (styleInfo.Additional.IsValidate)
             {
-                dontAddAttributes = new List<string>();
+                extraBuilder.Append(
+                    $@"<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span><script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>");
             }
-            var styleInfoList = TableStyleManager.GetTableStyleInfoList(tableStyle, tableName, relatedIdentities);
+
+            var builder = new StringBuilder();
+
+            var styleItems = styleInfo.StyleItems ?? DataProvider.TableStyleItemDao.GetStyleItemInfoList(styleInfo.Id);
+            if (styleItems == null || styleItems.Count == 0)
+            {
+                styleItems = new List<TableStyleItemInfo>
+                {
+                    new TableStyleItemInfo
+                    {
+                        ItemTitle = "是",
+                        ItemValue = "1"
+                    },
+                    new TableStyleItemInfo
+                    {
+                        ItemTitle = "否",
+                        ItemValue = "0"
+                    }
+                };
+            }
+            var radioButtonList = new RadioButtonList
+            {
+                CssClass = "radio radio-primary",
+                ID = styleInfo.AttributeName,
+                RepeatDirection = styleInfo.IsHorizontal ? RepeatDirection.Horizontal : RepeatDirection.Vertical,
+                RepeatColumns = styleInfo.Additional.Columns
+            };
+
+            var selectedValue = attributes.GetString(styleInfo.AttributeName);
+
+            InputParserUtils.GetValidateAttributesForListItem(radioButtonList, styleInfo.Additional.IsValidate, styleInfo.DisplayName, styleInfo.Additional.IsRequired, styleInfo.Additional.MinNum, styleInfo.Additional.MaxNum, styleInfo.Additional.ValidateType, styleInfo.Additional.RegExp, styleInfo.Additional.ErrorMessage);
+
+            var isTicked = false;
+            foreach (var styleItem in styleItems)
+            {
+                var isOptionSelected = false;
+                if (!isTicked)
+                {
+                    isTicked = isOptionSelected = styleItem.ItemValue == selectedValue;
+                }
+                
+                var listItem = new ListItem(styleItem.ItemTitle, styleItem.ItemValue)
+                {
+                    Selected = isOptionSelected
+                };
+                radioButtonList.Items.Add(listItem);
+            }
+            radioButtonList.Attributes.Add("isListItem", "true");
+            builder.Append(ControlUtils.GetControlRenderHtml(radioButtonList));
+
+            return builder.ToString();
+        }
+
+        private static string ParseDate(IAttributes attributes, NameValueCollection pageScripts, TableStyleInfo styleInfo, StringBuilder extraBuilder)
+        {
+            if (styleInfo.Additional.IsValidate)
+            {
+                extraBuilder.Append(
+                    $@"<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span><script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>");
+            }
+
+            var selectedValue = attributes.GetString(styleInfo.AttributeName);
+            var dateTime = selectedValue == Current ? DateTime.Now : TranslateUtils.ToDateTime(selectedValue);
+
+            if (pageScripts != null)
+            {
+                pageScripts["calendar"] =
+                    $@"<script language=""javascript"" src=""{SiteServerAssets.GetUrl(SiteServerAssets.DatePicker.Js)}""></script>";
+            }
+
+            var value = string.Empty;
+            if (dateTime > DateUtils.SqlMinValue)
+            {
+                value = DateUtils.GetDateString(dateTime);
+            }
+
+            return
+                $@"<input id=""{styleInfo.AttributeName}"" name=""{styleInfo.AttributeName}"" type=""text"" class=""form-control"" value=""{value}"" onfocus=""{SiteServerAssets.DatePicker.OnFocusDateOnly}"" style=""width: 180px"" />";
+        }
+
+        private static string ParseDateTime(IAttributes attributes, NameValueCollection pageScripts, TableStyleInfo styleInfo, StringBuilder extraBuilder)
+        {
+            if (styleInfo.Additional.IsValidate)
+            {
+                extraBuilder.Append(
+                    $@"<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span><script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>");
+            }
+
+            var selectedValue = attributes.GetString(styleInfo.AttributeName);
+            var dateTime = selectedValue == Current ? DateTime.Now : TranslateUtils.ToDateTime(selectedValue);
+
+            if (pageScripts != null)
+            {
+                pageScripts["calendar"] =
+                    $@"<script type=""text/javascript"" src=""{SiteServerAssets.GetUrl(SiteServerAssets.DatePicker.Js)}""></script>";
+            }
+
+            var value = string.Empty;
+            if (dateTime > DateUtils.SqlMinValue)
+            {
+                value = DateUtils.GetDateAndTimeString(dateTime, EDateFormatType.Day, ETimeFormatType.LongTime);
+            }
+
+            return $@"<input id=""{styleInfo.AttributeName}"" name=""{styleInfo.AttributeName}"" type=""text"" class=""form-control"" value=""{value}"" onfocus=""{SiteServerAssets.DatePicker.OnFocus}"" style=""width: 180px"" />";
+        }
+
+        private static string ParseImage(IAttributes attributes, SiteInfo siteInfo, int channelId, TableStyleInfo styleInfo, StringBuilder extraBuilder)
+        {
+            var btnAddHtml = string.Empty;
+
+            if (channelId > 0)
+            {
+                btnAddHtml = $@"
+    <button class=""btn"" onclick=""add_{styleInfo.AttributeName}('',true);return false;"">
+        新增
+    </button>
+";
+            }
+
+            extraBuilder.Append($@"
+<div class=""btn-group btn-group-sm"">
+    <button class=""btn"" onclick=""{ModalUploadImage.GetOpenWindowString(siteInfo.Id, styleInfo.AttributeName)}"">
+        上传
+    </button>
+    <button class=""btn"" onclick=""{ModalSelectImage.GetOpenWindowString(siteInfo, styleInfo.AttributeName)}"">
+        选择
+    </button>
+    <button class=""btn"" onclick=""{ModalCuttingImage.GetOpenWindowStringWithTextBox(siteInfo.Id, styleInfo.AttributeName)}"">
+        裁切
+    </button>
+    <button class=""btn"" onclick=""{ModalMessage.GetOpenWindowStringToPreviewImage(siteInfo.Id, styleInfo.AttributeName)}"">
+        预览
+    </button>
+    {btnAddHtml}
+</div>
+");
+
+            var attributeName = styleInfo.AttributeName;
+            var extendAttributeName = ContentAttribute.GetExtendAttributeName(styleInfo.AttributeName);
+
+            extraBuilder.Append($@"
+<script type=""text/javascript"">
+function select_{styleInfo.AttributeName}(obj, index){{
+  var cmd = ""{ModalSelectImage.GetOpenWindowString(siteInfo, styleInfo.AttributeName)}"".replace('{attributeName}', '{attributeName}_' + index).replace('return false;', '');
+  eval(cmd);
+}}
+function upload_{attributeName}(obj, index){{
+  var cmd = ""{ModalUploadImage.GetOpenWindowString(siteInfo.Id, attributeName)}"".replace('{attributeName}', '{attributeName}_' + index).replace('return false;', '');
+  eval(cmd);
+}}
+function cutting_{attributeName}(obj, index){{
+  var cmd = ""{ModalCuttingImage.GetOpenWindowStringWithTextBox(siteInfo.Id, attributeName)}"".replace('{attributeName}', '{attributeName}_' + index).replace('return false;', '');
+  eval(cmd);
+}}
+function preview_{attributeName}(obj, index){{
+  var cmd = ""{ModalMessage.GetOpenWindowStringToPreviewImage(siteInfo.Id, attributeName)}"".replace(/{attributeName}/g, '{attributeName}_' + index).replace('return false;', '');
+  eval(cmd);
+}}
+function delete_{attributeName}(obj){{
+  $(obj).parent().parent().parent().remove();
+}}
+var index_{attributeName} = 0;
+function add_{attributeName}(val,foucs){{
+    index_{attributeName}++;
+    var inputHtml = '<input id=""{attributeName}_'+index_{attributeName}+'"" name=""{extendAttributeName}"" type=""text"" class=""form-control"" value=""'+val+'"" />';
+    var btnHtml = '<div class=""btn-group btn-group-sm"">';
+    btnHtml += '<button class=""btn"" href=""javascript:;"" onclick=""select_{attributeName}(this, '+index_{attributeName}+');return false;"">选择</button>';
+    btnHtml += '<button class=""btn"" href=""javascript:;"" onclick=""upload_{attributeName}(this, '+index_{attributeName}+');return false;"">上传</button>';
+    btnHtml += '<button class=""btn"" href=""javascript:;"" onclick=""cutting_{attributeName}(this, '+index_{attributeName}+');return false;"">裁切</button>';
+    btnHtml += '<button class=""btn"" href=""javascript:;"" onclick=""preview_{attributeName}(this, '+index_{attributeName}+');return false;"">预览</button>';
+    btnHtml += '<button class=""btn"" href=""javascript:;"" onclick=""delete_{attributeName}(this);return false;"">删除</button>';
+    btnHtml += '</div>';
+    var div = $('.{extendAttributeName}').length == 0 ? $('#{attributeName}').parent().parent() : $('.{extendAttributeName}:last');
+    div.after('<div class=""form-group form-row {extendAttributeName}""><label class=""col-sm-1 col-form-label text-right""></label><div class=""col-sm-6"">' + inputHtml + '</div><div class=""col-sm-5"">' + btnHtml + '</div></div>');
+    if (foucs) $('#{attributeName}_'+index_{attributeName}).focus();
+
+}}
+");
+
+            var extendValues = attributes.GetString(extendAttributeName);
+            if (!string.IsNullOrEmpty(extendValues))
+            {
+                foreach (var extendValue in TranslateUtils.StringCollectionToStringList(extendValues))
+                {
+                    if (!string.IsNullOrEmpty(extendValue))
+                    {
+                        extraBuilder.Append($"add_{attributeName}('{extendValue}',false);");
+                    }
+                }
+            }
+
+            extraBuilder.Append("</script>");
+
+            return $@"<input id=""{attributeName}"" name=""{attributeName}"" type=""text"" class=""form-control"" value=""{attributes.GetString(attributeName)}"" />";
+        }
+
+        private static string ParseVideo(IAttributes attributes, SiteInfo siteInfo, int channelId, TableStyleInfo styleInfo, StringBuilder extraBulder)
+        {
+            var attributeName = styleInfo.AttributeName;
+
+            var btnAddHtml = string.Empty;
+            if (channelId > 0)
+            {
+                btnAddHtml = $@"
+    <button class=""btn"" onclick=""add_{attributeName}('',true);return false;"">
+        新增
+    </button>
+";
+            }
+
+            extraBulder.Append($@"
+<div class=""btn-group btn-group-sm"">
+    <button class=""btn"" onclick=""{ModalUploadVideo.GetOpenWindowStringToTextBox(siteInfo.Id, attributeName)}"">
+        上传
+    </button>
+    <button class=""btn"" onclick=""{ModalSelectVideo.GetOpenWindowString(siteInfo, attributeName)}"">
+        选择
+    </button>
+    <button class=""btn"" onclick=""{ModalMessage.GetOpenWindowStringToPreviewVideo(siteInfo.Id, attributeName)}"">
+        预览
+    </button>
+    {btnAddHtml}
+</div>");
+
+            var extendAttributeName = ContentAttribute.GetExtendAttributeName(attributeName);
+
+            extraBulder.Append($@"
+<script type=""text/javascript"">
+function select_{attributeName}(obj, index){{
+  var cmd = ""{ModalSelectVideo.GetOpenWindowString(siteInfo, attributeName)}"".replace('{attributeName}', '{attributeName}_' + index).replace('return false;', '');
+  eval(cmd);
+}}
+function upload_{attributeName}(obj, index){{
+  var cmd = ""{ModalUploadVideo.GetOpenWindowStringToTextBox(siteInfo.Id, attributeName)}"".replace('{attributeName}', '{attributeName}_' + index).replace('return false;', '');
+  eval(cmd);
+}}
+function preview_{attributeName}(obj, index){{
+  var cmd = ""{ModalMessage.GetOpenWindowStringToPreviewVideo(siteInfo.Id, attributeName)}"".replace(/{attributeName}/g, '{attributeName}_' + index).replace('return false;', '');
+  eval(cmd);
+}}
+function delete_{attributeName}(obj){{
+  $(obj).parent().parent().parent().remove();
+}}
+var index_{attributeName} = 0;
+function add_{attributeName}(val,foucs){{
+    index_{attributeName}++;
+    var inputHtml = '<input id=""{attributeName}_'+index_{attributeName}+'"" name=""{extendAttributeName}"" type=""text"" class=""form-control"" value=""'+val+'"" />';
+    var btnHtml = '<div class=""btn-group btn-group-sm"">';
+    btnHtml += '<button class=""btn"" href=""javascript:;"" onclick=""select_{attributeName}(this, '+index_{attributeName}+');return false;"">选择</button>';
+    btnHtml += '<button class=""btn"" href=""javascript:;"" onclick=""upload_{attributeName}(this, '+index_{attributeName}+');return false;"">上传</button>';
+    btnHtml += '<button class=""btn"" href=""javascript:;"" onclick=""preview_{attributeName}(this, '+index_{attributeName}+');return false;"">预览</button>';
+    btnHtml += '<button class=""btn"" href=""javascript:;"" onclick=""delete_{attributeName}(this);return false;"">删除</button>';
+    btnHtml += '</div>';
+    var div = $('.{extendAttributeName}').length == 0 ? $('#{attributeName}').parent().parent() : $('.{extendAttributeName}:last');
+    div.after('<div class=""form-group form-row {extendAttributeName}""><label class=""col-sm-1 col-form-label text-right""></label><div class=""col-sm-6"">' + inputHtml + '</div><div class=""col-sm-5"">' + btnHtml + '</div></div>');
+    if (foucs) $('#{attributeName}_'+index_{attributeName}).focus();
+
+}}
+");
+
+            var extendValues = attributes.GetString(extendAttributeName);
+            if (!string.IsNullOrEmpty(extendValues))
+            {
+                foreach (var extendValue in TranslateUtils.StringCollectionToStringList(extendValues))
+                {
+                    if (!string.IsNullOrEmpty(extendValue))
+                    {
+                        extraBulder.Append($"add_{attributeName}('{extendValue}',false);");
+                    }
+                }
+            }
+
+            extraBulder.Append("</script>");
+
+            return $@"<input id=""{attributeName}"" name=""{attributeName}"" type=""text"" class=""form-control"" value=""{attributes.GetString(attributeName)}"" />";
+        }
+
+        private static string ParseFile(IAttributes attributes, SiteInfo siteInfo, int channelId, TableStyleInfo styleInfo, StringBuilder extraBuilder)
+        {
+            var attributeName = styleInfo.AttributeName;
+            var value = attributes.GetString(attributeName);
+            var relatedPath = string.Empty;
+            if (!string.IsNullOrEmpty(value))
+            {
+                value = value.Trim('/');
+                var i = value.LastIndexOf('/');
+                if (i != -1)
+                {
+                    relatedPath = value.Substring(0, i + 1);
+                }
+            }
+
+            var btnAddHtml = string.Empty;
+            if (channelId > 0)
+            {
+                btnAddHtml = $@"
+<button class=""btn"" onclick=""add_{attributeName}('',true);return false;"">
+    新增
+</button>
+";
+            }
+
+            extraBuilder.Append($@"
+<div class=""btn-group btn-group-sm"">
+    <button class=""btn"" onclick=""{ModalUploadFile.GetOpenWindowStringToTextBox(siteInfo.Id, EUploadType.File, attributeName)}"">
+        上传
+    </button>
+    <button class=""btn"" onclick=""{ModalSelectFile.GetOpenWindowString(siteInfo.Id, attributeName, relatedPath)}"">
+        选择
+    </button>
+    <button class=""btn"" onclick=""{ModalFileView.GetOpenWindowStringWithTextBoxValue(siteInfo.Id, attributeName)}"">
+        查看
+    </button>
+    {btnAddHtml}
+</div>
+");
+
+            var extendAttributeName = ContentAttribute.GetExtendAttributeName(attributeName);
+
+            extraBuilder.Append($@"
+<script type=""text/javascript"">
+function select_{attributeName}(obj, index){{
+  var cmd = ""{ModalSelectFile.GetOpenWindowString(siteInfo.Id, attributeName, relatedPath)}"".replace('{attributeName}', '{attributeName}_' + index).replace('return false;', '');
+  eval(cmd);
+}}
+function upload_{attributeName}(obj, index){{
+  var cmd = ""{ModalUploadFile.GetOpenWindowStringToTextBox(siteInfo.Id, EUploadType.File,
+                attributeName)}"".replace('{attributeName}', '{attributeName}_' + index).replace('return false;', '');
+  eval(cmd);
+}}
+function preview_{attributeName}(obj, index){{
+  var cmd = ""{ModalFileView.GetOpenWindowStringWithTextBoxValue(siteInfo.Id,
+                attributeName)}"".replace(/{attributeName}/g, '{attributeName}_' + index).replace('return false;', '');
+  eval(cmd);
+}}
+function delete_{attributeName}(obj){{
+  $(obj).parent().parent().parent().remove();
+}}
+var index_{attributeName} = 0;
+function add_{attributeName}(val,foucs){{
+    index_{attributeName}++;
+    var inputHtml = '<input id=""{attributeName}_'+index_{attributeName}+'"" name=""{extendAttributeName}"" type=""text"" class=""form-control"" value=""'+val+'"" />';
+    var btnHtml = '<div class=""btn-group btn-group-sm"">';
+    btnHtml += '<button class=""btn"" href=""javascript:;"" onclick=""select_{attributeName}(this, '+index_{attributeName}+');return false;"">选择</button>';
+    btnHtml += '<button class=""btn"" href=""javascript:;"" onclick=""upload_{attributeName}(this, '+index_{attributeName}+');return false;"">上传</button>';
+    btnHtml += '<button class=""btn"" href=""javascript:;"" onclick=""preview_{attributeName}(this, '+index_{attributeName}+');return false;"">查看</button>';
+    btnHtml += '<button class=""btn"" href=""javascript:;"" onclick=""delete_{attributeName}(this);return false;"">删除</button>';
+    btnHtml += '</div>';
+    var div = $('.{extendAttributeName}').length == 0 ? $('#{attributeName}').parent().parent() : $('.{extendAttributeName}:last');
+    div.after('<div class=""form-group form-row {extendAttributeName}""><label class=""col-sm-1 col-form-label text-right""></label><div class=""col-sm-6"">' + inputHtml + '</div><div class=""col-sm-5"">' + btnHtml + '</div></div>');
+    if (foucs) $('#{attributeName}_'+index_{attributeName}).focus();
+}}
+");
+
+            var extendValues = attributes.GetString(extendAttributeName);
+            if (!string.IsNullOrEmpty(extendValues))
+            {
+                foreach (var extendValue in TranslateUtils.StringCollectionToStringList(extendValues))
+                {
+                    if (!string.IsNullOrEmpty(extendValue))
+                    {
+                        extraBuilder.Append($"add_{attributeName}('{extendValue}',false);");
+                    }
+                }
+            }
+
+            extraBuilder.Append("</script>");
+
+            return
+                $@"<input id=""{attributeName}"" name=""{attributeName}"" type=""text"" class=""form-control"" value=""{value}"" />";
+        }
+
+        private static string ParseCustomize(IAttributes attributes, TableStyleInfo styleInfo, StringBuilder extraBuilder)
+        {
+            if (styleInfo.Additional.IsValidate)
+            {
+                extraBuilder.Append(
+                    $@"<span id=""{styleInfo.AttributeName}_msg"" style=""color:red;display:none;"">*</span><script>event_observe('{styleInfo.AttributeName}', 'blur', checkAttributeValue);</script>");
+            }
+
+            var value = attributes.GetString(styleInfo.AttributeName);
+            var left = styleInfo.Additional.CustomizeLeft.Replace(Value, value);
+            var right = styleInfo.Additional.CustomizeRight.Replace(Value, value);
+
+            extraBuilder.Append(right);
+            return left;
+        }
+
+        public static void SaveAttributes(IAttributes attributes, SiteInfo siteInfo, List<TableStyleInfo> styleInfoList, NameValueCollection formCollection, List<string> dontAddAttributesLowercase)
+        {
+            if (dontAddAttributesLowercase == null)
+            {
+                dontAddAttributesLowercase = new List<string>();
+            }
+
             foreach (var styleInfo in styleInfoList)
             {
-                if (styleInfo.IsVisible == false || dontAddAttributes.Contains(styleInfo.AttributeName.ToLower())) continue;
-                var theValue = GetValueByForm(styleInfo, publishmentSystemInfo, formCollection);
+                if (dontAddAttributesLowercase.Contains(styleInfo.AttributeName.ToLower())) continue;
+                //var theValue = GetValueByForm(styleInfo, siteInfo, formCollection);
 
-                if (!InputTypeUtils.EqualsAny(styleInfo.InputType, InputType.TextEditor, InputType.Image, InputType.File, InputType.Video) && styleInfo.AttributeName != BackgroundContentAttribute.LinkUrl)
+                var theValue = formCollection[styleInfo.AttributeName] ?? string.Empty;
+                var inputType = styleInfo.InputType;
+                if (inputType == InputType.TextEditor)
+                {
+                    theValue = ContentUtility.TextEditorContentEncode(siteInfo, theValue);
+                    theValue = ETextEditorTypeUtils.TranslateToStlElement(theValue);
+                }
+
+                if (inputType != InputType.TextEditor && inputType != InputType.Image && inputType != InputType.File && inputType != InputType.Video && styleInfo.AttributeName != ContentAttribute.LinkUrl)
                 {
                     theValue = PageUtils.FilterSqlAndXss(theValue);
                 }
 
-                TranslateUtils.SetOrRemoveAttributeLowerCase(attributes, styleInfo.AttributeName, theValue);
+                attributes.Set(styleInfo.AttributeName, theValue);
+                //TranslateUtils.SetOrRemoveAttributeLowerCase(attributes, styleInfo.AttributeName, theValue);
 
                 if (styleInfo.Additional.IsFormatString)
                 {
@@ -1050,104 +945,17 @@ $(document).ready(function(){{
                     var formatColor = formCollection[styleInfo.AttributeName + "_formatColor"];
                     var theFormatString = ContentUtility.GetTitleFormatString(formatString, formatEm, formatU, formatColor);
 
-                    TranslateUtils.SetOrRemoveAttributeLowerCase(attributes, ContentAttribute.GetFormatStringAttributeName(styleInfo.AttributeName), theFormatString);
+                    attributes.Set(ContentAttribute.GetFormatStringAttributeName(styleInfo.AttributeName), theFormatString);
+                    //TranslateUtils.SetOrRemoveAttributeLowerCase(attributes, ContentAttribute.GetFormatStringAttributeName(styleInfo.AttributeName), theFormatString);
                 }
 
-                if (InputTypeUtils.EqualsAny(styleInfo.InputType, InputType.Image, InputType.Video, InputType.File))
+                if (inputType == InputType.Image || inputType == InputType.File || inputType == InputType.Video)
                 {
                     var attributeName = ContentAttribute.GetExtendAttributeName(styleInfo.AttributeName);
-                    TranslateUtils.SetOrRemoveAttributeLowerCase(attributes, attributeName, formCollection[attributeName]);
+                    attributes.Set(attributeName, formCollection[attributeName]);
+                    //TranslateUtils.SetOrRemoveAttributeLowerCase(attributes, attributeName, formCollection[attributeName]);
                 }
             }
-        }
-
-        //public static void AddValuesToAttributes(ETableStyle tableStyle, string tableName, PublishmentSystemInfo publishmentSystemInfo, List<int> relatedIdentities, NameValueCollection formCollection, NameValueCollection attributes, List<string> dontAddAttributes)
-        //{
-        //    var styleInfoList = TableStyleManager.GetTableStyleInfoList(tableStyle, tableName, relatedIdentities);
-        //    foreach (var styleInfo in styleInfoList)
-        //    {
-        //        if (styleInfo.IsVisible == false || dontAddAttributes.Contains(styleInfo.AttributeName.ToLower())) continue;
-        //        var theValue = GetValueByForm(styleInfo, publishmentSystemInfo, formCollection);
-        //        if (!InputTypeUtils.EqualsAny(styleInfo.InputType, InputType.TextEditor, InputType.Image, InputType.File, InputType.Video) && styleInfo.AttributeName != BackgroundContentAttribute.LinkUrl)
-        //        {
-        //            theValue = PageUtils.FilterSqlAndXss(theValue);
-        //        }
-
-        //        TranslateUtils.SetOrRemoveAttributeLowerCase(attributes, styleInfo.AttributeName, theValue);
-
-        //        if (styleInfo.Additional.IsFormatString)
-        //        {
-        //            var formatString = TranslateUtils.ToBool(formCollection[styleInfo.AttributeName + "_formatStrong"]);
-        //            var formatEm = TranslateUtils.ToBool(formCollection[styleInfo.AttributeName + "_formatEM"]);
-        //            var formatU = TranslateUtils.ToBool(formCollection[styleInfo.AttributeName + "_formatU"]);
-        //            var formatColor = formCollection[styleInfo.AttributeName + "_formatColor"];
-        //            var theFormatString = ContentUtility.GetTitleFormatString(formatString, formatEm, formatU, formatColor);
-
-        //            TranslateUtils.SetOrRemoveAttributeLowerCase(attributes, ContentAttribute.GetFormatStringAttributeName(styleInfo.AttributeName), theFormatString);
-        //        }
-
-        //        if (InputTypeUtils.EqualsAny(styleInfo.InputType, InputType.Image, InputType.Video, InputType.File))
-        //        {
-        //            var attributeName = ContentAttribute.GetExtendAttributeName(styleInfo.AttributeName);
-        //            TranslateUtils.SetOrRemoveAttributeLowerCase(attributes, attributeName, formCollection[attributeName]);
-        //        }
-        //    }
-        //}
-
-        public static void AddSingleValueToAttributes(ETableStyle tableStyle, string tableName, PublishmentSystemInfo publishmentSystemInfo, List<int> relatedIdentities, NameValueCollection formCollection, string attributeName, NameValueCollection attributes, bool isSystemContained)
-        {
-            var metadataInfo = TableManager.GetTableMetadataInfo(tableName, attributeName);
-            if (!isSystemContained && metadataInfo.IsSystem) return;
-
-            var styleInfo = TableStyleManager.GetTableStyleInfo(tableStyle, tableName, attributeName, relatedIdentities);
-            if (styleInfo.IsVisible == false) return;
-
-            var theValue = GetValueByForm(styleInfo, publishmentSystemInfo, formCollection);
-
-            TranslateUtils.SetOrRemoveAttributeLowerCase(attributes, metadataInfo.AttributeName, theValue);
-        }
-
-        private static string GetValueByControl(TableStyleInfo styleInfo, PublishmentSystemInfo publishmentSystemInfo, Control containerControl)
-        {
-            var theValue = ControlUtils.GetInputValue(containerControl, styleInfo.AttributeName) ?? string.Empty;
-
-            var inputType = InputTypeUtils.GetEnumType(styleInfo.InputType);
-
-            if (inputType == InputType.TextEditor)
-            {
-                theValue = ContentUtility.TextEditorContentEncode(publishmentSystemInfo, theValue);
-            }
-
-            return theValue;
-        }
-
-        private static string GetValue(string attributeName, NameValueCollection formCollection, bool isAddAndNotPostBack, string defaultValue)
-        {
-            var value = string.Empty;
-            if (formCollection?[attributeName] != null)
-            {
-                value = formCollection[attributeName];
-            }
-            if (isAddAndNotPostBack && string.IsNullOrEmpty(value))
-            {
-                value = defaultValue;
-            }
-            return value;
-        }
-
-        private static string GetValueByForm(TableStyleInfo styleInfo, PublishmentSystemInfo publishmentSystemInfo, NameValueCollection formCollection)
-        {
-            var theValue = formCollection[styleInfo.AttributeName] ?? string.Empty;
-
-            var inputType = InputTypeUtils.GetEnumType(styleInfo.InputType);
-
-            if (inputType == InputType.TextEditor)
-            {
-                theValue = ContentUtility.TextEditorContentEncode(publishmentSystemInfo, theValue);
-                theValue = ETextEditorTypeUtils.TranslateToStlElement(theValue);
-            }
-
-            return theValue;
         }
     }
 }

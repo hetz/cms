@@ -1,24 +1,22 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class ModalCreateDirectory : BasePageCms
     {
-		protected TextBox DirectoryName;
-		protected RegularExpressionValidator DirectoryNameValidator;
+		protected TextBox TbDirectoryName;
 
 		private string _currentRootPath;
 		private string _directoryPath;
 
-        public static string GetOpenWindowString(int publishmentSystemId, string currentRootPath)
+        public static string GetOpenWindowString(int siteId, string currentRootPath)
         {
-            return PageUtils.GetOpenWindowString("创建文件夹", PageUtils.GetCmsUrl(nameof(ModalCreateDirectory), new NameValueCollection
+            return LayerUtils.GetOpenScript("创建文件夹", PageUtils.GetCmsUrl(siteId, nameof(ModalCreateDirectory), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"CurrentRootPath", currentRootPath}
             }), 400, 250);
         }
@@ -27,40 +25,30 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID", "CurrentRootPath");
+            PageUtils.CheckRequestParameter("siteId", "CurrentRootPath");
 
-			_currentRootPath = Body.GetQueryString("CurrentRootPath").TrimEnd('/');
-			_directoryPath = PathUtility.MapPath(PublishmentSystemInfo, _currentRootPath);
+			_currentRootPath = AuthRequest.GetQueryString("CurrentRootPath").TrimEnd('/');
+			_directoryPath = PathUtility.MapPath(SiteInfo, _currentRootPath);
 		}
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
-			var isCreated = false;
-
-            if (!DirectoryUtils.IsDirectoryNameCompliant(DirectoryName.Text))
+            if (!DirectoryUtils.IsDirectoryNameCompliant(TbDirectoryName.Text))
             {
-                DirectoryNameValidator.IsValid = false;
-                DirectoryNameValidator.ErrorMessage = "文件夹名称不符合要求";
+                FailMessage("文件夹名称不符合要求");
                 return;
             }
 
-            var path = PathUtils.Combine(_directoryPath, DirectoryName.Text);
+            var path = PathUtils.Combine(_directoryPath, TbDirectoryName.Text);
             if (DirectoryUtils.IsDirectoryExists(path))
             {
-                DirectoryNameValidator.IsValid = false;
-                DirectoryNameValidator.ErrorMessage = "文件夹已经存在";
-            }
-            else
-            {
-                DirectoryUtils.CreateDirectoryIfNotExists(path);
-                isCreated = true;
+                FailMessage("文件夹已经存在");
+                return;
             }
 
-			if (isCreated)
-			{
-                Body.AddSiteLog(PublishmentSystemId, "新建文件夹", $"文件夹:{DirectoryName.Text}");
-				PageUtils.CloseModalPage(Page);
-			}
-		}
+            DirectoryUtils.CreateDirectoryIfNotExists(path);
+            AuthRequest.AddSiteLog(SiteId, "新建文件夹", $"文件夹:{TbDirectoryName.Text}");
+            LayerUtils.Close(Page);
+        }
 	}
 }

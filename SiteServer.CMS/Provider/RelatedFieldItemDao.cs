@@ -1,10 +1,9 @@
-using System.Collections;
 using System.Collections.Generic;
 using System.Data;
-using BaiRong.Core.Data;
-using BaiRong.Core.Model;
+using SiteServer.CMS.Data;
 using SiteServer.CMS.Model;
-using SiteServer.Plugin.Models;
+using SiteServer.Plugin;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Provider
 {
@@ -12,40 +11,40 @@ namespace SiteServer.CMS.Provider
     {
         public override string TableName => "siteserver_RelatedFieldItem";
 
-        public override List<TableColumnInfo> TableColumns => new List<TableColumnInfo>
+        public override List<TableColumn> TableColumns => new List<TableColumn>
         {
-            new TableColumnInfo
+            new TableColumn
             {
-                ColumnName = nameof(RelatedFieldItemInfo.Id),
+                AttributeName = nameof(RelatedFieldItemInfo.Id),
                 DataType = DataType.Integer,
                 IsIdentity = true,
                 IsPrimaryKey = true
             },
-            new TableColumnInfo
+            new TableColumn
             {
-                ColumnName = nameof(RelatedFieldItemInfo.RelatedFieldId),
+                AttributeName = nameof(RelatedFieldItemInfo.RelatedFieldId),
                 DataType = DataType.Integer
             },
-            new TableColumnInfo
+            new TableColumn
             {
-                ColumnName = nameof(RelatedFieldItemInfo.ItemName),
+                AttributeName = nameof(RelatedFieldItemInfo.ItemName),
                 DataType = DataType.VarChar,
-                Length = 255
+                DataLength = 255
             },
-            new TableColumnInfo
+            new TableColumn
             {
-                ColumnName = nameof(RelatedFieldItemInfo.ItemValue),
+                AttributeName = nameof(RelatedFieldItemInfo.ItemValue),
                 DataType = DataType.VarChar,
-                Length = 255
+                DataLength = 255
             },
-            new TableColumnInfo
+            new TableColumn
             {
-                ColumnName = nameof(RelatedFieldItemInfo.ParentId),
+                AttributeName = nameof(RelatedFieldItemInfo.ParentId),
                 DataType = DataType.Integer
             },
-            new TableColumnInfo
+            new TableColumn
             {
-                ColumnName = nameof(RelatedFieldItemInfo.Taxis),
+                AttributeName = nameof(RelatedFieldItemInfo.Taxis),
                 DataType = DataType.Integer
             }
         };
@@ -103,12 +102,25 @@ namespace SiteServer.CMS.Provider
             //RelatedFieldManager.ClearCache();
         }
 
-        public IEnumerable GetDataSource(int relatedFieldId, int parentId)
+        public List<RelatedFieldItemInfo> GetRelatedFieldItemInfoList(int relatedFieldId, int parentId)
         {
+            var list = new List<RelatedFieldItemInfo>();
+
             string sqlString =
                 $"SELECT ID, RelatedFieldID, ItemName, ItemValue, ParentID, Taxis FROM siteserver_RelatedFieldItem WHERE RelatedFieldID = {relatedFieldId} AND ParentID = {parentId} ORDER BY Taxis";
-            var enumerable = (IEnumerable)ExecuteReader(sqlString);
-            return enumerable;
+
+            using (var rdr = ExecuteReader(sqlString))
+            {
+                while (rdr.Read())
+                {
+                    var i = 0;
+                    var info = new RelatedFieldItemInfo(GetInt(rdr, i++), GetInt(rdr, i++), GetString(rdr, i++), GetString(rdr, i++), GetInt(rdr, i++), GetInt(rdr, i));
+                    list.Add(info);
+                }
+                rdr.Close();
+            }
+
+            return list;
         }
 
         public void UpdateTaxisToUp(int id, int parentId)
@@ -116,7 +128,7 @@ namespace SiteServer.CMS.Provider
             //Get Higher Taxis and ClassID
             //string sqlString =
             //    $"SELECT TOP 1 ID, Taxis FROM siteserver_RelatedFieldItem WHERE ((Taxis > (SELECT Taxis FROM siteserver_RelatedFieldItem WHERE ID = {id})) AND ParentID = {parentId}) ORDER BY Taxis";
-            var sqlString = SqlUtils.GetTopSqlString("siteserver_RelatedFieldItem", "ID, Taxis", $"WHERE ((Taxis > (SELECT Taxis FROM siteserver_RelatedFieldItem WHERE ID = {id})) AND ParentID = {parentId})", "ORDER BY Taxis", 1);
+            var sqlString = SqlUtils.ToTopSqlString("siteserver_RelatedFieldItem", "ID, Taxis", $"WHERE ((Taxis > (SELECT Taxis FROM siteserver_RelatedFieldItem WHERE ID = {id})) AND ParentID = {parentId})", "ORDER BY Taxis", 1);
 
             var higherId = 0;
             var higherTaxis = 0;
@@ -150,7 +162,7 @@ namespace SiteServer.CMS.Provider
             //Get Lower Taxis and ClassID
             //string sqlString =
             //    $"SELECT TOP 1 ID, Taxis FROM siteserver_RelatedFieldItem WHERE ((Taxis < (SELECT Taxis FROM siteserver_RelatedFieldItem WHERE (ID = {id}))) AND ParentID = {parentId}) ORDER BY Taxis DESC";
-            var sqlString = SqlUtils.GetTopSqlString("siteserver_RelatedFieldItem", "ID, Taxis", $"WHERE ((Taxis < (SELECT Taxis FROM siteserver_RelatedFieldItem WHERE (ID = {id}))) AND ParentID = {parentId})", "ORDER BY Taxis DESC", 1);
+            var sqlString = SqlUtils.ToTopSqlString("siteserver_RelatedFieldItem", "ID, Taxis", $"WHERE ((Taxis < (SELECT Taxis FROM siteserver_RelatedFieldItem WHERE (ID = {id}))) AND ParentID = {parentId})", "ORDER BY Taxis DESC", 1);
 
             var lowerId = 0;
             var lowerTaxis = 0;
@@ -255,25 +267,6 @@ namespace SiteServer.CMS.Provider
             return info;
         }
 
-        public List<RelatedFieldItemInfo> GetRelatedFieldItemInfoList(int relatedFieldId, int parentId)
-        {
-            var list = new List<RelatedFieldItemInfo>();
-
-            string sqlString =
-                $"SELECT ID, RelatedFieldID, ItemName, ItemValue, ParentID, Taxis FROM siteserver_RelatedFieldItem WHERE RelatedFieldID = {relatedFieldId} AND ParentID = {parentId} ORDER BY Taxis";
-
-            using (var rdr = ExecuteReader(sqlString))
-            {
-                while (rdr.Read())
-                {
-                    var i = 0;
-                    var info = new RelatedFieldItemInfo(GetInt(rdr, i++), GetInt(rdr, i++), GetString(rdr, i++), GetString(rdr, i++), GetInt(rdr, i++), GetInt(rdr, i));
-                    list.Add(info);
-                }
-                rdr.Close();
-            }
-
-            return list;
-        }
+        
     }
 }

@@ -1,33 +1,22 @@
-﻿using System.Collections.Generic;
-using System.Text;
+﻿using System.Text;
 using System.Web.UI.HtmlControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.StlParser.Model;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
-    [Stl(Usage = "当前位置", Description = "通过 stl:location 标签在模板中插入页面的当前位置")]
+    [StlClass(Usage = "当前位置", Description = "通过 stl:location 标签在模板中插入页面的当前位置")]
     public class StlLocation
     {
         private StlLocation() { }
         public const string ElementName = "stl:location";
 
-        public const string AttributeSeparator = "separator";
-        public const string AttributeTarget = "target";
-        public const string AttributeLinkClass = "linkClass";
-        public const string AttributeWordNum = "wordNum";
-        public const string AttributeIsContainSelf = "isContainSelf";
-
-        public static SortedList<string, string> AttributeList => new SortedList<string, string>
-        {
-            {AttributeSeparator, "当前位置分隔符"},
-            {AttributeTarget, "打开窗口的目标"},
-            {AttributeLinkClass, "链接CSS样式"},
-            {AttributeWordNum, "链接字数"},
-            {AttributeIsContainSelf, "是否包含当前栏目"}
-        };
-
+        private static readonly Attr Separator = new Attr("separator", "当前位置分隔符");
+        private static readonly Attr Target = new Attr("target", "打开窗口的目标");
+        private static readonly Attr LinkClass = new Attr("linkClass", "链接CSS样式");
+        private static readonly Attr WordNum = new Attr("wordNum", "链接字数");
+        private static readonly Attr IsContainSelf = new Attr("isContainSelf", "是否包含当前栏目");
 
         //对“当前位置”（stl:location）元素进行解析
         public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
@@ -38,27 +27,27 @@ namespace SiteServer.CMS.StlParser.StlElement
             var wordNum = 0;
             var isContainSelf = true;
 
-            foreach (var name in contextInfo.Attributes.Keys)
+            foreach (var name in contextInfo.Attributes.AllKeys)
             {
                 var value = contextInfo.Attributes[name];
 
-                if (StringUtils.EqualsIgnoreCase(name, AttributeSeparator))
+                if (StringUtils.EqualsIgnoreCase(name, Separator.Name))
                 {
                     separator = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeTarget))
+                else if (StringUtils.EqualsIgnoreCase(name, Target.Name))
                 {
                     target = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeLinkClass))
+                else if (StringUtils.EqualsIgnoreCase(name, LinkClass.Name))
                 {
                     linkClass = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeWordNum))
+                else if (StringUtils.EqualsIgnoreCase(name, WordNum.Name))
                 {
                     wordNum = TranslateUtils.ToInt(value);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeIsContainSelf))
+                else if (StringUtils.EqualsIgnoreCase(name, IsContainSelf.Name))
                 {
                     isContainSelf = TranslateUtils.ToBool(value);
                 }
@@ -69,12 +58,12 @@ namespace SiteServer.CMS.StlParser.StlElement
 
         private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, string separator, string target, string linkClass, int wordNum, bool isContainSelf)
         {
-            if (!string.IsNullOrEmpty(contextInfo.InnerXml))
+            if (!string.IsNullOrEmpty(contextInfo.InnerHtml))
             {
-                separator = contextInfo.InnerXml;
+                separator = contextInfo.InnerHtml;
             }
 
-            var nodeInfo = NodeManager.GetNodeInfo(pageInfo.PublishmentSystemId, contextInfo.ChannelId);
+            var nodeInfo = ChannelManager.GetChannelInfo(pageInfo.SiteId, contextInfo.ChannelId);
 
             var builder = new StringBuilder();
 
@@ -87,12 +76,12 @@ namespace SiteServer.CMS.StlParser.StlElement
                 {
                     nodePath = nodePath + "," + contextInfo.ChannelId;
                 }
-                var nodeIdArrayList = TranslateUtils.StringCollectionToStringList(nodePath);
-                foreach (var nodeIdStr in nodeIdArrayList)
+                var channelIdArrayList = TranslateUtils.StringCollectionToStringList(nodePath);
+                foreach (var channelIdStr in channelIdArrayList)
                 {
-                    var currentId = int.Parse(nodeIdStr);
-                    var currentNodeInfo = NodeManager.GetNodeInfo(pageInfo.PublishmentSystemId, currentId);
-                    if (currentId == pageInfo.PublishmentSystemId)
+                    var currentId = int.Parse(channelIdStr);
+                    var currentNodeInfo = ChannelManager.GetChannelInfo(pageInfo.SiteId, currentId);
+                    if (currentId == pageInfo.SiteId)
                     {
                         var stlAnchor = new HtmlAnchor();
                         if (!string.IsNullOrEmpty(target))
@@ -103,13 +92,13 @@ namespace SiteServer.CMS.StlParser.StlElement
                         {
                             stlAnchor.Attributes.Add("class", linkClass);
                         }
-                        var url = PageUtility.GetIndexPageUrl(pageInfo.PublishmentSystemInfo, pageInfo.IsLocal);
+                        var url = PageUtility.GetIndexPageUrl(pageInfo.SiteInfo, pageInfo.IsLocal);
                         if (url.Equals(PageUtils.UnclickedUrl))
                         {
                             stlAnchor.Target = string.Empty;
                         }
                         stlAnchor.HRef = url;
-                        stlAnchor.InnerHtml = StringUtils.MaxLengthText(currentNodeInfo.NodeName, wordNum);
+                        stlAnchor.InnerHtml = StringUtils.MaxLengthText(currentNodeInfo.ChannelName, wordNum);
 
                         ControlUtils.AddAttributesIfNotExists(stlAnchor, contextInfo.Attributes);
 
@@ -131,13 +120,13 @@ namespace SiteServer.CMS.StlParser.StlElement
                         {
                             stlAnchor.Attributes.Add("class", linkClass);
                         }
-                        var url = PageUtility.GetChannelUrl(pageInfo.PublishmentSystemInfo, currentNodeInfo, pageInfo.IsLocal);
+                        var url = PageUtility.GetChannelUrl(pageInfo.SiteInfo, currentNodeInfo, pageInfo.IsLocal);
                         if (url.Equals(PageUtils.UnclickedUrl))
                         {
                             stlAnchor.Target = string.Empty;
                         }
                         stlAnchor.HRef = url;
-                        stlAnchor.InnerHtml = StringUtils.MaxLengthText(currentNodeInfo.NodeName, wordNum);
+                        stlAnchor.InnerHtml = StringUtils.MaxLengthText(currentNodeInfo.ChannelName, wordNum);
 
                         ControlUtils.AddAttributesIfNotExists(stlAnchor, contextInfo.Attributes);
 
@@ -154,13 +143,13 @@ namespace SiteServer.CMS.StlParser.StlElement
                         {
                             stlAnchor.Attributes.Add("class", linkClass);
                         }
-                        var url = PageUtility.GetChannelUrl(pageInfo.PublishmentSystemInfo, currentNodeInfo, pageInfo.IsLocal);
+                        var url = PageUtility.GetChannelUrl(pageInfo.SiteInfo, currentNodeInfo, pageInfo.IsLocal);
                         if (url.Equals(PageUtils.UnclickedUrl))
                         {
                             stlAnchor.Target = string.Empty;
                         }
                         stlAnchor.HRef = url;
-                        stlAnchor.InnerHtml = StringUtils.MaxLengthText(currentNodeInfo.NodeName, wordNum);
+                        stlAnchor.InnerHtml = StringUtils.MaxLengthText(currentNodeInfo.ChannelName, wordNum);
 
                         ControlUtils.AddAttributesIfNotExists(stlAnchor, contextInfo.Attributes);
 

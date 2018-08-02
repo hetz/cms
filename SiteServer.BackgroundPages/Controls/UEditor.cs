@@ -3,8 +3,11 @@ using System.Collections.Specialized;
 using System.Text;
 using System.Web;
 using System.Web.UI;
-using BaiRong.Core;
-using BaiRong.Core.Web.Controls;
+using SiteServer.CMS.Api;
+using SiteServer.CMS.Api.Sys.Editors;
+using SiteServer.CMS.Core;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Controls
 {
@@ -12,8 +15,8 @@ namespace SiteServer.BackgroundPages.Controls
     {
         protected override void Render(HtmlTextWriter writer)
         {
-            var controllerUrl = CMS.Controllers.Sys.Editors.UEditor.GetUrl(PageUtils.OuterApiUrl, 0);
-            var editorUrl = SiteFilesAssets.GetUrl(PageUtils.OuterApiUrl, "ueditor");
+            var controllerUrl = ApiRouteUEditor.GetUrl(ApiManager.InnerApiUrl, 0);
+            var editorUrl = SiteFilesAssets.GetUrl(ApiManager.InnerApiUrl, "ueditor");
 
             if (string.IsNullOrEmpty(Height) || Height == "0")
             {
@@ -32,7 +35,7 @@ namespace SiteServer.BackgroundPages.Controls
 <textarea id=""{ClientID}"" name=""{ClientID}"" style=""display:none"">{HttpUtility.HtmlEncode(Text)}</textarea>
 <script type=""text/javascript"">
 $(function(){{
-  UE.getEditor('{ClientID}', {{allowDivTransToP: false}});
+  UE.getEditor('{ClientID}', {ETextEditorTypeUtils.ConfigValues});
   $('#{ClientID}').show();
 }});
 </script>");

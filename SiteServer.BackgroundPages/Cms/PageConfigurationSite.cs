@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -12,62 +12,59 @@ namespace SiteServer.BackgroundPages.Cms
         public TextBox TbPageSize;
         public DropDownList DdlIsCreateDoubleClick;
 
-		public void Page_Load(object sender, EventArgs e)
+        public static string GetRedirectUrl(int siteId)
+        {
+            return PageUtils.GetCmsUrl(siteId, nameof(PageConfigurationSite), null);
+        }
+
+        public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID");
+            PageUtils.CheckRequestParameter("siteId");
 
-			if (!IsPostBack)
-			{
-                BreadCrumb(AppManager.Cms.LeftMenu.IdConfigration, "站点配置管理", AppManager.Permissions.WebSite.Configration);
+            if (IsPostBack) return;
 
-                ECharsetUtils.AddListItems(DdlCharset);
-                ControlUtils.SelectListItems(DdlCharset, PublishmentSystemInfo.Additional.Charset);
+            VerifySitePermissions(ConfigManager.WebSitePermissions.Configration);
 
-                TbPageSize.Text = PublishmentSystemInfo.Additional.PageSize.ToString();
+            ECharsetUtils.AddListItems(DdlCharset);
+            ControlUtils.SelectSingleItem(DdlCharset, SiteInfo.Additional.Charset);
 
-                EBooleanUtils.AddListItems(DdlIsCreateDoubleClick, "启用双击生成", "不启用");
-                ControlUtils.SelectListItemsIgnoreCase(DdlIsCreateDoubleClick, PublishmentSystemInfo.Additional.IsCreateDoubleClick.ToString());
-            }
-		}
+            TbPageSize.Text = SiteInfo.Additional.PageSize.ToString();
+
+            EBooleanUtils.AddListItems(DdlIsCreateDoubleClick, "启用双击生成", "不启用");
+            ControlUtils.SelectSingleItemIgnoreCase(DdlIsCreateDoubleClick, SiteInfo.Additional.IsCreateDoubleClick.ToString());
+        }
 
         public override void Submit_OnClick(object sender, EventArgs e)
 		{
 		    if (!Page.IsPostBack || !Page.IsValid) return;
 
-            if (PublishmentSystemInfo.Additional.Charset != DdlCharset.SelectedValue)
+            if (SiteInfo.Additional.Charset != DdlCharset.SelectedValue)
 		    {
-		        PublishmentSystemInfo.Additional.Charset = DdlCharset.SelectedValue;
+		        SiteInfo.Additional.Charset = DdlCharset.SelectedValue;
 		    }
 
-		    PublishmentSystemInfo.Additional.PageSize = TranslateUtils.ToInt(TbPageSize.Text, PublishmentSystemInfo.Additional.PageSize);
-		    PublishmentSystemInfo.Additional.IsCreateDoubleClick = TranslateUtils.ToBool(DdlIsCreateDoubleClick.SelectedValue);
-                
-		    try
-		    {
-		        //修改所有模板编码
-		        var templateInfoList = DataProvider.TemplateDao.GetTemplateInfoListByPublishmentSystemId(PublishmentSystemId);
-		        var charset = ECharsetUtils.GetEnumType(PublishmentSystemInfo.Additional.Charset);
-		        foreach (var templateInfo in templateInfoList)
-		        {
-		            if (templateInfo.Charset == charset) continue;
+		    SiteInfo.Additional.PageSize = TranslateUtils.ToInt(TbPageSize.Text, SiteInfo.Additional.PageSize);
+		    SiteInfo.Additional.IsCreateDoubleClick = TranslateUtils.ToBool(DdlIsCreateDoubleClick.SelectedValue);
 
-		            var templateContent = TemplateManager.GetTemplateContent(PublishmentSystemInfo, templateInfo);
-		            templateInfo.Charset = charset;
-		            DataProvider.TemplateDao.Update(PublishmentSystemInfo, templateInfo, templateContent, Body.AdminName);
-		        }
+            //修改所有模板编码
+            var templateInfoList = DataProvider.TemplateDao.GetTemplateInfoListBySiteId(SiteId);
+            var charset = ECharsetUtils.GetEnumType(SiteInfo.Additional.Charset);
+            foreach (var templateInfo in templateInfoList)
+            {
+                if (templateInfo.Charset == charset) continue;
 
-		        DataProvider.PublishmentSystemDao.Update(PublishmentSystemInfo);
+                var templateContent = TemplateManager.GetTemplateContent(SiteInfo, templateInfo);
+                templateInfo.Charset = charset;
+                DataProvider.TemplateDao.Update(SiteInfo, templateInfo, templateContent, AuthRequest.AdminName);
+            }
 
-		        Body.AddSiteLog(PublishmentSystemId, "修改站点配置管理");
+            DataProvider.SiteDao.Update(SiteInfo);
 
-		        SuccessMessage("站点配置管理修改成功！");
-		    }
-		    catch(Exception ex)
-		    {
-		        FailMessage(ex, "站点配置管理修改失败！");
-		    }
-		}
+            AuthRequest.AddSiteLog(SiteId, "修改站点设置");
+
+            SuccessMessage("站点设置修改成功！");
+        }
 	}
 }

@@ -1,27 +1,35 @@
 ﻿using System;
 using System.Collections.Specialized;
-using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.CMS.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Plugin;
 
 namespace SiteServer.BackgroundPages.Plugins
 {
     public class PageView : BasePage
     {
-        public Button BtnInstall;
-        public PlaceHolder PhSuccess;
-        public PlaceHolder PhFailure;
-        public Literal LtlErrorMessage;
-
         private string _pluginId;
-        private string _version;
+        private string _returnUrl;
 
-        public static string GetRedirectUrl(string pluginId, string version)
+        public string Installed => PluginManager.IsExists(_pluginId).ToString().ToLower();
+
+        public string Package => TranslateUtils.JsonSerialize(PluginManager.GetMetadata(_pluginId));
+
+        public string InstalledVersion
+        {
+            get
+            {
+                var plugin = PluginManager.GetPlugin(_pluginId);
+                return plugin != null ? plugin.Version : string.Empty;
+            }
+        }
+
+        public static string GetRedirectUrl(string pluginId, string returnUrl)
         {
             return PageUtils.GetPluginsUrl(nameof(PageView), new NameValueCollection
             {
                 {"pluginId", pluginId},
-                {"version", version}
+                {"returnUrl", returnUrl}
             });
         }
 
@@ -29,33 +37,17 @@ namespace SiteServer.BackgroundPages.Plugins
         {
             if (IsForbidden) return;
 
-            _pluginId = Body.GetQueryString("pluginId");
-            _version = Body.GetQueryString("version");
+            _pluginId = AuthRequest.GetQueryString("pluginId");
+            _returnUrl = AuthRequest.GetQueryString("returnUrl");
 
             if (Page.IsPostBack) return;
 
-            BreadCrumbPlugins("插件查看", AppManager.Permissions.Plugins.Management);
-
-            if (PluginCache.IsExists(_pluginId))
-            {
-                BtnInstall.Text = "插件已安装";
-                BtnInstall.Enabled = false;
-            }
+            VerifySystemPermissions(ConfigManager.PluginsPermissions.Add, ConfigManager.PluginsPermissions.Management);
         }
 
-        public void BtnInstall_Click(object sender, EventArgs e)
+        public void Return_Click(object sender, EventArgs e)
         {
-            string errorMessage;
-            var isSuccess = PluginManager.Install(_pluginId, _version, out errorMessage);
-            if (isSuccess)
-            {
-                PhSuccess.Visible = true;
-            }
-            else
-            {
-                PhFailure.Visible = true;
-                LtlErrorMessage.Text = errorMessage;
-            }
+            PageUtils.Redirect(string.IsNullOrEmpty(_returnUrl) ? PageAdd.GetRedirectUrl() : _returnUrl);
         }
     }
 }

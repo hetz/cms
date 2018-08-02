@@ -1,22 +1,21 @@
 ﻿using System;
 using System.Text;
-using BaiRong.Core;
+using SiteServer.Utils;
 using System.Collections.Specialized;
-using BaiRong.Core.Model.Enumerations;
 using SiteServer.BackgroundPages.Cms;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Core.Security;
 using SiteServer.CMS.Model;
 using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Core
 {
-    public class ChannelLoading
+    public static class ChannelLoading
     {
-        public static string GetChannelRowHtml(PublishmentSystemInfo publishmentSystemInfo, NodeInfo nodeInfo, bool enabled, ELoadingType loadingType, NameValueCollection additional, string administratorName)
+        public static string GetChannelRowHtml(SiteInfo siteInfo, ChannelInfo nodeInfo, bool enabled, ELoadingType loadingType, NameValueCollection additional, PermissionManager permissionManager)
         {
-            var nodeTreeItem = NodeTreeItem.CreateInstance(publishmentSystemInfo, nodeInfo, enabled, administratorName);
-            var title = nodeTreeItem.GetItemHtml(loadingType, PageChannel.GetRedirectUrl(publishmentSystemInfo.PublishmentSystemId, nodeInfo.NodeId), additional);
+            var nodeTreeItem = ChannelTreeItem.CreateInstance(siteInfo, nodeInfo, enabled, permissionManager);
+            var title = nodeTreeItem.GetItemHtml(loadingType, PageChannel.GetRedirectUrl(siteInfo.Id, nodeInfo.Id), additional);
 
             var rowHtml = string.Empty;
 
@@ -24,9 +23,7 @@ namespace SiteServer.BackgroundPages.Core
             {
                 rowHtml = $@"
 <tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"">
-	<td align=""left"" nowrap>
-		{title}
-	</td>
+	<td nowrap>{title}</td>
 </tr>
 ";
             }
@@ -39,47 +36,34 @@ namespace SiteServer.BackgroundPages.Core
 
                 if (enabled)
                 {
-                    if (AdminUtility.HasChannelPermissions(administratorName, nodeInfo.PublishmentSystemId, nodeInfo.NodeId, AppManager.Permissions.Channel.ChannelEdit))
+                    if (permissionManager.HasChannelPermissions(nodeInfo.SiteId, nodeInfo.Id, ConfigManager.ChannelPermissions.ChannelEdit))
                     {
-                        var urlEdit = PageChannelEdit.GetRedirectUrl(nodeInfo.PublishmentSystemId, nodeInfo.NodeId, PageChannel.GetRedirectUrl(nodeInfo.PublishmentSystemId, nodeInfo.NodeId));
-                        editUrl = $"<a href=\"{urlEdit}\">编辑</a>";
-                        var urlSubtract = PageUtils.GetCmsUrl(nameof(PageChannel), new NameValueCollection
-                        {
-                            {"PublishmentSystemID", nodeInfo.PublishmentSystemId.ToString()},
-                            {"Subtract", true.ToString()},
-                            {"NodeID", nodeInfo.NodeId.ToString()}
-                        });
+                        editUrl = $@"<a href=""{PageChannelEdit.GetRedirectUrl(nodeInfo.SiteId, nodeInfo.Id, PageChannel.GetRedirectUrl(nodeInfo.SiteId, nodeInfo.Id))}"" onclick=""event.stopPropagation()"">编辑</a>";
                         upLink =
-                            $@"<a href=""{urlSubtract}""><img src=""../Pic/icon/up.gif"" border=""0"" alt=""上升"" /></a>";
-                        var urlAdd = PageUtils.GetCmsUrl(nameof(PageChannel), new NameValueCollection
-                        {
-                            {"PublishmentSystemID", nodeInfo.PublishmentSystemId.ToString()},
-                            {"Add", true.ToString()},
-                            {"NodeID", nodeInfo.NodeId.ToString()}
-                        });
+                            $@"<a href=""{PageUtils.GetCmsUrl(nodeInfo.SiteId, nameof(PageChannel), new NameValueCollection
+                            {
+                                {"Subtract", true.ToString()},
+                                {"channelId", nodeInfo.Id.ToString()}
+                            })}"" onclick=""event.stopPropagation()""><img src=""../Pic/icon/up.gif"" border=""0"" alt=""上升"" /></a>";
                         downLink =
-                            $@"<a href=""{urlAdd}""><img src=""../Pic/icon/down.gif"" border=""0"" alt=""下降"" /></a>";
+                            $@"<a href=""{PageUtils.GetCmsUrl(nodeInfo.SiteId, nameof(PageChannel), new NameValueCollection
+                            {
+                                {"Add", true.ToString()},
+                                {"channelId", nodeInfo.Id.ToString()}
+                            })}"" onclick=""event.stopPropagation()""><img src=""../Pic/icon/down.gif"" border=""0"" alt=""下降"" /></a>";
                     }
-                    checkBoxHtml = $"<input type='checkbox' name='ChannelIDCollection' value='{nodeInfo.NodeId}' />";
+                    checkBoxHtml = $@"<input type=""checkbox"" name=""ChannelIDCollection"" value=""{nodeInfo.Id}"" onclick=""checkboxClick(this)"" />";
                 }
 
                 rowHtml = $@"
-<tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"">
+<tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"" onclick=""activeRow(this);return false;"">
     <td>{title}</td>
-    <td>{nodeInfo.NodeGroupNameCollection}</td>
-    <td><nobr>{nodeInfo.NodeIndexName}</nobr></td>
-    <td class=""text-center"">
-	    {upLink}
-    </td>
-    <td class=""text-center"">
-	    {downLink}
-    </td>
-    <td class=""text-center"">
-	    {editUrl}
-    </td>
-    <td class=""text-center"">
-	    {checkBoxHtml}
-    </td>
+    <td class=""text-nowrap"">{nodeInfo.GroupNameCollection}</td>
+    <td class=""text-nowrap"">{nodeInfo.IndexName}</td>
+    <td class=""text-center"">{upLink}</td>
+    <td class=""text-center"">{downLink}</td>
+    <td class=""text-center"">{editUrl}</td>
+    <td class=""text-center"">{checkBoxHtml}</td>
 </tr>
 ";
             }
@@ -88,24 +72,18 @@ namespace SiteServer.BackgroundPages.Core
                 var startDate = TranslateUtils.ToDateTime(additional["StartDate"]);
                 var endDate = TranslateUtils.ToDateTime(additional["EndDate"]);
 
-                var tableName = NodeManager.GetTableName(publishmentSystemInfo, nodeInfo);
-                var num = DataProvider.ContentDao.GetCountOfContentAdd(tableName, publishmentSystemInfo.PublishmentSystemId, nodeInfo.NodeId, EScopeType.All, startDate, endDate, string.Empty);
+                var tableName = ChannelManager.GetTableName(siteInfo, nodeInfo);
+                var num = DataProvider.ContentDao.GetCountOfContentAdd(tableName, siteInfo.Id, nodeInfo.Id, EScopeType.All, startDate, endDate, string.Empty, ETriState.All);
                 var contentAddNum = num == 0 ? "0" : $"<strong>{num}</strong>";
 
-                num = DataProvider.ContentDao.GetCountOfContentUpdate(tableName, publishmentSystemInfo.PublishmentSystemId, nodeInfo.NodeId, EScopeType.All, startDate, endDate, string.Empty);
+                num = DataProvider.ContentDao.GetCountOfContentUpdate(tableName, siteInfo.Id, nodeInfo.Id, EScopeType.All, startDate, endDate, string.Empty);
                 var contentUpdateNum = num == 0 ? "0" : $"<strong>{num}</strong>";
 
                 rowHtml = $@"
 <tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"">
-	<td>
-		<nobr>{title}</nobr>
-	</td>
-	<td>
-		{contentAddNum}
-	</td>
-	<td>
-		{contentUpdateNum}
-	</td>
+	<td>{title}</td>
+	<td class=""text-center"">{contentAddNum}</td>
+	<td class=""text-center"">{contentUpdateNum}</td>
 </tr>
 ";
             }
@@ -115,22 +93,16 @@ namespace SiteServer.BackgroundPages.Core
 
                 if (enabled)
                 {
-                    var showPopWinString = ModalTemplateFilePathRule.GetOpenWindowString(nodeInfo.PublishmentSystemId, nodeInfo.NodeId);
+                    var showPopWinString = ModalTemplateFilePathRule.GetOpenWindowString(nodeInfo.SiteId, nodeInfo.Id);
                     editLink = $"<a href=\"javascript:;\" onclick=\"{showPopWinString}\">更改</a>";
                 }
-                var filePath = PageUtility.GetInputChannelUrl(publishmentSystemInfo, nodeInfo, false);
+                var filePath = PageUtility.GetInputChannelUrl(siteInfo, nodeInfo, false);
 
                 rowHtml = $@"
 <tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"">
-	<td>
-		<nobr>{title}</nobr>
-	</td>
-	<td>
-		<nobr>{filePath}</nobr>
-	</td>
-	<td class=""text-center"">
-		{editLink}
-	</td>
+	<td>{title}</td>
+	<td>{filePath}</td>
+	<td class=""text-center"">{editLink}</td>
 </tr>
 ";
             }
@@ -142,20 +114,20 @@ namespace SiteServer.BackgroundPages.Core
 
                 if (enabled)
                 {
-                    var showPopWinString = ModalConfigurationCreateChannel.GetOpenWindowString(nodeInfo.PublishmentSystemId, nodeInfo.NodeId);
+                    var showPopWinString = ModalConfigurationCreateChannel.GetOpenWindowString(nodeInfo.SiteId, nodeInfo.Id);
                     editChannelLink = $"<a href=\"javascript:;\" onclick=\"{showPopWinString}\">触发栏目</a>";
                 }
 
-                if (nodeInfo.Additional.ToNameValueCollection().Count > 0)
+                if (nodeInfo.Additional.Count > 0)
                 {
                     var nodeNameBuilder = new StringBuilder();
-                    var nodeIdList = TranslateUtils.StringCollectionToIntList(nodeInfo.Additional.CreateChannelIDsIfContentChanged);
-                    foreach (var theNodeId in nodeIdList)
+                    var channelIdList = TranslateUtils.StringCollectionToIntList(nodeInfo.Additional.CreateChannelIDsIfContentChanged);
+                    foreach (var theChannelId in channelIdList)
                     {
-                        var theNodeInfo = NodeManager.GetNodeInfo(publishmentSystemInfo.PublishmentSystemId, theNodeId);
+                        var theNodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, theChannelId);
                         if (theNodeInfo != null)
                         {
-                            nodeNameBuilder.Append(theNodeInfo.NodeName).Append(",");
+                            nodeNameBuilder.Append(theNodeInfo.ChannelName).Append(",");
                         }
                     }
                     if (nodeNameBuilder.Length > 0)
@@ -167,15 +139,9 @@ namespace SiteServer.BackgroundPages.Core
 
                 rowHtml = $@"
 <tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"">
-	<td>
-		<nobr>{title}</nobr>
-	</td>
-	<td>
-		{nodeNames}
-	</td>
-	<td class=""text-center"">
-		{editChannelLink}
-	</td>
+	<td>{title}</td>
+	<td>{nodeNames}</td>
+	<td class=""text-center"">{editChannelLink}</td>
 </tr>
 ";
             }
@@ -185,17 +151,17 @@ namespace SiteServer.BackgroundPages.Core
 
                 if (enabled)
                 {
-                    var showPopWinString = ModalCrossSiteTransEdit.GetOpenWindowString(nodeInfo.PublishmentSystemId, nodeInfo.NodeId);
+                    var showPopWinString = ModalCrossSiteTransEdit.GetOpenWindowString(nodeInfo.SiteId, nodeInfo.Id);
                     editLink = $"<a href=\"javascript:;\" onclick=\"{showPopWinString}\">更改</a>";
                 }
 
-                var contribute = CrossSiteTransUtility.GetDescription(nodeInfo.PublishmentSystemId, nodeInfo);
+                var contribute = CrossSiteTransUtility.GetDescription(nodeInfo.SiteId, nodeInfo);
 
                 rowHtml = $@"
 <tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"">
 	<td>{title}</td>
 	<td>{contribute}</td>
-	<td class=""text-center"" width=""50"">{editLink}</td>
+	<td class=""text-center"">{editLink}</td>
 </tr>
 ";
             }
@@ -203,7 +169,7 @@ namespace SiteServer.BackgroundPages.Core
             {
                 rowHtml = $@"
 <tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"">
-	<td nowrap>{title}</td>
+	<td>{title}</td>
 </tr>
 ";
             }
@@ -211,31 +177,28 @@ namespace SiteServer.BackgroundPages.Core
             return rowHtml;
         }
 
-        public static string GetScript(PublishmentSystemInfo publishmentSystemInfo, ELoadingType loadingType, NameValueCollection additional)
+        public static string GetScript(SiteInfo siteInfo, string contentModelPluginId, ELoadingType loadingType, NameValueCollection additional)
         {
-            return NodeTreeItem.GetScript(publishmentSystemInfo, loadingType, additional);
+            return ChannelTreeItem.GetScript(siteInfo, loadingType, contentModelPluginId, additional);
         }
 
-        public static string GetScriptOnLoad(int publishmentSystemId, int currentNodeId)
+        public static string GetScriptOnLoad(int siteId, int currentChannelId)
         {
-            if (currentNodeId != 0 && currentNodeId != publishmentSystemId)
+            if (currentChannelId == 0 || currentChannelId == siteId) return string.Empty;
+
+            var nodeInfo = ChannelManager.GetChannelInfo(siteId, currentChannelId);
+            if (nodeInfo == null) return string.Empty;
+
+            string path;
+            if (nodeInfo.ParentId == siteId)
             {
-                var nodeInfo = NodeManager.GetNodeInfo(publishmentSystemId, currentNodeId);
-                if (nodeInfo != null)
-                {
-                    string path;
-                    if (nodeInfo.ParentId == publishmentSystemId)
-                    {
-                        path = currentNodeId.ToString();
-                    }
-                    else
-                    {
-                        path = nodeInfo.ParentsPath.Substring(nodeInfo.ParentsPath.IndexOf(",", StringComparison.Ordinal) + 1) + "," + currentNodeId;
-                    }
-                    return NodeTreeItem.GetScriptOnLoad(path);
-                }
+                path = currentChannelId.ToString();
             }
-            return string.Empty;
+            else
+            {
+                path = nodeInfo.ParentsPath.Substring(nodeInfo.ParentsPath.IndexOf(",", StringComparison.Ordinal) + 1) + "," + currentChannelId;
+            }
+            return ChannelTreeItem.GetScriptOnLoad(path);
         }
     }
 }

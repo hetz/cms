@@ -1,17 +1,18 @@
 ﻿using System.Text;
 using System.Web;
 using System.Web.Http;
-using BaiRong.Core;
-using SiteServer.CMS.Controllers.Sys.Stl;
+using SiteServer.CMS.Api.Sys.Stl;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.StlParser.StlElement;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.API.Controllers.Sys.Stl
 {
     [RoutePrefix("api")]
     public class StlActionsLoadingChannelsController : ApiController
     {
-        [HttpPost, Route(ActionsLoadingChannels.Route)]
+        [HttpPost, Route(ApiRouteActionsLoadingChannels.Route)]
         public void Main()
         {
             var builder = new StringBuilder();
@@ -19,24 +20,24 @@ namespace SiteServer.API.Controllers.Sys.Stl
             try
             {
                 var form = HttpContext.Current.Request.Form;
-                var publishmentSystemId = TranslateUtils.ToInt(form["publishmentSystemID"]);
-                var parentId = TranslateUtils.ToInt(form["parentID"]);
+                var siteId = TranslateUtils.ToInt(form["siteId"]);
+                var parentId = TranslateUtils.ToInt(form["parentId"]);
                 var target = form["target"];
                 var isShowTreeLine = TranslateUtils.ToBool(form["isShowTreeLine"]);
                 var isShowContentNum = TranslateUtils.ToBool(form["isShowContentNum"]);
                 var currentFormatString = form["currentFormatString"];
-                var topNodeId = TranslateUtils.ToInt(form["topNodeID"]);
+                var topChannelId = TranslateUtils.ToInt(form["topChannelId"]);
                 var topParentsCount = TranslateUtils.ToInt(form["topParentsCount"]);
-                var currentNodeId = TranslateUtils.ToInt(form["currentNodeID"]);
+                var currentChannelId = TranslateUtils.ToInt(form["currentChannelId"]);
 
-                var publishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(publishmentSystemId);
-                var nodeIdList = DataProvider.NodeDao.GetNodeIdListByParentId(publishmentSystemId, parentId);
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                var channelIdList = ChannelManager.GetChannelIdList(ChannelManager.GetChannelInfo(siteId, parentId == 0 ? siteId : parentId), EScopeType.Children, string.Empty, string.Empty, string.Empty);
 
-                foreach (var nodeId in nodeIdList)
+                foreach (var channelId in channelIdList)
                 {
-                    var nodeInfo = NodeManager.GetNodeInfo(publishmentSystemId, nodeId);
+                    var nodeInfo = ChannelManager.GetChannelInfo(siteId, channelId);
 
-                    builder.Append(StlTree.GetChannelRowHtml(publishmentSystemInfo, nodeInfo, target, isShowTreeLine, isShowContentNum, TranslateUtils.DecryptStringBySecretKey(currentFormatString), topNodeId, topParentsCount, currentNodeId, false));
+                    builder.Append(StlTree.GetChannelRowHtml(siteInfo, nodeInfo, target, isShowTreeLine, isShowContentNum, TranslateUtils.DecryptStringBySecretKey(currentFormatString), topChannelId, topParentsCount, currentChannelId, false));
                 }
             }
             catch

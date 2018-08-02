@@ -1,165 +1,133 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Data;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
 using SiteServer.BackgroundPages.Core;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.BackgroundPages.Settings
 {
     public class PageLogUser : BasePage
     {
-        public Literal ltlState;
-        public TextBox UserName;
-        public TextBox Keyword;
-        public DateTimeTextBox DateFrom;
-        public DateTimeTextBox DateTo;
+        public DateTimeTextBox TbDateFrom;
+        public DateTimeTextBox TbDateTo;
+        public TextBox TbUserName;
+        public TextBox TbKeyword;
+        public Repeater RptContents;
+        public SqlPager SpContents;
+        public Literal LtlState;
+        public Button BtnDelete;
+        public Button BtnDeleteAll;
+        public Button BtnSetting;
 
-        public Repeater rptContents;
-        public SqlPager spContents;
-
-		public Button Delete;
-		public Button DeleteAll;
-        public Button Setting;
-
-		public void Page_Load(object sender, EventArgs e)
+        public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            spContents.ControlToPaginate = rptContents;
-            spContents.ItemsPerPage = StringUtils.Constants.PageSize;
+            SpContents.ControlToPaginate = RptContents;
+            SpContents.ItemsPerPage = StringUtils.Constants.PageSize;
 
-            if (!Body.IsQueryExists("Keyword"))
+            SpContents.SelectCommand = !AuthRequest.IsQueryExists("Keyword") ? DataProvider.UserLogDao.GetSelectCommend() : DataProvider.UserLogDao.GetSelectCommend(AuthRequest.GetQueryString("UserName"), AuthRequest.GetQueryString("Keyword"), AuthRequest.GetQueryString("DateFrom"), AuthRequest.GetQueryString("DateTo"));
+
+            SpContents.SortField = nameof(UserLogInfo.Id);
+            SpContents.SortMode = SortMode.DESC;
+            RptContents.ItemDataBound += RptContents_ItemDataBound;
+
+            if (IsPostBack) return;
+
+            VerifySystemPermissions(ConfigManager.SettingsPermissions.Log);
+
+            if (AuthRequest.IsQueryExists("Keyword"))
             {
-                spContents.SelectCommand = BaiRongDataProvider.UserLogDao.GetSelectCommend();
+                TbUserName.Text = AuthRequest.GetQueryString("UserName");
+                TbKeyword.Text = AuthRequest.GetQueryString("Keyword");
+                TbDateFrom.Text = AuthRequest.GetQueryString("DateFrom");
+                TbDateTo.Text = AuthRequest.GetQueryString("DateTo");
+            }
+
+            if (AuthRequest.IsQueryExists("Delete"))
+            {
+                var list = TranslateUtils.StringCollectionToIntList(AuthRequest.GetQueryString("IDCollection"));
+                DataProvider.UserLogDao.Delete(list);
+                SuccessDeleteMessage();
+            }
+            else if (AuthRequest.IsQueryExists("DeleteAll"))
+            {
+                DataProvider.UserLogDao.DeleteAll();
+                SuccessDeleteMessage();
+            }
+            else if (AuthRequest.IsQueryExists("Setting"))
+            {
+                ConfigManager.SystemConfigInfo.IsLogUser = !ConfigManager.SystemConfigInfo.IsLogUser;
+                DataProvider.ConfigDao.Update(ConfigManager.Instance);
+                SuccessMessage($"成功{(ConfigManager.SystemConfigInfo.IsLogUser ? "启用" : "禁用")}日志记录");
+            }
+
+            BtnDelete.Attributes.Add("onclick", PageUtils.GetRedirectStringWithCheckBoxValueAndAlert(PageUtils.GetSettingsUrl(nameof(PageLogUser), new NameValueCollection
+            {
+                {"Delete", "True" }
+            }), "IDCollection", "IDCollection", "请选择需要删除的日志！", "此操作将删除所选日志，确认吗？"));
+
+            BtnDeleteAll.Attributes.Add("onclick",
+                AlertUtils.ConfirmRedirect("删除所有日志", "此操作将删除所有日志信息，确定吗？", "删除全部",
+                    PageUtils.GetSettingsUrl(nameof(PageLogUser), new NameValueCollection
+                    {
+                        {"DeleteAll", "True"}
+                    })));
+
+            if (ConfigManager.SystemConfigInfo.IsLogUser)
+            {
+                BtnSetting.Text = "禁用用户日志";
+                BtnSetting.Attributes.Add("onclick",
+                    AlertUtils.ConfirmRedirect("禁用用户日志", "此操作将禁用用户日志记录功能，确定吗？", "禁 用",
+                        PageUtils.GetSettingsUrl(nameof(PageLogUser), new NameValueCollection
+                        {
+                            {"Setting", "True"}
+                        })));
             }
             else
             {
-                spContents.SelectCommand = BaiRongDataProvider.UserLogDao.GetSelectCommend(Body.GetQueryString("UserName"), Body.GetQueryString("Keyword"), Body.GetQueryString("DateFrom"), Body.GetQueryString("DateTo"));
+                LtlState.Text = @"<div class=""alert alert-danger m-t-10"">用户日志当前处于禁用状态，系统将不会记录用户操作日志！</div>";
+                BtnSetting.Text = "启用用户日志";
+                BtnSetting.Attributes.Add("onclick",
+                    AlertUtils.ConfirmRedirect("启用用户日志", "此操作将启用用户日志记录功能，确定吗？", "启 用",
+                        PageUtils.GetSettingsUrl(nameof(PageLogUser), new NameValueCollection
+                        {
+                            {"Setting", "True"}
+                        })));
             }
 
-            spContents.SortField = "ID";
-            spContents.SortMode = SortMode.DESC;
-            rptContents.ItemDataBound += rptContents_ItemDataBound;
+            SpContents.DataBind();
+        }
 
-			if(!IsPostBack)
-			{
-                BreadCrumbSettings("用户日志", AppManager.Permissions.Settings.Log);
-
-                if (Body.IsQueryExists("Keyword"))
-                {
-                    UserName.Text = Body.GetQueryString("UserName");
-                    Keyword.Text = Body.GetQueryString("Keyword");
-                    DateFrom.Text = Body.GetQueryString("DateFrom");
-                    DateTo.Text = Body.GetQueryString("DateTo");
-                }
-
-                if (Body.IsQueryExists("Delete"))
-                {
-                    var arraylist = TranslateUtils.StringCollectionToIntList(Body.GetQueryString("IDCollection"));
-                    try
-                    {
-                        BaiRongDataProvider.UserLogDao.Delete(arraylist);
-                        SuccessDeleteMessage();
-                    }
-                    catch (Exception ex)
-                    {
-                        FailDeleteMessage(ex);
-                    }
-                }
-                else if (Body.IsQueryExists("DeleteAll"))
-                {
-                    try
-                    {
-                        BaiRongDataProvider.UserLogDao.DeleteAll();
-                        SuccessDeleteMessage();
-                    }
-                    catch (Exception ex)
-                    {
-                        FailDeleteMessage(ex);
-                    }
-                }
-                else if (Body.IsQueryExists("Setting"))
-                {
-                    try
-                    {
-                        ConfigManager.SystemConfigInfo.IsLogUser = !ConfigManager.SystemConfigInfo.IsLogUser;
-                        BaiRongDataProvider.ConfigDao.Update(ConfigManager.Instance);
-                        SuccessMessage($"成功{(ConfigManager.SystemConfigInfo.IsLogUser ? "启用" : "禁用")}日志记录");
-                    }
-                    catch (Exception ex)
-                    {
-                        FailMessage(ex, $"{(ConfigManager.SystemConfigInfo.IsLogUser ? "启用" : "禁用")}日志记录失败");
-                    }
-                }
-
-                Delete.Attributes.Add("onclick", PageUtils.GetRedirectStringWithCheckBoxValueAndAlert(PageUtils.GetSettingsUrl(nameof(PageLogUser), new NameValueCollection
-                {
-                    {"Delete", "True" }
-                }), "IDCollection", "IDCollection", "请选择需要删除的日志！", "此操作将删除所选日志，确认吗？"));
-
-                DeleteAll.Attributes.Add("onclick", PageUtils.GetRedirectStringWithConfirm(PageUtils.GetSettingsUrl(nameof(PageLogUser), new NameValueCollection
-                {
-                    {"DeleteAll", "True" }
-                }), "此操作将删除所有日志信息，确定吗？"));
-
-                if (ConfigManager.SystemConfigInfo.IsLogUser)
-                {
-                    Setting.Text = "禁用记录日志功能";
-                    Setting.Attributes.Add("onclick",
-                        PageUtils.GetRedirectStringWithConfirm(
-                            PageUtils.GetSettingsUrl(nameof(PageLogUser), new NameValueCollection
-                            {
-                                {"Setting", "True"}
-                            }), "此操作将禁用用户日志记录功能，确定吗？"));
-                }
-                else
-                {
-                    ltlState.Text = " (用户日志当前处于禁用状态，将不会记录相关操作！)";
-                    Setting.Text = "启用记录日志功能";
-                    Setting.Attributes.Add("onclick",
-                        PageUtils.GetRedirectStringWithConfirm(
-                            PageUtils.GetSettingsUrl(nameof(PageLogUser), new NameValueCollection
-                            {
-                                {"Setting", "True"}
-                            }), "此操作将启用用户日志记录功能，确定吗？"));
-                }
-
-                spContents.DataBind(); 
-			}
-		}
-
-        void rptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
+        private static void RptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
         {
-            if (e.Item.ItemType == ListItemType.Item || e.Item.ItemType == ListItemType.AlternatingItem)
-            {
-                var ltlUserName = (Literal)e.Item.FindControl("ltlUserName");
-                var ltlAddDate = (Literal)e.Item.FindControl("ltlAddDate");
-                var ltlIpAddress = (Literal)e.Item.FindControl("ltlIPAddress");
-                var ltlAction = (Literal)e.Item.FindControl("ltlAction");
-                var ltlSummary = (Literal)e.Item.FindControl("ltlSummary");
+            if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-                ltlUserName.Text = SqlUtils.EvalString(e.Item.DataItem, "UserName");
-                ltlAddDate.Text = DateUtils.GetDateAndTimeString(SqlUtils.EvalDateTime(e.Item.DataItem, "AddDate"));
-                ltlIpAddress.Text = SqlUtils.EvalString(e.Item.DataItem, "IPAddress");
-                ltlAction.Text = EUserActionTypeUtils.GetText(EUserActionTypeUtils.GetEnumType(SqlUtils.EvalString(e.Item.DataItem, "Action")));
-                ltlSummary.Text = SqlUtils.EvalString(e.Item.DataItem, "Summary");
-            }
+            var ltlUserName = (Literal)e.Item.FindControl("ltlUserName");
+            var ltlAddDate = (Literal)e.Item.FindControl("ltlAddDate");
+            var ltlIpAddress = (Literal)e.Item.FindControl("ltlIpAddress");
+            var ltlAction = (Literal)e.Item.FindControl("ltlAction");
+            var ltlSummary = (Literal)e.Item.FindControl("ltlSummary");
+
+            ltlUserName.Text = SqlUtils.EvalString(e.Item.DataItem, nameof(UserLogInfo.UserName));
+            ltlAddDate.Text = DateUtils.GetDateAndTimeString(SqlUtils.EvalDateTime(e.Item.DataItem, nameof(UserLogInfo.AddDate)));
+            ltlIpAddress.Text = SqlUtils.EvalString(e.Item.DataItem, nameof(UserLogInfo.IpAddress));
+            ltlAction.Text = SqlUtils.EvalString(e.Item.DataItem, nameof(UserLogInfo.Action));
+            ltlSummary.Text = SqlUtils.EvalString(e.Item.DataItem, nameof(UserLogInfo.Summary));
         }
 
         public void Search_OnClick(object sender, EventArgs e)
         {
-            Response.Redirect(PageUrl, true);
+            PageUtils.Redirect(PageUtils.GetSettingsUrl(nameof(PageLogUser), new NameValueCollection
+            {
+                {"UserName", TbUserName.Text},
+                {"Keyword", TbKeyword.Text},
+                {"DateFrom", TbDateFrom.Text},
+                {"DateTo", TbDateTo.Text}
+            }));
         }
-
-	    private string PageUrl => PageUtils.GetSettingsUrl(nameof(PageLogUser), new NameValueCollection
-	    {
-	        {"UserName", UserName.Text},
-	        {"Keyword", Keyword.Text},
-	        {"DateFrom", DateFrom.Text},
-	        {"DateTo", DateTo.Text}
-	    });
-	}
+    }
 }

@@ -1,56 +1,54 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
 using SiteServer.CMS.Core;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
 	public class ModalFileEdit : BasePageCms
     {
-        protected TextBox FileName;
-        protected RadioButtonList IsPureText;
-        public DropDownList Charset;
+        protected TextBox TbFileName;
+        protected DropDownList DdlIsPureText;
+        public DropDownList DdlCharset;
         
-        protected PlaceHolder PlaceHolder_PureText;
-        protected TextBox FileContentTextBox;
-        protected PlaceHolder PlaceHolder_TextEditor;
-        protected UEditor FileContent;
+        protected PlaceHolder PhPureText;
+        protected TextBox TbFileContent;
+        protected PlaceHolder PhFileContent;
+        protected UEditor UeFileContent;
 
-        protected Literal ltlOpen;
-        protected Literal ltlView;
+        protected Literal LtlOpen;
+        protected Literal LtlView;
 
 		private string _relatedPath;
         private string _theFileName;
         private bool _isCreate;
         private ECharset _fileCharset;
 
-        public static string GetOpenWindowString(int publishmentSystemId, string relatedPath, string fileName, bool isCreate)
+        public static string GetOpenWindowString(int siteId, string relatedPath, string fileName, bool isCreate)
         {
             var title = isCreate ? "新建文件" : "编辑文件";
-            return PageUtils.GetOpenLayerString(title, PageUtils.GetCmsUrl(nameof(ModalFileEdit), new NameValueCollection
+            return LayerUtils.GetOpenScript(title, PageUtils.GetCmsUrl(siteId, nameof(ModalFileEdit), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"RelatedPath", relatedPath},
                 {"FileName", fileName},
                 {"IsCreate", isCreate.ToString()}
             }), 680, 660);
         }
 
-        public static string GetRedirectUrl(int publishmentSystemId, string relatedPath, string fileName, bool isCreate)
+        public static string GetRedirectUrl(int siteId, string relatedPath, string fileName, bool isCreate)
         {
-            return PageUtils.GetCmsUrl(nameof(ModalFileEdit), new NameValueCollection
+            return PageUtils.GetCmsUrl(siteId, nameof(ModalFileEdit), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"RelatedPath", relatedPath},
                 {"FileName", fileName},
                 {"IsCreate", isCreate.ToString()}
             });
         }
 
-        public static string GetOpenWindowString(int publishmentSystemId, string fileUrl)
+        public static string GetOpenWindowString(int siteId, string fileUrl)
         {
             var relatedPath = "@/";
             var fileName = fileUrl;
@@ -64,38 +62,33 @@ namespace SiteServer.BackgroundPages.Cms
                     fileName = fileUrl.Substring(i + 1, fileUrl.Length - i - 1);
                 }
             }
-            return GetOpenWindowString(publishmentSystemId, relatedPath, fileName, false);
+            return GetOpenWindowString(siteId, relatedPath, fileName, false);
         }
 
 		public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID", "RelatedPath", "FileName", "IsCreate");
-            _relatedPath = Body.GetQueryString("RelatedPath").Trim('/');
+            PageUtils.CheckRequestParameter("siteId", "RelatedPath", "FileName", "IsCreate");
+            _relatedPath = AuthRequest.GetQueryString("RelatedPath").Trim('/');
             if (!_relatedPath.StartsWith("@"))
             {
                 _relatedPath = "@/" + _relatedPath;
             }
-            _theFileName = Body.GetQueryString("FileName");
-            _isCreate = Body.GetQueryBool("IsCreate");
+            _theFileName = AuthRequest.GetQueryString("FileName");
+            _isCreate = AuthRequest.GetQueryBool("IsCreate");
             _fileCharset = ECharset.utf_8;
-            if (PublishmentSystemInfo != null)
+            if (SiteInfo != null)
             {
-                _fileCharset = ECharsetUtils.GetEnumType(PublishmentSystemInfo.Additional.Charset);
+                _fileCharset = ECharsetUtils.GetEnumType(SiteInfo.Additional.Charset);
             }
 
             if (_isCreate == false)
             {
-                string filePath;
-                if (PublishmentSystemInfo != null)
-                {
-                    filePath = PathUtility.MapPath(PublishmentSystemInfo, PathUtils.Combine(_relatedPath, _theFileName));
-                }
-                else
-                {
-                    filePath = PathUtils.MapPath(PathUtils.Combine(_relatedPath, _theFileName));
-                }
+                var filePath = SiteInfo != null
+                    ? PathUtility.MapPath(SiteInfo, PathUtils.Combine(_relatedPath, _theFileName))
+                    : PathUtils.MapPath(PathUtils.Combine(_relatedPath, _theFileName));
+
                 if (!FileUtils.IsFileExists(filePath))
                 {
                     PageUtils.RedirectToErrorPage("此文件不存在！");
@@ -103,58 +96,48 @@ namespace SiteServer.BackgroundPages.Cms
                 }
             }
 
-			if (!IsPostBack)
-			{
-                Charset.Items.Add(new ListItem("默认", string.Empty));
-                ECharsetUtils.AddListItems(Charset);
-                
-                if (_isCreate == false)
-                {
-                    var filePath = string.Empty;
-                    if (PublishmentSystemInfo != null)
-                    {
-                        filePath = PathUtility.MapPath(PublishmentSystemInfo, PathUtils.Combine(_relatedPath, _theFileName));
-                    }
-                    else
-                    {
-                        filePath = PathUtils.MapPath(PathUtils.Combine(_relatedPath, _theFileName));
-                    }
-                    FileName.Text = _theFileName;
-                    FileName.Enabled = false;
-                    FileContentTextBox.Text = FileUtils.ReadText(filePath, _fileCharset);
-                }
+            if (IsPostBack) return;
 
-                if (!_isCreate)
-                {
-                    if (PublishmentSystemInfo != null)
-                    {
-                        ltlOpen.Text =
-                            $@"<a href=""{PageUtility.ParseNavigationUrl(PublishmentSystemInfo,
-                                PageUtils.Combine(_relatedPath, _theFileName), true)}"" target=""_blank"">浏 览</a>&nbsp;&nbsp;";
-                    }
-                    else
-                    {
-                        ltlOpen.Text =
-                            $@"<a href=""{PageUtils.ParseConfigRootUrl(PageUtils.Combine(_relatedPath, _theFileName))}"" target=""_blank"">浏 览</a>&nbsp;&nbsp;";
-                    }
-                    ltlView.Text = $@"<a href=""{ModalFileView.GetRedirectUrl(PublishmentSystemId, _relatedPath, _theFileName)}"">属 性</a>";
-                }
-			}
-		}
+            DdlCharset.Items.Add(new ListItem("默认", string.Empty));
+            ECharsetUtils.AddListItems(DdlCharset);
 
-        protected void IsPureText_OnSelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (TranslateUtils.ToBool(IsPureText.SelectedValue))
+            if (_isCreate == false)
             {
-                PlaceHolder_PureText.Visible = true;
-                PlaceHolder_TextEditor.Visible = false;
-                FileContentTextBox.Text = FileContent.Text;
+                var filePath = SiteInfo != null ? PathUtility.MapPath(SiteInfo, PathUtils.Combine(_relatedPath, _theFileName)) : PathUtils.MapPath(PathUtils.Combine(_relatedPath, _theFileName));
+                TbFileName.Text = _theFileName;
+                TbFileName.Enabled = false;
+                TbFileContent.Text = FileUtils.ReadText(filePath, _fileCharset);
+            }
+
+            if (_isCreate) return;
+
+            if (SiteInfo != null)
+            {
+                LtlOpen.Text =
+                    $@"<a class=""btn btn-default m-l-10"" href=""{PageUtility.ParseNavigationUrl(SiteInfo,
+                        PageUtils.Combine(_relatedPath, _theFileName), true)}"" target=""_blank"">浏 览</a>";
             }
             else
             {
-                PlaceHolder_PureText.Visible = false;
-                PlaceHolder_TextEditor.Visible = true;
-                FileContent.Text = FileContentTextBox.Text;
+                LtlOpen.Text =
+                    $@"<a class=""btn btn-default m-l-10"" href=""{PageUtils.ParseConfigRootUrl(PageUtils.Combine(_relatedPath, _theFileName))}"" target=""_blank"">浏 览</a>";
+            }
+            LtlView.Text = $@"<a class=""btn btn-default m-l-10"" href=""{ModalFileView.GetRedirectUrl(SiteId, _relatedPath, _theFileName)}"">查 看</a>";
+        }
+
+        protected void DdlIsPureText_OnSelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (TranslateUtils.ToBool(DdlIsPureText.SelectedValue))
+            {
+                PhPureText.Visible = true;
+                PhFileContent.Visible = false;
+                TbFileContent.Text = UeFileContent.Text;
+            }
+            else
+            {
+                PhPureText.Visible = false;
+                PhFileContent.Visible = true;
+                UeFileContent.Text = TbFileContent.Text;
             }
         }
 
@@ -168,33 +151,27 @@ namespace SiteServer.BackgroundPages.Cms
             var isSuccess = false;
             var errorMessage = string.Empty;
 
-            var content = TranslateUtils.ToBool(IsPureText.SelectedValue) ? FileContentTextBox.Text : FileContent.Text;
+            var content = TranslateUtils.ToBool(DdlIsPureText.SelectedValue) ? TbFileContent.Text : UeFileContent.Text;
             if (_isCreate == false)
             {
-                string filePath;
-
                 var fileExtName = PathUtils.GetExtension(_theFileName);
-                if (!PathUtility.IsFileExtenstionAllowed(PublishmentSystemInfo, fileExtName))
+                if (!PathUtility.IsFileExtenstionAllowed(SiteInfo, fileExtName))
                 {
                     FailMessage("此格式不允许创建，请选择有效的文件名");
                     return;
                 }
 
-                if (PublishmentSystemInfo != null)
-                {
-                    filePath = PathUtility.MapPath(PublishmentSystemInfo, PathUtils.Combine(_relatedPath, _theFileName));
-                }
-                else
-                {
-                    filePath = PathUtils.MapPath(PathUtils.Combine(_relatedPath, _theFileName));
-                }
+                var filePath = SiteInfo != null
+                    ? PathUtility.MapPath(SiteInfo, PathUtils.Combine(_relatedPath, _theFileName))
+                    : PathUtils.MapPath(PathUtils.Combine(_relatedPath, _theFileName));
+
                 try
                 {
                     try
                     {
-                        if (!string.IsNullOrEmpty(Charset.SelectedValue))
+                        if (!string.IsNullOrEmpty(DdlCharset.SelectedValue))
                         {
-                            _fileCharset = ECharsetUtils.GetEnumType(Charset.SelectedValue);
+                            _fileCharset = ECharsetUtils.GetEnumType(DdlCharset.SelectedValue);
                         }
                         FileUtils.WriteText(filePath, _fileCharset, content);
                     }
@@ -204,7 +181,7 @@ namespace SiteServer.BackgroundPages.Cms
                         FileUtils.WriteText(filePath, _fileCharset, content);
                     }
 
-                    Body.AddSiteLog(PublishmentSystemId, "新建文件", $"文件名:{_theFileName}");
+                    AuthRequest.AddSiteLog(SiteId, "新建文件", $"文件名:{_theFileName}");
 
                     isSuccess = true;
                 }
@@ -215,23 +192,17 @@ namespace SiteServer.BackgroundPages.Cms
             }
             else
             {
-                string filePath;
-
-                var fileExtName = PathUtils.GetExtension(FileName.Text);
-                if (!PathUtility.IsFileExtenstionAllowed(PublishmentSystemInfo, fileExtName))
+                var fileExtName = PathUtils.GetExtension(TbFileName.Text);
+                if (!PathUtility.IsFileExtenstionAllowed(SiteInfo, fileExtName))
                 {
                     FailMessage("此格式不允许创建，请选择有效的文件名");
                     return;
                 }
 
-                if (PublishmentSystemInfo != null)
-                {
-                    filePath = PathUtility.MapPath(PublishmentSystemInfo, PathUtils.Combine(_relatedPath, FileName.Text));
-                }
-                else
-                {
-                    filePath = PathUtils.MapPath(PathUtils.Combine(_relatedPath, FileName.Text));
-                }
+                var filePath = SiteInfo != null
+                    ? PathUtility.MapPath(SiteInfo, PathUtils.Combine(_relatedPath, TbFileName.Text))
+                    : PathUtils.MapPath(PathUtils.Combine(_relatedPath, TbFileName.Text));
+
                 if (FileUtils.IsFileExists(filePath))
                 {
                     errorMessage = "文件名已存在！";
@@ -249,7 +220,7 @@ namespace SiteServer.BackgroundPages.Cms
                             FileUtils.RemoveReadOnlyAndHiddenIfExists(filePath);
                             FileUtils.WriteText(filePath, _fileCharset, content);
                         }
-                        Body.AddSiteLog(PublishmentSystemId, "编辑文件", $"文件名:{_theFileName}");
+                        AuthRequest.AddSiteLog(SiteId, "编辑文件", $"文件名:{_theFileName}");
                         isSuccess = true;
                     }
                     catch (Exception ex)
@@ -265,11 +236,11 @@ namespace SiteServer.BackgroundPages.Cms
                 {
                     if (_isCreate)
                     {
-                        PageUtils.CloseModalPage(Page);
+                        LayerUtils.Close(Page);
                     }
                     else
                     {
-                        PageUtils.CloseModalPageWithoutRefresh(Page);
+                        LayerUtils.CloseWithoutRefresh(Page);
                     }
                 }
                 else

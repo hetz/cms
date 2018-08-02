@@ -1,58 +1,58 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Text;
-using System.Web;
 using System.Web.Http;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
-using SiteServer.CMS.Controllers.Sys.Stl;
+using SiteServer.CMS.Api.Sys.Stl;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Model;
-using SiteServer.CMS.Model.Enumerations;
+using SiteServer.CMS.Plugin;
 using SiteServer.CMS.StlParser;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.StlElement;
 using SiteServer.CMS.StlParser.StlEntity;
 using SiteServer.CMS.StlParser.Utility;
+using SiteServer.Plugin;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.API.Controllers.Sys.Stl
 {
     [RoutePrefix("api")]
     public class StlActionsSearchController : ApiController
     {
-        [HttpPost, Route(ActionsSearch.Route)]
+        [HttpPost, Route(ApiRouteActionsSearch.Route)]
         public IHttpActionResult Main()
         {
             try
             {
-                var body = new RequestBody();
-                var form = HttpContext.Current.Request.Form;
+                var request = new AuthRequest();
+                var form = request.GetPostCollection();
 
-                var isAllSites = body.GetPostBool(StlSearch.AttributeIsAllSites.ToLower());
-                var siteName = PageUtils.FilterSqlAndXss(body.GetPostString(StlSearch.AttributeSiteName.ToLower()));
-                var siteDir = PageUtils.FilterSqlAndXss(body.GetPostString(StlSearch.AttributeSiteDir.ToLower()));
-                var siteIds = PageUtils.FilterSqlAndXss(body.GetPostString(StlSearch.AttributeSiteIds.ToLower()));
-                var channelIndex = PageUtils.FilterSqlAndXss(body.GetPostString(StlSearch.AttributeChannelIndex.ToLower()));
-                var channelName = PageUtils.FilterSqlAndXss(body.GetPostString(StlSearch.AttributeChannelName.ToLower()));
-                var channelIds = PageUtils.FilterSqlAndXss(body.GetPostString(StlSearch.AttributeChannelIds.ToLower()));
-                var type = PageUtils.FilterSqlAndXss(body.GetPostString(StlSearch.AttributeType.ToLower()));
-                var word = PageUtils.FilterSql(body.GetPostString(StlSearch.AttributeWord.ToLower()));
-                var dateAttribute = PageUtils.FilterSqlAndXss(body.GetPostString(StlSearch.AttributeDateAttribute.ToLower()));
-                var dateFrom = PageUtils.FilterSqlAndXss(body.GetPostString(StlSearch.AttributeDateFrom.ToLower()));
-                var dateTo = PageUtils.FilterSqlAndXss(body.GetPostString(StlSearch.AttributeDateTo.ToLower()));
-                var since = PageUtils.FilterSqlAndXss(body.GetPostString(StlSearch.AttributeSince.ToLower()));
-                var pageNum = body.GetPostInt(StlSearch.AttributePageNum.ToLower());
-                var isHighlight = body.GetPostBool(StlSearch.AttributeIsHighlight.ToLower());
-                var isDefaultDisplay = body.GetPostBool(StlSearch.AttributeIsDefaultDisplay.ToLower());
-                var publishmentSystemId = body.GetPostInt("publishmentsystemid");
-                var ajaxDivId = PageUtils.FilterSqlAndXss(body.GetPostString("ajaxdivid"));
-                var template = TranslateUtils.DecryptStringBySecretKey(body.GetPostString("template"));
-                var pageIndex = body.GetPostInt("page", 1) - 1;
+                var isAllSites = request.GetPostBool(StlSearch.IsAllSites.Name.ToLower());
+                var siteName = PageUtils.FilterSqlAndXss(request.GetPostString(StlSearch.SiteName.Name.ToLower()));
+                var siteDir = PageUtils.FilterSqlAndXss(request.GetPostString(StlSearch.SiteDir.Name.ToLower()));
+                var siteIds = PageUtils.FilterSqlAndXss(request.GetPostString(StlSearch.SiteIds.Name.ToLower()));
+                var channelIndex = PageUtils.FilterSqlAndXss(request.GetPostString(StlSearch.ChannelIndex.Name.ToLower()));
+                var channelName = PageUtils.FilterSqlAndXss(request.GetPostString(StlSearch.ChannelName.Name.ToLower()));
+                var channelIds = PageUtils.FilterSqlAndXss(request.GetPostString(StlSearch.ChannelIds.Name.ToLower()));
+                var type = PageUtils.FilterSqlAndXss(request.GetPostString(StlSearch.Type.Name.ToLower()));
+                var word = PageUtils.FilterSql(request.GetPostString(StlSearch.Word.Name.ToLower()));
+                var dateAttribute = PageUtils.FilterSqlAndXss(request.GetPostString(StlSearch.DateAttribute.Name.ToLower()));
+                var dateFrom = PageUtils.FilterSqlAndXss(request.GetPostString(StlSearch.DateFrom.Name.ToLower()));
+                var dateTo = PageUtils.FilterSqlAndXss(request.GetPostString(StlSearch.DateTo.Name.ToLower()));
+                var since = PageUtils.FilterSqlAndXss(request.GetPostString(StlSearch.Since.Name.ToLower()));
+                var pageNum = request.GetPostInt(StlSearch.PageNum.Name.ToLower());
+                var isHighlight = request.GetPostBool(StlSearch.IsHighlight.Name.ToLower());
+                var siteId = request.GetPostInt("siteid");
+                var ajaxDivId = PageUtils.FilterSqlAndXss(request.GetPostString("ajaxdivid"));
+                var template = TranslateUtils.DecryptStringBySecretKey(request.GetPostString("template"));
+                var pageIndex = request.GetPostInt("page", 1) - 1;
 
-                var templateInfo = new TemplateInfo(0, publishmentSystemId, string.Empty, ETemplateType.FileTemplate, string.Empty, string.Empty, string.Empty, ECharset.utf_8, false);
-                var publishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(publishmentSystemId);
-                var pageInfo = new PageInfo(publishmentSystemId, 0, publishmentSystemInfo, templateInfo)
+                var templateInfo = new TemplateInfo(0, siteId, string.Empty, TemplateType.FileTemplate, string.Empty, string.Empty, string.Empty, ECharset.utf_8, false);
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                var pageInfo = new PageInfo(siteId, 0, siteInfo, templateInfo, new Dictionary<string, object>())
                 {
-                    UserInfo = body.UserInfo
+                    UserInfo = request.UserInfo
                 };
                 var contextInfo = new ContextInfo(pageInfo);
                 var contentBuilder = new StringBuilder(StlRequestEntities.ParseRequestEntities(form, template));
@@ -65,16 +65,9 @@ namespace SiteServer.API.Controllers.Sys.Stl
                     var stlPageContentsElement = stlElement;
                     var stlPageContentsElementReplaceString = stlElement;
 
-                    bool isDefaultCondition;
-                    var whereString = DataProvider.ContentDao.GetWhereStringByStlSearch(isAllSites, siteName, siteDir, siteIds, channelIndex, channelName, channelIds, type, word, dateAttribute, dateFrom, dateTo, since, publishmentSystemId, ActionsSearch.ExlcudeAttributeNames, form, out isDefaultCondition);
+                    var whereString = DataProvider.ContentDao.GetWhereStringByStlSearch(isAllSites, siteName, siteDir, siteIds, channelIndex, channelName, channelIds, type, word, dateAttribute, dateFrom, dateTo, since, siteId, ApiRouteActionsSearch.ExlcudeAttributeNames, form);
 
-                    //没搜索条件时不显示搜索结果
-                    if (isDefaultCondition && !isDefaultDisplay)
-                    {
-                        return NotFound();
-                    }
-
-                    var stlPageContents = new StlPageContents(stlPageContentsElement, pageInfo, contextInfo, pageNum, publishmentSystemInfo.AuxiliaryTableForContent, whereString);
+                    var stlPageContents = new StlPageContents(stlPageContentsElement, pageInfo, contextInfo, pageNum, siteInfo.TableName, whereString);
 
                     int totalNum;
                     var pageCount = stlPageContents.GetPageCount(out totalNum);
@@ -91,7 +84,7 @@ namespace SiteServer.API.Controllers.Sys.Stl
                         var pageHtml = stlPageContents.Parse(totalNum, currentPageIndex, pageCount, false);
                         var pagedBuilder = new StringBuilder(contentBuilder.ToString().Replace(stlPageContentsElementReplaceString, pageHtml));
 
-                        StlParserManager.ReplacePageElementsInSearchPage(pagedBuilder, pageInfo, stlLabelList, ajaxDivId, pageInfo.PageNodeId, currentPageIndex, pageCount, totalNum);
+                        StlParserManager.ReplacePageElementsInSearchPage(pagedBuilder, pageInfo, stlLabelList, ajaxDivId, pageInfo.PageChannelId, currentPageIndex, pageCount, totalNum);
 
                         if (isHighlight && !string.IsNullOrEmpty(word))
                         {
@@ -102,12 +95,12 @@ namespace SiteServer.API.Controllers.Sys.Stl
                                 $"<span style='color:#cc0000'>{word}</span>"));
                         }
 
-                        Parser.Parse(publishmentSystemInfo, pageInfo, contextInfo, pagedBuilder, string.Empty, false);
+                        Parser.Parse(pageInfo, contextInfo, pagedBuilder, string.Empty, false);
                         return Ok(pagedBuilder.ToString());
                     }
                 }
 
-                Parser.Parse(publishmentSystemInfo, pageInfo, contextInfo, contentBuilder, string.Empty, false);
+                Parser.Parse(pageInfo, contextInfo, contentBuilder, string.Empty, false);
                 return Ok(contentBuilder.ToString());
             }
             catch (Exception ex)

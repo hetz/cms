@@ -1,51 +1,34 @@
-﻿using System.Collections.Generic;
-using System.Web.UI.HtmlControls;
-using BaiRong.Core;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Attributes;
-using BaiRong.Core.Model.Enumerations;
+﻿using System.Web.UI.HtmlControls;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.StlParser.Cache;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Parsers;
 using SiteServer.CMS.StlParser.Utility;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
-    [Stl(Usage = "显示图片", Description = "通过 stl:image 标签在模板中显示栏目或内容的图片")]
+    [StlClass(Usage = "显示图片", Description = "通过 stl:image 标签在模板中显示栏目或内容的图片")]
     public class StlImage
 	{
 		private StlImage(){}
 		public const string ElementName = "stl:image";
 
-		public const string AttributeChannelIndex = "channelIndex";
-		public const string AttributeChannelName = "channelName";
-        public const string AttributeNo = "no";
-		public const string AttributeParent = "parent";
-		public const string AttributeUpLevel = "upLevel";
-        public const string AttributeTopLevel = "topLevel";
-        public const string AttributeType = "type";
-        public const string AttributeIsOriginal = "isOriginal";
-		public const string AttributeSrc = "src";
-        public const string AttributeAltSrc = "altSrc";
-        public const string AttributeWidth = "width";
-        public const string AttributeHeight = "height";
-
-	    public static SortedList<string, string> AttributeList => new SortedList<string, string>
-        {
-	        {AttributeChannelIndex, "栏目索引"},
-	        {AttributeChannelName, "栏目名称"},
-	        {AttributeNo, "显示字段的顺序"},
-	        {AttributeParent, "显示父栏目"},
-	        {AttributeUpLevel, "上级栏目的级别"},
-	        {AttributeTopLevel, "从首页向下的栏目级别"},
-	        {AttributeType, "指定存储图片的字段"},
-	        {AttributeIsOriginal, "如果是引用内容，是否获取所引用内容的值"},
-	        {AttributeSrc, "显示的图片地址"},
-	        {AttributeAltSrc, "当指定的图片不存在时显示的图片地址"},
-	        {AttributeWidth, "宽度"},
-	        {AttributeHeight, "高度"}
-	    };
+		private static readonly Attr ChannelIndex = new Attr("channelIndex", "栏目索引");
+		private static readonly Attr ChannelName = new Attr("channelName", "栏目名称");
+        private static readonly Attr No = new Attr("no", "显示字段的顺序");
+		private static readonly Attr Parent = new Attr("parent", "显示父栏目");
+		private static readonly Attr UpLevel = new Attr("upLevel", "上级栏目的级别");
+        private static readonly Attr TopLevel = new Attr("topLevel", "从首页向下的栏目级别");
+        private static readonly Attr Type = new Attr("type", "指定存储图片的字段");
+        private static readonly Attr IsOriginal = new Attr("isOriginal", "如果是引用内容，是否获取所引用内容的值");
+		private static readonly Attr Src = new Attr("src", "显示的图片地址");
+        private static readonly Attr AltSrc = new Attr("altSrc", "当指定的图片不存在时显示的图片地址");
+        private static readonly Attr Width = new Attr("width", "宽度");
+        private static readonly Attr Height = new Attr("height", "高度");
 
         public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
 		{
@@ -61,11 +44,11 @@ namespace SiteServer.CMS.StlParser.StlElement
             var altSrc = string.Empty;
             var stlImage = new HtmlImage();
 
-            foreach (var name in contextInfo.Attributes.Keys)
+            foreach (var name in contextInfo.Attributes.AllKeys)
             {
                 var value = contextInfo.Attributes[name];
 
-                if (StringUtils.EqualsIgnoreCase(name, AttributeChannelIndex))
+                if (StringUtils.EqualsIgnoreCase(name, ChannelIndex.Name))
                 {
                     channelIndex = StlEntityParser.ReplaceStlEntitiesForAttributeValue(value, pageInfo, contextInfo);
                     if (!string.IsNullOrEmpty(channelIndex))
@@ -73,7 +56,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                         isGetPicUrlFromAttribute = true;
                     }
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeChannelName))
+                else if (StringUtils.EqualsIgnoreCase(name, ChannelName.Name))
                 {
                     channelName = StlEntityParser.ReplaceStlEntitiesForAttributeValue(value, pageInfo, contextInfo);
                     if (!string.IsNullOrEmpty(channelName))
@@ -81,11 +64,11 @@ namespace SiteServer.CMS.StlParser.StlElement
                         isGetPicUrlFromAttribute = true;
                     }
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeNo))
+                else if (StringUtils.EqualsIgnoreCase(name, No.Name))
                 {
                     no = TranslateUtils.ToInt(value);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeParent))
+                else if (StringUtils.EqualsIgnoreCase(name, Parent.Name))
                 {
                     if (TranslateUtils.ToBool(value))
                     {
@@ -93,7 +76,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                         isGetPicUrlFromAttribute = true;
                     }
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeUpLevel))
+                else if (StringUtils.EqualsIgnoreCase(name, UpLevel.Name))
                 {
                     upLevel = TranslateUtils.ToInt(value);
                     if (upLevel > 0)
@@ -101,7 +84,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                         isGetPicUrlFromAttribute = true;
                     }
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeTopLevel))
+                else if (StringUtils.EqualsIgnoreCase(name, TopLevel.Name))
                 {
                     topLevel = TranslateUtils.ToInt(value);
                     if (topLevel >= 0)
@@ -109,19 +92,19 @@ namespace SiteServer.CMS.StlParser.StlElement
                         isGetPicUrlFromAttribute = true;
                     }
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeType))
+                else if (StringUtils.EqualsIgnoreCase(name, Type.Name))
                 {
                     type = value;
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeIsOriginal))
+                else if (StringUtils.EqualsIgnoreCase(name, IsOriginal.Name))
                 {
                     isOriginal = TranslateUtils.ToBool(value, true);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeSrc))
+                else if (StringUtils.EqualsIgnoreCase(name, Src.Name))
                 {
                     src = StlEntityParser.ReplaceStlEntitiesForAttributeValue(value, pageInfo, contextInfo);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeAltSrc))
+                else if (StringUtils.EqualsIgnoreCase(name, AltSrc.Name))
                 {
                     altSrc = StlEntityParser.ReplaceStlEntitiesForAttributeValue(value, pageInfo, contextInfo);
                 }
@@ -166,17 +149,16 @@ namespace SiteServer.CMS.StlParser.StlElement
                     {
                         if (contentInfo != null && contentInfo.ReferenceId > 0 && contentInfo.SourceId > 0)
                         {
-                            var targetNodeId = contentInfo.SourceId;
-                            //var targetPublishmentSystemId = DataProvider.NodeDao.GetPublishmentSystemId(targetNodeId);
-                            var targetPublishmentSystemId = Node.GetPublishmentSystemId(targetNodeId);
-                            var targetPublishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(targetPublishmentSystemId);
-                            var targetNodeInfo = NodeManager.GetNodeInfo(targetPublishmentSystemId, targetNodeId);
+                            var targetChannelId = contentInfo.SourceId;
+                            //var targetSiteId = DataProvider.ChannelDao.GetSiteId(targetChannelId);
+                            var targetSiteId = Node.GetSiteId(targetChannelId);
+                            var targetSiteInfo = SiteManager.GetSiteInfo(targetSiteId);
+                            var targetNodeInfo = ChannelManager.GetChannelInfo(targetSiteId, targetChannelId);
 
-                            var tableStyle = NodeManager.GetTableStyle(targetPublishmentSystemInfo, targetNodeInfo);
-                            var tableName = NodeManager.GetTableName(targetPublishmentSystemInfo, targetNodeInfo);
+                            var tableName = ChannelManager.GetTableName(targetSiteInfo, targetNodeInfo);
                             //var targetContentInfo = DataProvider.ContentDao.GetContentInfo(tableStyle, tableName, contentInfo.ReferenceId);
-                            var targetContentInfo = Content.GetContentInfo(tableStyle, tableName, contentInfo.ReferenceId);
-                            if (targetContentInfo != null && targetContentInfo.NodeId > 0)
+                            var targetContentInfo = Content.GetContentInfo(tableName, contentInfo.ReferenceId);
+                            if (targetContentInfo != null && targetContentInfo.ChannelId > 0)
                             {
                                 contentInfo = targetContentInfo;
                             }
@@ -185,8 +167,8 @@ namespace SiteServer.CMS.StlParser.StlElement
 
                     if (contentInfo == null)
                     {
-                        //contentInfo = DataProvider.ContentDao.GetContentInfo(ETableStyle.BackgroundContent, pageInfo.PublishmentSystemInfo.AuxiliaryTableForContent, contentId);
-                        contentInfo = Content.GetContentInfo(ETableStyle.BackgroundContent, pageInfo.PublishmentSystemInfo.AuxiliaryTableForContent, contentId);
+                        //contentInfo = DataProvider.ContentDao.GetContentInfo(ETableStyle.BackgroundContent, pageInfo.SiteInfo.AuxiliaryTableForContent, contentId);
+                        contentInfo = Content.GetContentInfo(pageInfo.SiteInfo.TableName, contentId);
                     }
 
                     if (contentInfo != null)
@@ -217,11 +199,11 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
                 else if (contextType == EContextType.Channel)//获取栏目图片
                 {
-                    var channelId = StlDataUtility.GetNodeIdByLevel(pageInfo.PublishmentSystemId, contextInfo.ChannelId, upLevel, topLevel);
+                    var channelId = StlDataUtility.GetChannelIdByLevel(pageInfo.SiteId, contextInfo.ChannelId, upLevel, topLevel);
 
-                    channelId = StlDataUtility.GetNodeIdByChannelIdOrChannelIndexOrChannelName(pageInfo.PublishmentSystemId, channelId, channelIndex, channelName);
+                    channelId = StlDataUtility.GetChannelIdByChannelIdOrChannelIndexOrChannelName(pageInfo.SiteId, channelId, channelIndex, channelName);
 
-                    var channel = NodeManager.GetNodeInfo(pageInfo.PublishmentSystemId, channelId);
+                    var channel = ChannelManager.GetChannelInfo(pageInfo.SiteId, channelId);
 
                     picUrl = channel.ImageUrl;
                 }
@@ -249,7 +231,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
                 else
                 {
-                    stlImage.Src = PageUtility.ParseNavigationUrl(pageInfo.PublishmentSystemInfo, picUrl, pageInfo.IsLocal);
+                    stlImage.Src = PageUtility.ParseNavigationUrl(pageInfo.SiteInfo, picUrl, pageInfo.IsLocal);
                     parsedContent = ControlUtils.GetControlRenderHtml(stlImage);
                 }
             }

@@ -1,41 +1,39 @@
 ﻿using System;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Model.Enumerations;
 using SiteServer.CMS.StlParser.Utility;
+using SiteServer.Plugin;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class PageTemplatePreview : BasePageCms
     {
-        public Literal LtlMessage;
         public DropDownList DdlTemplateType;
         public PlaceHolder PhTemplateChannel;
-        public DropDownList DdlNodeId;
+        public DropDownList DdlChannelId;
+        public TextBox TbCode;
+        public Literal LtlPreview;
         public TextBox TbTemplate;
         public Button BtnReturn;
-
-        public PlaceHolder PhPreview;
-        public Literal LtlPreview;
 
         public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID");
+            PageUtils.CheckRequestParameter("siteId");
 
             if (IsPostBack) return;
-            BreadCrumb(AppManager.Cms.LeftMenu.IdTemplate, "STL在线解析", AppManager.Permissions.WebSite.Template);
+            VerifySitePermissions(ConfigManager.WebSitePermissions.Template);
 
-            ETemplateTypeUtils.AddListItems(DdlTemplateType);
-            NodeManager.AddListItems(DdlNodeId.Items, PublishmentSystemInfo, false, true, Body.AdminName);
-            if (Body.IsQueryExists("fromCache"))
+            TemplateTypeUtils.AddListItems(DdlTemplateType);
+            ChannelManager.AddListItems(DdlChannelId.Items, SiteInfo, false, true, AuthRequest.AdminPermissions);
+            if (AuthRequest.IsQueryExists("fromCache"))
             {
                 TbTemplate.Text = TranslateUtils.DecryptStringBySecretKey(CacheUtils.Get<string>("SiteServer.BackgroundPages.Cms.PageTemplatePreview"));
             }
             
-            if (Body.IsQueryExists("returnUrl"))
+            if (AuthRequest.IsQueryExists("returnUrl"))
             {
                 BtnReturn.Visible = true;
             }
@@ -43,8 +41,8 @@ namespace SiteServer.BackgroundPages.Cms
 
         public void DdlTemplateType_SelectedIndexChanged(object sender, EventArgs e)
         {
-            var templateType = ETemplateTypeUtils.GetEnumType(DdlTemplateType.SelectedValue);
-            if (templateType == ETemplateType.IndexPageTemplate || templateType == ETemplateType.IndexPageTemplate)
+            var templateType = TemplateTypeUtils.GetEnumType(DdlTemplateType.SelectedValue);
+            if (templateType == TemplateType.IndexPageTemplate || templateType == TemplateType.IndexPageTemplate)
             {
                 PhTemplateChannel.Visible = false;
             }
@@ -55,50 +53,44 @@ namespace SiteServer.BackgroundPages.Cms
         }
 
         public void BtnPreview_OnClick(object sender, EventArgs e)
-        {
-            PhPreview.Visible = false;
-            LtlMessage.Text = string.Empty;
-
+        {           
             if (string.IsNullOrEmpty(TbTemplate.Text))
             {
-                LtlMessage.Text = @"<div class=""alert alert-danger"">
-                                        请输入STL标签
-                                    </div>";
+                FailMessage("请输入STL标签");
                 return;
             }
 
-            var templateType = ETemplateTypeUtils.GetEnumType(DdlTemplateType.SelectedValue);
-            var channelId = PublishmentSystemId;
+            var templateType = TemplateTypeUtils.GetEnumType(DdlTemplateType.SelectedValue);
+            var channelId = SiteId;
             var contentId = 0;
-            if (templateType == ETemplateType.ChannelTemplate || templateType == ETemplateType.ContentTemplate)
+            if (templateType == TemplateType.ChannelTemplate || templateType == TemplateType.ContentTemplate)
             {
-                channelId = TranslateUtils.ToInt(DdlNodeId.SelectedValue);
-                if (templateType == ETemplateType.ContentTemplate)
+                channelId = TranslateUtils.ToInt(DdlChannelId.SelectedValue);
+                if (templateType == TemplateType.ContentTemplate)
                 {
-                    var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, channelId);
+                    var nodeInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
                     if (nodeInfo.ContentNum > 0)
                     {
-                        var tableName = NodeManager.GetTableName(PublishmentSystemInfo, nodeInfo);
-                        contentId = BaiRongDataProvider.ContentDao.GetFirstContentId(tableName, channelId);
+                        var tableName = ChannelManager.GetTableName(SiteInfo, nodeInfo);
+                        contentId = DataProvider.ContentDao.GetFirstContentId(tableName, channelId);
                     }
 
                     if (contentId == 0)
                     {
-                        LtlMessage.Text = @"<div class=""alert alert-danger"">
-                                        所选栏目下无内容，请选择有内容的栏目
-                                    </div>";
+                        FailMessage("所选栏目下无内容，请选择有内容的栏目");
                         return;
                     }
                 }
             }
 
-            PhPreview.Visible = true;
-            LtlPreview.Text = StlParserManager.ParseTemplateContent(TbTemplate.Text, PublishmentSystemId, channelId, contentId);
+            TbCode.Text = LtlPreview.Text = StlParserManager.ParseTemplatePreview(SiteInfo, templateType, channelId, contentId, TbTemplate.Text);
+
+            LtlPreview.Text += "<script>$('#linkCode').click();</script>";
         }
 
         public void BtnReturn_OnClick(object sender, EventArgs e)
         {
-            PageUtils.Redirect(TranslateUtils.DecryptStringBySecretKey(Body.GetQueryString("returnUrl")));
+            PageUtils.Redirect(TranslateUtils.DecryptStringBySecretKey(AuthRequest.GetQueryString("returnUrl")));
         }
     }
 }

@@ -1,107 +1,127 @@
 ﻿<%@ Page Language="C#" Inherits="SiteServer.BackgroundPages.Cms.PageContentSearch" %>
-  <%@ Register TagPrefix="bairong" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
+  <%@ Register TagPrefix="ctrl" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
     <!DOCTYPE html>
     <html>
 
     <head>
       <meta charset="utf-8">
-      <!--#include file="../inc/header.aspx"-->
+      <!--#include file="../inc/head.html"-->
+      <script type="text/javascript">
+        $(document).ready(function () {
+          loopRows(document.getElementById('contents'), function (cur) {
+            cur.onclick = chkSelect;
+          });
+        });
+      </script>
     </head>
 
     <body>
-      <!--#include file="../inc/openWindow.html"-->
-      <form class="form-inline" runat="server">
-        <asp:Literal id="LtlBreadCrumb" runat="server" />
-        <bairong:alerts runat="server" />
+      <form class="m-l-15 m-r-15" runat="server">
+        <ctrl:alerts runat="server" />
 
-        <script type="text/javascript">
-          $(document).ready(function () {
-            loopRows(document.getElementById('contents'), function (cur) {
-              cur.onclick = chkSelect;
-            });
-            $(".popover-hover").popover({
-              trigger: 'hover',
-              html: true
-            });
-          });
-        </script>
+        <div class="card-box">
 
-        <div class="well well-small">
-          <table class="table table-noborder">
-            <tr>
-              <td>
-                栏目：
-                <asp:DropDownList ID="DdlChannelId" AutoPostBack="true" OnSelectedIndexChanged="Search_OnClick" runat="server"></asp:DropDownList>
-                内容状态：
-                <asp:DropDownList ID="DdlState" AutoPostBack="true" OnSelectedIndexChanged="Search_OnClick" class="input-small" runat="server"></asp:DropDownList>
-                <asp:CheckBox ID="CbIsDuplicate" class="checkbox inline" Text="包含重复标题" runat="server"></asp:CheckBox>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                时间：从
-                <bairong:DateTimeTextBox id="TbDateFrom" class="input-small" Columns="12" runat="server" /> &nbsp;到&nbsp;
-                <bairong:DateTimeTextBox id="TbDateTo" class="input-small" Columns="12" runat="server" /> 目标：
-                <asp:DropDownList ID="DdlSearchType" class="input-small" runat="server"> </asp:DropDownList>
-                关键字：
-                <asp:TextBox id="TbKeyword" MaxLength="500" Size="37" runat="server" />
-                <asp:Button class="btn" OnClick="Search_OnClick" id="Search" text="搜 索" runat="server" />
-              </td>
-            </tr>
-          </table>
-        </div>
+          <div class="m-t-10">
+            <div class="form-inline">
+              <div class="form-group">
+                <label class="col-form-label m-r-10">栏目</label>
+                <asp:DropDownList ID="DdlChannelId" AutoPostBack="true" OnSelectedIndexChanged="Search_OnClick" class="form-control" runat="server"></asp:DropDownList>
+              </div>
 
-        <table id="contents" class="table table-bordered table-hover">
-          <tr class="info thead">
-            <td>内容标题(点击查看) </td>
-            <td>栏目</td>
-            <asp:Literal ID="LtlColumnHeadRows" runat="server"></asp:Literal>
-            <td width="50"> 状态 </td>
-            <td width="30">&nbsp;</td>
-            <asp:Literal ID="LtlCommandHeadRows" runat="server"></asp:Literal>
-            <td width="20">
-              <input type="checkbox" onClick="selectRows(document.getElementById('contents'), this.checked);">
-            </td>
-          </tr>
-          <asp:Repeater ID="RptContents" runat="server">
-            <itemtemplate>
-              <tr>
-                <td>
-                  <asp:Literal ID="ltlItemTitle" runat="server"></asp:Literal>
-                </td>
-                <td>
-                  <asp:Literal ID="ltlChannel" runat="server"></asp:Literal>
-                </td>
-                <asp:Literal ID="ltlColumnItemRows" runat="server"></asp:Literal>
-                <td class="center" nowrap>
-                  <asp:Literal ID="ltlItemStatus" runat="server"></asp:Literal>
-                </td>
-                <td class="center">
-                  <asp:Literal ID="ltlItemEditUrl" runat="server"></asp:Literal>
-                </td>
-                <asp:Literal ID="ltlCommandItemRows" runat="server"></asp:Literal>
-                <td class="center">
-                  <asp:Literal ID="ltlSelect" runat="server"></asp:Literal>
-                </td>
-              </tr>
-            </itemtemplate>
-          </asp:Repeater>
-        </table>
+              <div class="form-group m-l-10">
+                <label class="col-form-label m-r-10">状态</label>
+                <asp:DropDownList ID="DdlState" AutoPostBack="true" OnSelectedIndexChanged="Search_OnClick" class="form-control" runat="server"></asp:DropDownList>
+              </div>
+            </div>
 
-        <bairong:sqlPager id="SpContents" runat="server" class="table table-pager" />
+            <div class="form-inline m-t-10">
+              <div class="form-group">
+                <label class="col-form-label m-r-10">时间：从</label>
+                <ctrl:DateTimeTextBox id="TbDateFrom" class="form-control" Columns="12" runat="server" />
+              </div>
 
-        <ul class="breadcrumb breadcrumb-button">
-          <asp:Button class="btn" id="BtnAddContent" OnClick="AddContent_OnClick" Text="添加信息" runat="server" />
-          <asp:Button class="btn" id="BtnSelect" Text="选择显示项" runat="server" />
-          <asp:Button class="btn" id="BtnAddToGroup" Text="添加到内容组" runat="server" />
-          <asp:Button class="btn" id="BtnTranslate" Text="转 移" runat="server" />
+              <div class="form-group m-l-10">
+                <label class="col-form-label m-r-10">到</label>
+                <ctrl:DateTimeTextBox id="TbDateTo" class="form-control" Columns="12" runat="server" />
+              </div>
+
+              <div class="form-group m-l-10">
+                <label class="col-form-label m-r-10">目标</label>
+                <asp:DropDownList ID="DdlSearchType" class="form-control" runat="server"> </asp:DropDownList>
+              </div>
+
+              <div class="form-group m-l-10">
+                <label class="col-form-label m-r-10">关键字</label>
+                <asp:TextBox id="TbKeyword" class="form-control" runat="server" />
+              </div>
+
+              <asp:Button class="btn btn-success m-l-10 btn-md" OnClick="Search_OnClick" ID="Search" Text="搜 索" runat="server" />
+            </div>
+          </div>
+
+          <div class="panel panel-default m-t-20">
+            <div class="panel-body p-0">
+              <div class="table-responsive">
+                <table id="contents" class="table tablesaw table-hover m-0">
+                  <thead>
+                    <tr class="thead">
+                      <th>内容标题(点击查看) </th>
+                      <th class="text-nowrap">栏目 </th>
+                      <asp:Literal id="LtlColumnsHead" runat="server"></asp:Literal>
+                      <th class="text-center text-nowrap" width="100">状态</th>
+                      <th width="20" class="text-center text-nowrap">
+                        <input type="checkbox" onClick="selectRows(document.getElementById('contents'), this.checked);">
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <asp:Repeater ID="RptContents" runat="server">
+                      <itemtemplate>
+                        <tr>
+                          <td>
+                            <asp:Literal ID="ltlTitle" runat="server"></asp:Literal>
+                          </td>
+                          <td class="text-nowrap">
+                            <asp:Literal ID="ltlChannel" runat="server"></asp:Literal>
+                          </td>
+                          <asp:Literal ID="ltlColumns" runat="server"></asp:Literal>
+                          <td class="text-center text-nowrap">
+                            <asp:Literal ID="ltlStatus" runat="server"></asp:Literal>
+                          </td>
+                          <td class="text-center text-nowrap">
+                            <asp:Literal ID="ltlSelect" runat="server"></asp:Literal>
+                          </td>
+                        </tr>
+                      </itemtemplate>
+                    </asp:Repeater>
+                  </tbody>
+                </table>
+
+              </div>
+            </div>
+          </div>
+
+          <ctrl:pager id="PgContents" runat="server" />
+
+          <hr />
+
+          <asp:Button class="btn m-r-5" id="BtnSelect" Text="选择显示项" runat="server" />
+          <asp:Button class="btn m-r-5" id="BtnAddToGroup" Text="添加到内容组" runat="server" />
+          <asp:Button class="btn m-r-5" id="BtnTranslate" Text="转 移" runat="server" />
           <asp:PlaceHolder ID="PhCheck" runat="server">
-            <asp:Button class="btn" id="BtnCheck" Text="审 核" runat="server" />
+            <asp:Button class="btn m-r-5" id="BtnCheck" Text="审 核" runat="server" />
           </asp:PlaceHolder>
-          <asp:Button class="btn" id="BtnDelete" Text="删 除" runat="server" />
-        </ul>
+          <asp:PlaceHolder id="PhTrash" runat="server" visible="false">
+            <asp:Button class="btn m-r-5 btn-success" id="BtnRestore" Text="还 原" runat="server" />
+            <asp:Button class="btn m-r-5" id="BtnRestoreAll" Text="全部还原" runat="server" />
+            <asp:Button class="btn m-r-5" id="BtnDeleteAll" Text="清空回收站" runat="server" />
+          </asp:PlaceHolder>
+          <asp:Button class="btn m-r-5" id="BtnDelete" Text="删 除" runat="server" />
+
+        </div>
 
       </form>
     </body>
 
     </html>
+    <!--#include file="../inc/foot.html"-->

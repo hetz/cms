@@ -3,11 +3,11 @@ using System.Collections;
 using System.Collections.Specialized;
 using System.Text;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
-using BaiRong.Text.LitJson;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Office;
+using SiteServer.Utils.Enumerations;
+using SiteServer.Utils.LitJson;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -21,18 +21,16 @@ namespace SiteServer.BackgroundPages.Cms
 
         private string _attributeName;
 
-        public static string GetOpenWindowString(int publishmentSystemId, string attributeName)
+        public static string GetOpenWindowString(int siteId, string attributeName)
         {
-            return PageUtils.GetOpenWindowString("导入Word", PageUtils.GetCmsUrl(nameof(ModalTextEditorImportWord), new NameValueCollection
+            return LayerUtils.GetOpenScript("导入Word", PageUtils.GetCmsUrl(siteId, nameof(ModalTextEditorImportWord), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"AttributeName", attributeName}
-            }), 550, 350);
+            }), 600, 400);
         }
 
-        public string UploadUrl => PageUtils.GetCmsUrl(nameof(ModalTextEditorImportWord), new NameValueCollection
+        public string UploadUrl => PageUtils.GetCmsUrl(SiteId, nameof(ModalTextEditorImportWord), new NameValueCollection
         {
-            {"PublishmentSystemID", PublishmentSystemId.ToString()},
             {"upload", true.ToString()}
         });
 
@@ -40,7 +38,7 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            if (Body.IsQueryExists("upload"))
+            if (AuthRequest.IsQueryExists("upload"))
             {
                 var attributes = Upload();
                 var json = JsonMapper.ToJson(attributes);
@@ -49,7 +47,7 @@ namespace SiteServer.BackgroundPages.Cms
                 return;
             }
 
-            _attributeName = Body.GetQueryString("AttributeName");
+            _attributeName = AuthRequest.GetQueryString("AttributeName");
 		}
 
         private Hashtable Upload()
@@ -112,13 +110,13 @@ namespace SiteServer.BackgroundPages.Cms
                 foreach (var fileName in fileNames.Split('|'))
                 {
                     var filePath = WordUtils.GetWordFilePath(fileName);
-                    var wordContent = WordUtils.Parse(PublishmentSystemId, filePath, CbIsClearFormat.Checked, CbIsFirstLineIndent.Checked, CbIsClearFontSize.Checked, CbIsClearFontFamily.Checked, CbIsClearImages.Checked);
-                    wordContent = ContentUtility.TextEditorContentDecode(PublishmentSystemInfo, wordContent, true);
+                    var wordContent = WordUtils.Parse(SiteId, filePath, CbIsClearFormat.Checked, CbIsFirstLineIndent.Checked, CbIsClearFontSize.Checked, CbIsClearFontFamily.Checked, CbIsClearImages.Checked);
+                    wordContent = ContentUtility.TextEditorContentDecode(SiteInfo, wordContent, true);
                     builder.Append(wordContent);
                     FileUtils.DeleteFileIfExists(filePath);
                 }
                 var script = "parent." + ETextEditorTypeUtils.GetInsertHtmlScript(_attributeName, builder.ToString());
-                PageUtils.CloseModalPageWithoutRefresh(Page, script);
+                LayerUtils.CloseWithoutRefresh(Page, script);
             }
             else
             {

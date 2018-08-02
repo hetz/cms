@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 using System.Web.UI;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
 
 namespace SiteServer.CMS.StlParser.StlEntity
 {
-    [Stl(Usage = "数据库实体", Description = "通过 {sql.} 实体在模板中显示数据库值")]
+    [StlClass(Usage = "数据库实体", Description = "通过 {sql.} 实体在模板中显示数据库值")]
     public class StlSqlEntities
 	{
         private StlSqlEntities()

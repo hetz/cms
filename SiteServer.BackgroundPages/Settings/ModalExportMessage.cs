@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
-using SiteServer.CMS.Controllers.Sys.Stl;
+using SiteServer.CMS.Api;
+using SiteServer.CMS.Api.Sys.Stl;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
 using SiteServer.CMS.ImportExport;
 
 namespace SiteServer.BackgroundPages.Settings
@@ -11,27 +12,23 @@ namespace SiteServer.BackgroundPages.Settings
     public class ModalExportMessage : BasePage
     {
         private string _exportType;
-
-        public const int Width = 380;
-        public const int Height = 250;
         public const string ExportTypeSingleTableStyle = "SingleTableStyle";
 
-        public static string GetOpenWindowStringToSingleTableStyle(ETableStyle tableStyle, string tableName)
+        public static string GetOpenWindowStringToSingleTableStyle(string tableName)
         {
-            return PageUtils.GetOpenWindowString("导出数据",
+            return LayerUtils.GetOpenScript("导出数据",
                 PageUtils.GetSettingsUrl(nameof(ModalExportMessage), new NameValueCollection
                 {
-                    {"TableStyle", ETableStyleUtils.GetValue(tableStyle)},
                     {"TableName", tableName},
                     {"ExportType", ExportTypeSingleTableStyle}
-                }), Width, Height, true);
+                }), 380, 250);
         }
 
         public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            _exportType = Body.GetQueryString("ExportType");
+            _exportType = AuthRequest.GetQueryString("ExportType");
 
             if (!IsPostBack)
             {
@@ -40,14 +37,13 @@ namespace SiteServer.BackgroundPages.Settings
                 {
                     if (_exportType == ExportTypeSingleTableStyle)
                     {
-                        var tableStyle = ETableStyleUtils.GetEnumType(Body.GetQueryString("TableStyle"));
-                        var tableName = Body.GetQueryString("TableName");
-                        fileName = ExportSingleTableStyle(tableStyle, tableName);
+                        var tableName = AuthRequest.GetQueryString("TableName");
+                        fileName = ExportSingleTableStyle(tableName);
                     }
 
                     var link = new HyperLink();
                     var filePath = PathUtils.GetTemporaryFilesPath(fileName);
-                    link.NavigateUrl = ActionsDownload.GetUrl(PageUtils.InnerApiUrl, filePath);
+                    link.NavigateUrl = ApiRouteActionsDownload.GetUrl(ApiManager.InnerApiUrl, filePath);
                     link.Text = "下载";
                     var successMessage = "成功导出文件！&nbsp;&nbsp;" + ControlUtils.GetControlRenderHtml(link);
                     SuccessMessage(successMessage);
@@ -60,9 +56,9 @@ namespace SiteServer.BackgroundPages.Settings
             }
         }
 
-        private string ExportSingleTableStyle(ETableStyle tableStyle, string tableName)
+        private static string ExportSingleTableStyle(string tableName)
         {
-            return ExportObject.ExportRootSingleTableStyle(tableStyle, tableName);
+            return ExportObject.ExportRootSingleTableStyle(tableName);
         }
     }
 }

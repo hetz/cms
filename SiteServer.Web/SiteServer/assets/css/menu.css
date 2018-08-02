@@ -43,11 +43,6 @@ File: Topbar,Left-sidebar,Right-sidebar
 .nav > li > a i {
   font-size: 20px;
 }
-.nav > li > a .badge {
-  position: absolute;
-  right: 10px;
-  top: 18px;
-}
 .profile img {
   border: 2px solid #edf0f0;
   height: 36px;
@@ -191,18 +186,22 @@ input.app-search-input:-ms-input-placeholder {
   background: #eeeeee;
   box-shadow: -4px 4px 40px rgba(0, 0, 0, 0.15);
   position: absolute;
-  top: 65px;
+  top: 62px;
 }
 body.fixed-left .side-menu.left {
   bottom: 50px;
   height: 100%;
-  margin-top: 0px;
+  margin-top: 0;
   position: fixed;
 }
 .content-page {
   margin-left: 200px;
   overflow: hidden;
   background: #fff;
+  width: 100%;
+  height: 100%;
+  margin-top: 0;
+  position: fixed;
 }
 .content-page > .content {
   margin-bottom: 60px;
@@ -228,6 +227,7 @@ body.fixed-left .side-menu.left {
 #sidebar-menu li,
 #sidebar-menu a {
   border: 0;
+  font-family: 'Microsoft YaHei', sans-serif;
   font-weight: normal;
   line-height: 1;
   font-size: 14px;
@@ -244,6 +244,19 @@ body.fixed-left .side-menu.left {
 #sidebar-menu a {
   line-height: 1.3;
 }
+#sidebar-menu a.badge {
+  display: block;
+  padding: 1px 5px;
+  font-weight: 600;
+  font-size: 12px;
+  float: right;
+  border-left: 0 !important;
+}
+#sidebar-menu a.badge:hover {
+  background: #ffc107;
+  border-left: 0 !important;
+}
+
 #sidebar-menu ul li .menu-arrow {
   -webkit-transition: -webkit-transform 0.15s;
   -o-transition: -o-transform 0.15s;
@@ -283,7 +296,7 @@ body.fixed-left .side-menu.left {
   color: #00b19d;
 }
 #sidebar-menu ul ul a {
-  color: #75767B;
+  color: #55565d;
   display: block;
   padding: 10px 10px 10px 45px;
 }
@@ -343,8 +356,6 @@ body.fixed-left .side-menu.left {
 .menu-title {
   padding: 12px 20px!important;
   letter-spacing: .035em;
-  pointer-events: none;
-  cursor: default;
   font-size: 15px !important;
   margin-top: 10px !important;
   font-weight: 500 !important;
@@ -588,15 +599,17 @@ body.fixed-left .side-menu.left {
   color: #00b19d;
 }
 #topnav .topbar-main {
+  font-family: 'Microsoft YaHei', sans-serif;
   background-color: #00b19d;
+  height: 62px;
 }
 #topnav .topbar-main .logo {
   color: #ffffff !important;
   font-size: 18px;
   font-weight: 700;
   letter-spacing: .05em;
-  margin-top: 9px;
-  margin-left: 5px;
+  margin-top: 8px;
+  margin-left: 8px;
   float: left;
 }
 #topnav .topbar-main .toggle {
@@ -857,7 +870,7 @@ body.fixed-left .side-menu.left {
   list-style: none;
   margin: 0;
   padding: 0;
-  margin-left: 215px;
+  margin-left: 245px;
 }
 #topnav .navigation-menu > li {
   float: left;
@@ -866,7 +879,7 @@ body.fixed-left .side-menu.left {
 }
 #topnav .navigation-menu > li > a {
   display: block;
-  color: #B0DDCE;
+  color: #fff;
   font-weight: 500;
   font-size: 14px;
   -webkit-transition: all .3s ease;
@@ -897,7 +910,7 @@ body.fixed-left .side-menu.left {
 #topnav .navigation-menu > li > a i {
   font-size: 18px;
   margin-right: 5px;
-  color: #B0DDCE;
+  color: #fff;
 }
 #topnav .navigation-menu > li > a:hover,
 #topnav .navigation-menu > li > a:focus {
@@ -906,7 +919,7 @@ body.fixed-left .side-menu.left {
 @media (min-width: 992px) {
   #topnav .navigation-menu > li > a {
     padding-top: 22px;
-    padding-bottom: 22px;
+    padding-bottom: 12px;
   }
 }
 /*

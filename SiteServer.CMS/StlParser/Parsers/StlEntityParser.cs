@@ -46,7 +46,7 @@ namespace SiteServer.CMS.StlParser.Parsers
         //        var entityType = EStlEntityTypeUtils.GetEntityType(stlEntity);
         //        if (entityType != EStlEntityType.User) continue;
         //        var resultContent = StlUserEntities.Parse(stlEntity, null);
-        //        parsedBuilder.Replace(stlEntity, resultContent, startIndex, stlEntity.Length);
+        //        parsedBuilder.Replace(stlEntity, resultContent, startIndex, stlEntity.DataLength);
         //    }
         //    return parsedBuilder.ToString();
         //}
@@ -72,14 +72,6 @@ namespace SiteServer.CMS.StlParser.Parsers
             else if (entityType == EStlEntityType.Channel)
             {
                 parsedContent = StlChannelEntities.Parse(stlEntity, pageInfo, contextInfo);
-            }
-            else if (entityType == EStlEntityType.Photo)
-            {
-                parsedContent = StlPhotoEntities.Parse(stlEntity, pageInfo, contextInfo);
-            }
-            else if (entityType == EStlEntityType.Comment)
-            {
-                parsedContent = StlCommentEntities.Parse(stlEntity, pageInfo, contextInfo);
             }
             else if (entityType == EStlEntityType.Request)
             {

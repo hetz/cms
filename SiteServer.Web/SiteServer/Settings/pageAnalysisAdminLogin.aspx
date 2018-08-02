@@ -1,160 +1,162 @@
 ﻿﻿<%@ Page Language="C#" Inherits="SiteServer.BackgroundPages.Settings.PageAnalysisAdminLogin" %>
-<%@ Register TagPrefix="bairong" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <!--#include file="../inc/header.aspx"-->
-</head>
+  <%@ Register TagPrefix="ctrl" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
+    <!DOCTYPE html>
+    <html>
 
-<body>
-    <!--#include file="../inc/openWindow.html"-->
-    <form class="form-inline" runat="server">
-        <script src="../assets/echarts/echarts.js"></script>
-        <asp:Literal ID="LtlBreadCrumb" runat="server" />
-        <bairong:Alerts runat="server" />
+    <head>
+      <meta charset="utf-8">
+      <!--#include file="../inc/head.html"-->
+      <script src="../assets/echarts/echarts.js"></script>
+    </head>
 
-        <div class="well well-small">
-            <div id="contentSearch" style="margin-top: 10px;">
-                时间从：
-                <bairong:DateTimeTextBox ID="TbDateFrom" class="input-small" Columns="12" runat="server" />
-                到：
-                <bairong:DateTimeTextBox ID="TbDateTo" class="input-small" Columns="12" runat="server" />
-                x轴：
-                <asp:DropDownList ID="DdlXType" runat="server"></asp:DropDownList>
-                <asp:Button class="btn" OnClick="Search_OnClick" Text="搜 索" runat="server" />
-            </div>
+    <body>
+      <form class="m-l-15 m-r-15" runat="server">
+
+        <div class="card-box">
+          <ul class="nav nav-pills">
+            <li class="nav-item">
+              <a class="nav-link" href="pageAnalysisSite.aspx">站点数据统计</a>
+            </li>
+            <li class="nav-item active">
+              <a class="nav-link" href="pageAnalysisAdminLogin.aspx">管理员登录统计</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="pageAnalysisAdminWork.aspx">管理员工作统计</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="pageAnalysisUser.aspx">会员数据统计</a>
+            </li>
+          </ul>
         </div>
 
-        <div class="popover popover-static">
+        <ctrl:alerts runat="server" />
 
-            <h3 class="popover-title"><asp:Literal id="LtlPageTitle1" runat="server"></asp:Literal></h3>
-            <div class="popover-content">
-                <!-- 为ECharts准备一个具备大小（宽高）的Dom -->
-                <div id="main" style="height: 400px"></div>
-                <!-- ECharts单文件引入 -->
-                <script type="text/javascript">
-                    // 路径配置
-                    require.config({
-                        paths: {
-                            echarts: '../assets/echarts'
-                        }
-                    });
-                    // 使用
-                    require(
-                        [
-                            'echarts',
-                            'echarts/chart/line' // 使用柱状图就加载bar模块，按需加载
-                        ],
-                        function (ec) {
-                            // 基于准备好的dom，初始化echarts图表
-                            var myChart = ec.init(document.getElementById('main'));
-                            //x array
-                            var xArray = [];
-                            //y array
-                            var yArray = [];
+        <div class="card-box">
+          <div class="form-inline">
+            <div class="form-group">
+              <label class="col-form-label m-r-10">时间从</label>
+              <ctrl:DateTimeTextBox ID="TbDateFrom" class="form-control" runat="server" />
+            </div>
 
-                            <asp:Literal id="LtlArray1" runat="server"></asp:Literal>
+            <div class="form-group m-l-10">
+              <label class="col-form-label m-r-10">到</label>
+              <ctrl:DateTimeTextBox ID="TbDateTo" class="form-control" runat="server" />
+            </div>
 
-                            var option = {
-                                tooltip: {
-                                    show: true
-                                },
-                                legend: {
-                                    data: ['管理员（按日期统计）']
-                                },
-                                xAxis: [
-                                    {
-                                        type: 'category',
-                                        data: xArray
-                                    }
-                                ],
-                                yAxis: [
-                                    {
-                                        type: 'value'
-                                    }
-                                ],
-                                series: [
-                                    {
-                                        "name": "登录次数",
-                                        "type": "line",
-                                        "data": yArray
-                                    }
-                                ]
-                            };
+            <div class="form-group m-l-10">
+              <label class="col-form-label m-r-10">x轴</label>
+              <asp:DropDownList ID="DdlXType" class="form-control" runat="server"></asp:DropDownList>
+            </div>
 
-                            // 为echarts对象加载数据
-                            myChart.setOption(option);
-                        }
+            <asp:Button class="btn btn-success m-l-10" OnClick="Search_OnClick" Text="统 计" runat="server" />
+          </div>
+
+          <hr />
+
+          <p class="lead">
+            <asp:Literal id="LtlPageTitle1" runat="server"></asp:Literal>
+          </p>
+
+          <div id="main" style="height: 400px"></div>
+          <script type="text/javascript">
+            require.config({
+              paths: {
+                echarts: '../assets/echarts'
+              }
+            });
+            require(
+              [
+                'echarts',
+                'echarts/chart/line'
+              ],
+              function (ec) {
+                var myChart = ec.init(document.getElementById('main'));
+                var xArray = [];
+                var yArray = [];
+
+                <%=StrArray1%>
+
+                var option = {
+                  tooltip: {
+                    show: true
+                  },
+                  legend: {
+                    data: ['管理员（按日期统计）']
+                  },
+                  xAxis: [{
+                    type: 'category',
+                    data: xArray
+                  }],
+                  yAxis: [{
+                    type: 'value'
+                  }],
+                  series: [{
+                    "name": "登录次数",
+                    "type": "line",
+                    "data": yArray
+                  }]
+                };
+
+                myChart.setOption(option);
+              }
             );
-                </script>
-            </div>
-        </div>
+          </script>
 
-        <div class="popover popover-static">
-            <h3 class="popover-title"><asp:Literal id="LtlPageTitle2" runat="server"></asp:Literal></h3>
-            <div class="popover-content">
-                <!-- 为ECharts准备一个具备大小（宽高）的Dom -->
-                <div id="user" style="height: 400px"></div>
-                <!-- ECharts单文件引入 -->
-                <script type="text/javascript">
-                    // 路径配置
-                    require.config({
-                        paths: {
-                            echarts: '../assets/echarts'
-                        }
-                    });
-                    // 使用
-                    require(
-                        [
-                            'echarts',
-                            'echarts/chart/bar' // 使用柱状图就加载bar模块，按需加载
-                        ],
-                        function (ec) {
-                            // 基于准备好的dom，初始化echarts图表
-                            var myChart = ec.init(document.getElementById('user'));
-                            //x array
-                            var xArray = [];
-                            //y array
-                            var yArray = [];
+          <hr />
 
-                            <asp:Literal id="LtlArray2" runat="server"></asp:Literal>
+          <p class="lead">
+            <asp:Literal id="LtlPageTitle2" runat="server"></asp:Literal>
+          </p>
 
-                            var option = {
-                                tooltip: {
-                                    show: true
-                                },
-                                legend: {
-                                    data: ['管理员（按管理员统计）']
-                                },
-                                xAxis: [
-                                    {
-                                        type: 'category',
-                                        data: xArray
-                                    }
-                                ],
-                                yAxis: [
-                                    {
-                                        type: 'value'
-                                    }
-                                ],
-                                series: [
-                                    {
-                                        "name": "登录次数",
-                                        "type": "bar",
-                                        "data": yArray
-                                    }
-                                ]
-                            };
+          <div id="user" style="height: 400px"></div>
+          <script type="text/javascript">
+            require.config({
+              paths: {
+                echarts: '../assets/echarts'
+              }
+            });
+            require(
+              [
+                'echarts',
+                'echarts/chart/bar'
+              ],
+              function (ec) {
+                var myChart = ec.init(document.getElementById('user'));
+                var xArray = [];
+                var yArray = [];
 
-                            // 为echarts对象加载数据
-                            myChart.setOption(option);
-                        }
+                <%=StrArray2%>
+
+                var option = {
+                  tooltip: {
+                    show: true
+                  },
+                  legend: {
+                    data: ['管理员（按管理员统计）']
+                  },
+                  xAxis: [{
+                    type: 'category',
+                    data: xArray
+                  }],
+                  yAxis: [{
+                    type: 'value'
+                  }],
+                  series: [{
+                    "name": "登录次数",
+                    "type": "bar",
+                    "data": yArray
+                  }]
+                };
+
+                myChart.setOption(option);
+              }
             );
-                </script>
-            </div>
+          </script>
+
         </div>
 
-    </form>
-</body>
-</html>
+      </form>
+    </body>
+
+    </html>
+    <!--#include file="../inc/foot.html"-->

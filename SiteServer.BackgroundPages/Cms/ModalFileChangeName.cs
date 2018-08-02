@@ -1,35 +1,32 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 
 namespace SiteServer.BackgroundPages.Cms
 {
 	public class ModalFileChangeName : BasePageCms
     {
-        protected Literal ltlFileName;
-        protected TextBox FileName;
-		protected RegularExpressionValidator FileNameValidator;
+        protected Literal LtlFileName;
+        protected TextBox TbFileName;
 
 		private string _rootPath;
 		private string _directoryPath;
 
-        public static string GetOpenWindowString(int publishmentSystemId, string rootPath, string fileName)
+        public static string GetOpenWindowString(int siteId, string rootPath, string fileName)
         {
-            return PageUtils.GetOpenWindowString("修改文件名", PageUtils.GetCmsUrl(nameof(ModalFileChangeName), new NameValueCollection
+            return LayerUtils.GetOpenScript("修改文件名", PageUtils.GetCmsUrl(siteId, nameof(ModalFileChangeName), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"RootPath", rootPath},
                 {"FileName", fileName}
             }), 400, 250);
         }
 
-        public static string GetOpenWindowString(int publishmentSystemId, string rootPath, string fileName, string hiddenClientId)
+        public static string GetOpenWindowString(int siteId, string rootPath, string fileName, string hiddenClientId)
         {
-            return PageUtils.GetOpenWindowString("修改文件名", PageUtils.GetCmsUrl(nameof(ModalFileChangeName), new NameValueCollection
+            return LayerUtils.GetOpenScript("修改文件名", PageUtils.GetCmsUrl(siteId, nameof(ModalFileChangeName), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"RootPath", rootPath},
                 {"FileName", fileName},
                 {"HiddenClientID", hiddenClientId}
@@ -40,54 +37,44 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID", "RootPath");
+            PageUtils.CheckRequestParameter("siteId", "RootPath");
 
-            _rootPath = Body.GetQueryString("RootPath").TrimEnd('/');
-            _directoryPath = PathUtility.MapPath(PublishmentSystemInfo, _rootPath);
+            _rootPath = AuthRequest.GetQueryString("RootPath").TrimEnd('/');
+            _directoryPath = PathUtility.MapPath(SiteInfo, _rootPath);
 
 			if (!Page.IsPostBack)
 			{
-                ltlFileName.Text = Body.GetQueryString("FileName");
+                LtlFileName.Text = AuthRequest.GetQueryString("FileName");
 			}
 		}
 
-        private string RedirectURL()
+        private string RedirectUrl()
         {
-            return ModalFileView.GetRedirectUrl(PublishmentSystemId, Body.GetQueryString("rootPath"),
-                Body.GetQueryString("FileName"), FileName.Text, Body.GetQueryString("HiddenClientID"));
+            return ModalFileView.GetRedirectUrl(SiteId, AuthRequest.GetQueryString("rootPath"),
+                AuthRequest.GetQueryString("FileName"), TbFileName.Text, AuthRequest.GetQueryString("HiddenClientID"));
         }
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
-			var isChange = false;
-
-            if (!DirectoryUtils.IsDirectoryNameCompliant(FileName.Text))
+            if (!DirectoryUtils.IsDirectoryNameCompliant(TbFileName.Text))
             {
-                FileNameValidator.IsValid = false;
-                FileNameValidator.ErrorMessage = "文件名称不符合要求";
+                FailMessage("文件名称不符合要求");
                 return;
             }
 
-            var path = PathUtils.Combine(_directoryPath, FileName.Text);
+            var path = PathUtils.Combine(_directoryPath, TbFileName.Text);
             if (FileUtils.IsFileExists(path))
             {
-                FileNameValidator.IsValid = false;
-                FileNameValidator.ErrorMessage = "文件已经存在";
+                FailMessage("文件已经存在");
+                return;
             }
-            else
-            {
-                var pathSource = PathUtils.Combine(_directoryPath, ltlFileName.Text);
-                FileUtils.MoveFile(pathSource, path, true);
-                FileUtils.DeleteFileIfExists(pathSource);
-                isChange = true;
-            }
+            var pathSource = PathUtils.Combine(_directoryPath, LtlFileName.Text);
+            FileUtils.MoveFile(pathSource, path, true);
+            FileUtils.DeleteFileIfExists(pathSource);
 
-            if (isChange)
-			{
-                Body.AddSiteLog(PublishmentSystemId, "修改文件名", $"文件名:{FileName.Text}");
-                //JsUtils.SubModal.CloseModalPageWithoutRefresh(Page);
-                PageUtils.CloseModalPageAndRedirect(Page, RedirectURL());
-			}
-		}
+            AuthRequest.AddSiteLog(SiteId, "修改文件名", $"文件名:{TbFileName.Text}");
+            //JsUtils.SubModal.CloseModalPageWithoutRefresh(Page);
+            LayerUtils.CloseAndRedirect(Page, RedirectUrl());
+        }
 	}
 }

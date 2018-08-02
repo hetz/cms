@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.CMS.Core;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Settings
 {
@@ -16,10 +17,10 @@ namespace SiteServer.BackgroundPages.Settings
             if (IsForbidden) return;
             if (IsPostBack) return;
 
-            BreadCrumbSettings("日志阈值设置", AppManager.Permissions.Settings.Log);
+            VerifySystemPermissions(ConfigManager.SettingsPermissions.Log);
 
             EBooleanUtils.AddListItems(RblIsTimeThreshold, "启用", "不启用");
-            ControlUtils.SelectListItemsIgnoreCase(RblIsTimeThreshold, ConfigManager.SystemConfigInfo.IsTimeThreshold.ToString());
+            ControlUtils.SelectSingleItem(RblIsTimeThreshold, ConfigManager.SystemConfigInfo.IsTimeThreshold.ToString());
             TbTime.Text = ConfigManager.SystemConfigInfo.TimeThreshold.ToString();
 
             PhTimeThreshold.Visible = TranslateUtils.ToBool(RblIsTimeThreshold.SelectedValue);
@@ -32,23 +33,16 @@ namespace SiteServer.BackgroundPages.Settings
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
-            try
+            ConfigManager.SystemConfigInfo.IsTimeThreshold = TranslateUtils.ToBool(RblIsTimeThreshold.SelectedValue);
+            if (ConfigManager.SystemConfigInfo.IsTimeThreshold)
             {
-                ConfigManager.SystemConfigInfo.IsTimeThreshold = TranslateUtils.ToBool(RblIsTimeThreshold.SelectedValue);
-                if (ConfigManager.SystemConfigInfo.IsTimeThreshold)
-                {
-                    ConfigManager.SystemConfigInfo.TimeThreshold = TranslateUtils.ToInt(TbTime.Text);
-                }
-
-                BaiRongDataProvider.ConfigDao.Update(ConfigManager.Instance);
-
-                Body.AddAdminLog("设置日志阈值参数");
-                SuccessMessage("日志阈值参数设置成功");
+                ConfigManager.SystemConfigInfo.TimeThreshold = TranslateUtils.ToInt(TbTime.Text);
             }
-            catch (Exception ex)
-            {
-                FailMessage(ex, ex.Message);
-            }
+
+            DataProvider.ConfigDao.Update(ConfigManager.Instance);
+
+            AuthRequest.AddAdminLog("设置日志阈值参数");
+            SuccessMessage("日志设置成功");
         }
     }
 }

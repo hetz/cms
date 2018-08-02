@@ -1,47 +1,45 @@
 ﻿using System;
-using BaiRong.Core.Model;
 using SiteServer.CMS.Model;
 using System.Text;
-using BaiRong.Core;
+using SiteServer.Utils;
 using System.Web.UI.WebControls;
 using System.Collections.Generic;
 using System.Collections.Specialized;
-using BaiRong.Core.Model.Attributes;
-using BaiRong.Core.Model.Enumerations;
 using SiteServer.CMS.Core.Create;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.Model.Enumerations;
-using BaiRong.Core.AuxiliaryTable;
 using SiteServer.CMS.Plugin;
-using SiteServer.Plugin.Models;
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Core
 {
-    public class ContentUtility
+    public static class ContentUtility
     {
-        private ContentUtility()
+        public static string PagePlaceHolder = "[SITESERVER_PAGE]";//内容翻页占位符
+
+        public static string TextEditorContentEncode(SiteInfo siteInfo, string content)
         {
-        }
-
-        public static string PagePlaceHolder = "[SITESERVER_PAGE]";//内容翻页展位符
-
-        public static string TextEditorContentEncode(PublishmentSystemInfo publishmentSystemInfo, string content)
-        {
-            if (publishmentSystemInfo == null) return content;
-
-            var url = publishmentSystemInfo.Additional.WebUrl;
-            if (publishmentSystemInfo.Additional.IsSaveImageInTextEditor && !string.IsNullOrEmpty(content))
+            if (siteInfo == null) return content;
+            
+            if (siteInfo.Additional.IsSaveImageInTextEditor && !string.IsNullOrEmpty(content))
             {
-                content = PathUtility.SaveImage(publishmentSystemInfo, content);
+                content = PathUtility.SaveImage(siteInfo, content);
             }
 
             var builder = new StringBuilder(content);
 
-            if (url == "/")
+            var url = siteInfo.Additional.WebUrl;
+            if (!string.IsNullOrEmpty(url) && url != "/")
             {
-                url = string.Empty;
+                StringUtils.ReplaceHrefOrSrc(builder, url, "@");
             }
+            //if (!string.IsNullOrEmpty(url))
+            //{
+            //    StringUtils.ReplaceHrefOrSrc(builder, url, "@");
+            //}
 
-            StringUtils.ReplaceHrefOrSrc(builder, url, "@");
+            var relatedSiteUrl = PageUtils.ParseNavigationUrl($"~/{siteInfo.SiteDir}");
+            StringUtils.ReplaceHrefOrSrc(builder, relatedSiteUrl, "@");
 
             builder.Replace("@'@", "'@");
             builder.Replace("@\"@", "\"@");
@@ -49,25 +47,25 @@ namespace SiteServer.CMS.Core
             return builder.ToString();
         }
 
-        public static string TextEditorContentDecode(PublishmentSystemInfo publishmentSystemInfo, string content, bool isLocal)
+        public static string TextEditorContentDecode(SiteInfo siteInfo, string content, bool isLocal)
         {
-            if (publishmentSystemInfo == null) return content;
+            if (siteInfo == null) return content;
             
             var builder = new StringBuilder(content);
 
-            var virtualAssetsUrl = $"@/{publishmentSystemInfo.Additional.AssetsDir}";
+            var virtualAssetsUrl = $"@/{siteInfo.Additional.AssetsDir}";
             string assetsUrl;
             if (isLocal)
             {
-                assetsUrl = PageUtility.GetLocalPublishmentSystemUrl(publishmentSystemInfo,
-                    publishmentSystemInfo.Additional.AssetsDir);
+                assetsUrl = PageUtility.GetSiteUrl(siteInfo,
+                    siteInfo.Additional.AssetsDir, true);
             }
             else
             {
-                assetsUrl = publishmentSystemInfo.Additional.AssetsUrl;
+                assetsUrl = siteInfo.Additional.AssetsUrl;
             }
             StringUtils.ReplaceHrefOrSrc(builder, virtualAssetsUrl, assetsUrl);
-            StringUtils.ReplaceHrefOrSrc(builder, "@", publishmentSystemInfo.Additional.WebUrl);
+            StringUtils.ReplaceHrefOrSrc(builder, "@", siteInfo.Additional.WebUrl);
 
             builder.Replace("&#xa0;", "&nbsp;");
 
@@ -100,10 +98,8 @@ namespace SiteServer.CMS.Core
             return isTitleFormatted;
         }
 
-        public static bool SetTitleFormatControls(string titleFormatString, out bool formatStrong, out bool formatEm, out bool formatU, out string formatColor)
+        public static void SetTitleFormatControls(string titleFormatString, out bool formatStrong, out bool formatEm, out bool formatU, out string formatColor)
         {
-            var isTitleFormatted = false;
-
             formatStrong = formatEm = formatU = false;
             formatColor = string.Empty;
 
@@ -116,13 +112,8 @@ namespace SiteServer.CMS.Core
                     formatEm = TranslateUtils.ToBool(formats[1]);
                     formatU = TranslateUtils.ToBool(formats[2]);
                     formatColor = formats[3];
-                    if (formatStrong || formatEm || formatU || !string.IsNullOrEmpty(formatColor))
-                    {
-                        isTitleFormatted = true;
-                    }
                 }
             }
-            return isTitleFormatted;
         }
 
         public static string FormatTitle(string titleFormatString, string title)
@@ -163,30 +154,34 @@ namespace SiteServer.CMS.Core
             return formattedTitle;
         }
 
-        public static void PutImagePaths(PublishmentSystemInfo publishmentSystemInfo, BackgroundContentInfo contentInfo, NameValueCollection collection)
+        public static void PutImagePaths(SiteInfo siteInfo, ContentInfo contentInfo, NameValueCollection collection)
         {
-            if (contentInfo != null)
-            {
-                if (!string.IsNullOrEmpty(contentInfo.ImageUrl) && PageUtility.IsVirtualUrl(contentInfo.ImageUrl))
-                {
-                    collection[contentInfo.ImageUrl] = PathUtility.MapPath(publishmentSystemInfo, contentInfo.ImageUrl);
-                }
-                if (!string.IsNullOrEmpty(contentInfo.VideoUrl) && PageUtility.IsVirtualUrl(contentInfo.VideoUrl))
-                {
-                    collection[contentInfo.VideoUrl] = PathUtility.MapPath(publishmentSystemInfo, contentInfo.VideoUrl);
-                }
-                if (!string.IsNullOrEmpty(contentInfo.FileUrl) && PageUtility.IsVirtualUrl(contentInfo.FileUrl))
-                {
-                    collection[contentInfo.FileUrl] = PathUtility.MapPath(publishmentSystemInfo, contentInfo.FileUrl);
-                }
+            if (contentInfo == null) return;
 
-                var srcArrayList = RegexUtils.GetOriginalImageSrcs(contentInfo.Content);
-                foreach (string src in srcArrayList)
+            var imageUrl = contentInfo.GetString(BackgroundContentAttribute.ImageUrl);
+            var videoUrl = contentInfo.GetString(BackgroundContentAttribute.VideoUrl);
+            var fileUrl = contentInfo.GetString(BackgroundContentAttribute.FileUrl);
+            var content = contentInfo.GetString(BackgroundContentAttribute.Content);
+
+            if (!string.IsNullOrEmpty(imageUrl) && PageUtility.IsVirtualUrl(imageUrl))
+            {
+                collection[imageUrl] = PathUtility.MapPath(siteInfo, imageUrl);
+            }
+            if (!string.IsNullOrEmpty(videoUrl) && PageUtility.IsVirtualUrl(videoUrl))
+            {
+                collection[videoUrl] = PathUtility.MapPath(siteInfo, videoUrl);
+            }
+            if (!string.IsNullOrEmpty(fileUrl) && PageUtility.IsVirtualUrl(fileUrl))
+            {
+                collection[fileUrl] = PathUtility.MapPath(siteInfo, fileUrl);
+            }
+
+            var srcList = RegexUtils.GetOriginalImageSrcs(content);
+            foreach (var src in srcList)
+            {
+                if (PageUtility.IsVirtualUrl(src))
                 {
-                    if (PageUtility.IsVirtualUrl(src))
-                    {
-                        collection[src] = PathUtility.MapPath(publishmentSystemInfo, src);
-                    }
+                    collection[src] = PathUtility.MapPath(siteInfo, src);
                 }
             }
         }
@@ -234,175 +229,191 @@ namespace SiteServer.CMS.Core
             }
         }
 
-        public static int GetRealContentId(ETableStyle tableStyle, string tableName, int contentId)
+        public static List<TableStyleInfo> GetAllTableStyleInfoList(List<TableStyleInfo> tableStyleInfoList)
         {
-            string linkUrl;
-            var referenceId = BaiRongDataProvider.ContentDao.GetReferenceId(tableStyle, tableName, contentId, out linkUrl);
-            return referenceId > 0 ? referenceId : contentId;
-        }
-
-        public static ContentInfo GetContentInfo(ETableStyle tableStyle)
-        {
-            switch (tableStyle)
+            var list = new List<TableStyleInfo>
             {
-                case ETableStyle.BackgroundContent:
-                    return new BackgroundContentInfo();
-            }
-            return new ContentInfo();
-        }
-
-        public static List<TableStyleInfo> GetAllTableStyleInfoList(PublishmentSystemInfo publishmentSystemInfo, ETableStyle tableStyle, List<TableStyleInfo> tableStyleInfoList)
-        {
-            var arraylist = new List<TableStyleInfo>();
-
-            var styleInfo = new TableStyleInfo
-            {
-                AttributeName = ContentAttribute.Id,
-                DisplayName = "编号"
-            };
-            arraylist.Add(styleInfo);
-
-            arraylist.AddRange(tableStyleInfoList);
-
-            styleInfo = new TableStyleInfo
-            {
-                AttributeName = ContentAttribute.Hits,
-                DisplayName = "点击量"
-            };
-            arraylist.Add(styleInfo);
-
-            if (tableStyle == ETableStyle.BackgroundContent)
-            {
-                if (publishmentSystemInfo.Additional.IsRelatedByTags)
+                new TableStyleInfo
                 {
-                    styleInfo = new TableStyleInfo
-                    {
-                        AttributeName = ContentAttribute.Tags,
-                        DisplayName = "标签"
-                    };
-                    arraylist.Add(styleInfo);
-                }
-
-                styleInfo = new TableStyleInfo
+                    AttributeName = ContentAttribute.Id,
+                    DisplayName = "编号"
+                },
+                new TableStyleInfo
                 {
-                    AttributeName = BackgroundContentAttribute.Star,
-                    DisplayName = "评分"
-                };
-                arraylist.Add(styleInfo);
-            }
-            else
-            {
-                styleInfo = new TableStyleInfo
+                    AttributeName = ContentAttribute.Title,
+                    DisplayName = "标题"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.LinkUrl,
+                    DisplayName = "外部链接"
+                },
+                new TableStyleInfo
                 {
                     AttributeName = ContentAttribute.AddDate,
                     DisplayName = "添加时间"
-                };
-                arraylist.Add(styleInfo);
-            }
-
-            return arraylist;
-        }
-
-        public static List<TableStyleInfo> GetColumnTableStyleInfoList(PublishmentSystemInfo publishmentSystemInfo, ETableStyle tableStyle, List<TableStyleInfo> tableStyleInfoArrayList)
-        {
-            var arraylist = new List<TableStyleInfo>();
-
-            if (tableStyleInfoArrayList != null)
-            {
-                foreach (var tableStyleInfo in tableStyleInfoArrayList)
+                },
+                new TableStyleInfo
                 {
-                    arraylist.Add(tableStyleInfo);
+                    AttributeName = ContentAttribute.LastEditDate,
+                    DisplayName = "修改时间"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.GroupNameCollection,
+                    DisplayName = "内容组"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.Tags,
+                    DisplayName = "标签"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.AddUserName,
+                    DisplayName = "添加人"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.LastEditUserName,
+                    DisplayName = "修改人"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.CheckUserName,
+                    DisplayName = "审核人"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.CheckCheckDate,
+                    DisplayName = "审核时间"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.CheckReasons,
+                    DisplayName = "审核原因"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.SourceId,
+                    DisplayName = "来源标识"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.Hits,
+                    DisplayName = "点击量"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.HitsByDay,
+                    DisplayName = "日点击"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.HitsByWeek,
+                    DisplayName = "周点击"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.HitsByMonth,
+                    DisplayName = "月点击"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.LastHitsDate,
+                    DisplayName = "最后点击时间"
+                }
+            };
+
+            if (tableStyleInfoList != null)
+            {
+                foreach (var tableStyleInfo in tableStyleInfoList)
+                {
+                    if (!list.Exists(t => t.AttributeName == tableStyleInfo.AttributeName))
+                    {
+                        list.Insert(2, tableStyleInfo);
+                    }
                 }
             }
 
-            var styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.AddUserName, 0, "添加者", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-            arraylist.Add(styleInfo);
-
-            styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.LastEditUserName, 0, "修改者", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-            arraylist.Add(styleInfo);
-
-            styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.LastEditDate, 0, "修改时间", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-            arraylist.Add(styleInfo);
-
-            styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.CheckUserName, 0, "审核者", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-            arraylist.Add(styleInfo);
-
-            styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.CheckCheckDate, 0, "审核时间", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-            arraylist.Add(styleInfo);
-
-            styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.CheckReasons, 0, "审核原因", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-            arraylist.Add(styleInfo);
-
-            styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.SourceId, 0, "来源标识", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-            arraylist.Add(styleInfo);
-
-            if (publishmentSystemInfo.Additional.IsRelatedByTags)
-            {
-                styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.Tags, 0, "标签", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-                arraylist.Add(styleInfo);
-            }
-
-            styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.ContentGroupNameCollection, 0, "所属内容组", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-            arraylist.Add(styleInfo);
-
-            styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.Hits, 0, "点击量", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-            arraylist.Add(styleInfo);
-
-            styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.HitsByDay, 0, "日点击", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-            arraylist.Add(styleInfo);
-
-            styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.HitsByWeek, 0, "周点击", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-            arraylist.Add(styleInfo);
-
-            styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.HitsByMonth, 0, "月点击", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-            arraylist.Add(styleInfo);
-
-            styleInfo = new TableStyleInfo(0, 0, string.Empty, ContentAttribute.LastHitsDate, 0, "最后点击时间", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-            arraylist.Add(styleInfo);
-
-            if (tableStyle == ETableStyle.BackgroundContent)
-            {
-                styleInfo = new TableStyleInfo(0, 0, string.Empty, BackgroundContentAttribute.Star, 0, "评分", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-                arraylist.Add(styleInfo);
-
-                styleInfo = new TableStyleInfo(0, 0, string.Empty, BackgroundContentAttribute.Digg, 0, "Digg", string.Empty, true, true, false, InputTypeUtils.GetValue(InputType.Text), string.Empty, false, string.Empty);
-                arraylist.Add(styleInfo);
-            }
-
-            return arraylist;
+            return list;
         }
 
-        public static bool AfterContentAdded(PublishmentSystemInfo publishmentSystemInfo, NodeInfo nodeInfo, int contentId, bool isCrossSiteTrans, bool isAutomatic)
+        public static List<TableStyleInfo> GetEditableTableStyleInfoList(List<TableStyleInfo> tableStyleInfoList)
+        {
+            var list = new List<TableStyleInfo>
+            {
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.Title,
+                    InputType = InputType.Text,
+                    DisplayName = "标题"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.LinkUrl,
+                    InputType = InputType.Text,
+                    DisplayName = "外部链接"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.AddDate,
+                    InputType = InputType.DateTime,
+                    DisplayName = "添加时间"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.GroupNameCollection,
+                    InputType = InputType.CheckBox,
+                    DisplayName = "内容组"
+                },
+                new TableStyleInfo
+                {
+                    AttributeName = ContentAttribute.Tags,
+                    InputType = InputType.CheckBox,
+                    DisplayName = "标签"
+                }
+            };
+
+            if (tableStyleInfoList != null)
+            {
+                list.InsertRange(2, tableStyleInfoList);
+            }
+
+            return list;
+        }
+
+        public static bool AfterContentAdded(SiteInfo siteInfo, ChannelInfo channelInfo, int contentId, bool isCrossSiteTrans, bool isAutomatic)
         {
             var isTranslated = false;
             if (isCrossSiteTrans && isAutomatic)
             {
-                var targetPublishmentSystemId = 0;
+                var targetSiteId = 0;
 
-                if (nodeInfo.Additional.TransType == ECrossSiteTransType.SpecifiedSite)
+                if (channelInfo.Additional.TransType == ECrossSiteTransType.SpecifiedSite)
                 {
-                    targetPublishmentSystemId = nodeInfo.Additional.TransPublishmentSystemId;
+                    targetSiteId = channelInfo.Additional.TransSiteId;
                 }
-                else if (nodeInfo.Additional.TransType == ECrossSiteTransType.SelfSite)
+                else if (channelInfo.Additional.TransType == ECrossSiteTransType.SelfSite)
                 {
-                    targetPublishmentSystemId = publishmentSystemInfo.PublishmentSystemId;
+                    targetSiteId = siteInfo.Id;
                 }
-                else if (nodeInfo.Additional.TransType == ECrossSiteTransType.ParentSite)
+                else if (channelInfo.Additional.TransType == ECrossSiteTransType.ParentSite)
                 {
-                    targetPublishmentSystemId = PublishmentSystemManager.GetParentPublishmentSystemId(publishmentSystemInfo.PublishmentSystemId);
+                    targetSiteId = SiteManager.GetParentSiteId(siteInfo.Id);
                 }
 
-                if (targetPublishmentSystemId > 0)
+                if (targetSiteId > 0)
                 {
-                    var targetPublishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(targetPublishmentSystemId);
-                    if (targetPublishmentSystemInfo != null)
+                    var targetSiteInfo = SiteManager.GetSiteInfo(targetSiteId);
+                    if (targetSiteInfo != null)
                     {
-                        var targetNodeIdArrayList = TranslateUtils.StringCollectionToIntList(nodeInfo.Additional.TransNodeIds);
-                        if (targetNodeIdArrayList.Count > 0)
+                        var targetChannelIdArrayList = TranslateUtils.StringCollectionToIntList(channelInfo.Additional.TransChannelIds);
+                        if (targetChannelIdArrayList.Count > 0)
                         {
-                            foreach (var targetNodeId in targetNodeIdArrayList)
+                            foreach (var targetChannelId in targetChannelIdArrayList)
                             {
-                                CrossSiteTransUtility.TransContentInfo(publishmentSystemInfo, nodeInfo, contentId, targetPublishmentSystemInfo, targetNodeId);
+                                CrossSiteTransUtility.TransContentInfo(siteInfo, channelInfo, contentId, targetSiteInfo, targetChannelId);
                                 isTranslated = true;
                             }
                         }
@@ -410,188 +421,155 @@ namespace SiteServer.CMS.Core
                 }
             }
 
-            var pluginChannels = PluginCache.GetChannelFeatures(nodeInfo);
-            foreach (var pluginId in pluginChannels.Keys)
+            foreach (var service in PluginManager.Services)
             {
-                var pluginChannel = pluginChannels[pluginId];
-
-                if (pluginChannel.OnContentAdded == null) continue;
-
                 try
                 {
-                    pluginChannel.OnContentAdded(publishmentSystemInfo.PublishmentSystemId, nodeInfo.NodeId, contentId);
+                    service.OnContentAddCompleted(new ContentEventArgs(siteInfo.Id, channelInfo.Id, contentId));
                 }
                 catch (Exception ex)
                 {
-                    LogUtils.AddPluginErrorLog(pluginId, ex, "OnContentAdded");
+                    LogUtils.AddErrorLog(service.PluginId, ex, nameof(service.OnContentAddCompleted));
                 }
             }
 
             return isTranslated;
         }
 
-        public static void Translate(PublishmentSystemInfo publishmentSystemInfo, int nodeId, int contentId, string translateCollection, ETranslateContentType translateType, string administratorName)
+        public static void Translate(SiteInfo siteInfo, int channelId, int contentId, string translateCollection, ETranslateContentType translateType, string administratorName)
         {
-            var translateArrayList = TranslateUtils.StringCollectionToStringList(translateCollection);
-            foreach (var translate in translateArrayList)
+            var translateList = TranslateUtils.StringCollectionToStringList(translateCollection);
+            foreach (var translate in translateList)
             {
                 if (string.IsNullOrEmpty(translate)) continue;
 
                 var translates = translate.Split('_');
                 if (translates.Length != 2) continue;
 
-                var targetPublishmentSystemId = TranslateUtils.ToInt(translates[0]);
-                var targetNodeId = TranslateUtils.ToInt(translates[1]);
+                var targetSiteId = TranslateUtils.ToInt(translates[0]);
+                var targetChannelId = TranslateUtils.ToInt(translates[1]);
 
-                Translate(administratorName, publishmentSystemInfo, nodeId, contentId, targetPublishmentSystemId, targetNodeId, translateType);
+                Translate(siteInfo, channelId, contentId, targetSiteId, targetChannelId, translateType);
             }
         }
 
-        public static void Translate(string administratorName, PublishmentSystemInfo publishmentSystemInfo, int nodeId, int contentId, int targetPublishmentSystemId, int targetNodeId, ETranslateContentType translateType)
+        public static void Translate(SiteInfo siteInfo, int channelId, int contentId, int targetSiteId, int targetChannelId, ETranslateContentType translateType)
         {
-            if (publishmentSystemInfo == null || nodeId <= 0 || contentId <= 0 || targetPublishmentSystemId <= 0 || targetNodeId <= 0) return;
+            if (siteInfo == null || channelId <= 0 || contentId <= 0 || targetSiteId <= 0 || targetChannelId <= 0) return;
 
-            var targetPublishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(targetPublishmentSystemId);
+            var targetSiteInfo = SiteManager.GetSiteInfo(targetSiteId);
 
-            var targetTableName = NodeManager.GetTableName(targetPublishmentSystemInfo, targetNodeId);
+            var targetTableName = ChannelManager.GetTableName(targetSiteInfo, targetChannelId);
 
-            var nodeInfo = NodeManager.GetNodeInfo(publishmentSystemInfo.PublishmentSystemId, nodeId);
-            var tableStyle = NodeManager.GetTableStyle(publishmentSystemInfo, nodeInfo);
-            var tableName = NodeManager.GetTableName(publishmentSystemInfo, nodeInfo);
+            var channelInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+            var tableName = ChannelManager.GetTableName(siteInfo, channelInfo);
 
-            var contentInfo = DataProvider.ContentDao.GetContentInfo(tableStyle, tableName, contentId);
+            var contentInfo = DataProvider.ContentDao.GetContentInfo(tableName, contentId);
 
             if (contentInfo == null) return;
 
             if (translateType == ETranslateContentType.Copy)
             {
-                FileUtility.MoveFileByContentInfo(publishmentSystemInfo, targetPublishmentSystemInfo, contentInfo);
+                FileUtility.MoveFileByContentInfo(siteInfo, targetSiteInfo, contentInfo);
 
-                contentInfo.PublishmentSystemId = targetPublishmentSystemId;
-                contentInfo.SourceId = contentInfo.NodeId;
-                contentInfo.NodeId = targetNodeId;
+                contentInfo.SiteId = targetSiteId;
+                contentInfo.SourceId = contentInfo.ChannelId;
+                contentInfo.ChannelId = targetChannelId;
                 contentInfo.Set(ContentAttribute.TranslateContentType, ETranslateContentType.Copy.ToString());
                 //contentInfo.Attributes.Add(ContentAttribute.TranslateContentType, ETranslateContentType.Copy.ToString());
-                var theContentId = DataProvider.ContentDao.Insert(targetTableName, targetPublishmentSystemInfo, contentInfo);
+                var theContentId = DataProvider.ContentDao.Insert(targetTableName, targetSiteInfo, contentInfo);
 
-                var pluginChannels = PluginCache.GetChannelFeatures(nodeInfo);
-                foreach (var pluginId in pluginChannels.Keys)
+                foreach (var service in PluginManager.Services)
                 {
-                    var pluginChannel = pluginChannels[pluginId];
-
-                    if (pluginChannel.OnContentTranslated == null) continue;
-
                     try
                     {
-                        pluginChannel.OnContentTranslated(publishmentSystemInfo.PublishmentSystemId, nodeInfo.NodeId, contentId, targetPublishmentSystemId, targetNodeId, theContentId);
+                        service.OnContentTranslateCompleted(new ContentTranslateEventArgs(siteInfo.Id, channelInfo.Id, contentId, targetSiteId, targetChannelId, theContentId));
                     }
                     catch (Exception ex)
                     {
-                        LogUtils.AddPluginErrorLog(pluginId, ex, "OnContentTranslated");
+                        LogUtils.AddErrorLog(service.PluginId, ex, nameof(service.OnContentTranslateCompleted));
                     }
                 }
 
-                if (contentInfo.IsChecked)
-                {
-                    CreateManager.CreateContentAndTrigger(targetPublishmentSystemInfo.PublishmentSystemId, contentInfo.NodeId, theContentId);
-                }
+                CreateManager.CreateContentAndTrigger(targetSiteInfo.Id, contentInfo.ChannelId, theContentId);
             }
             else if (translateType == ETranslateContentType.Cut)
             {
-                FileUtility.MoveFileByContentInfo(publishmentSystemInfo, targetPublishmentSystemInfo, contentInfo);
+                FileUtility.MoveFileByContentInfo(siteInfo, targetSiteInfo, contentInfo);
 
-                contentInfo.PublishmentSystemId = targetPublishmentSystemId;
-                contentInfo.SourceId = contentInfo.NodeId;
-                contentInfo.NodeId = targetNodeId;
+                contentInfo.SiteId = targetSiteId;
+                contentInfo.SourceId = contentInfo.ChannelId;
+                contentInfo.ChannelId = targetChannelId;
                 contentInfo.Set(ContentAttribute.TranslateContentType, ETranslateContentType.Cut.ToString());
                 //contentInfo.Attributes.Add(ContentAttribute.TranslateContentType, ETranslateContentType.Cut.ToString());
 
-                var newContentId = DataProvider.ContentDao.Insert(targetTableName, targetPublishmentSystemInfo, contentInfo);
-                DataProvider.ContentDao.DeleteContents(publishmentSystemInfo.PublishmentSystemId, tableName, TranslateUtils.ToIntList(contentId), nodeId);
+                var newContentId = DataProvider.ContentDao.Insert(targetTableName, targetSiteInfo, contentInfo);
+                DataProvider.ContentDao.DeleteContents(siteInfo.Id, tableName, TranslateUtils.ToIntList(contentId), channelId);
 
-                DataProvider.NodeDao.UpdateContentNum(publishmentSystemInfo, nodeId, true);
-                DataProvider.NodeDao.UpdateContentNum(targetPublishmentSystemInfo, targetNodeId, true);
+                DataProvider.ChannelDao.UpdateContentNum(siteInfo, channelId, true);
+                DataProvider.ChannelDao.UpdateContentNum(targetSiteInfo, targetChannelId, true);
 
-                var pluginChannels = PluginCache.GetChannelFeatures(nodeInfo);
-                foreach (var pluginId in pluginChannels.Keys)
+                foreach (var service in PluginManager.Services)
                 {
-                    var pluginChannel = pluginChannels[pluginId];
-
-                    if (pluginChannel.OnContentTranslated != null)
+                    try
                     {
-                        try
-                        {
-                            pluginChannel.OnContentTranslated(publishmentSystemInfo.PublishmentSystemId, nodeInfo.NodeId, contentId, targetPublishmentSystemId, targetNodeId, newContentId);
-                        }
-                        catch (Exception ex)
-                        {
-                            LogUtils.AddPluginErrorLog(pluginId, ex, "OnContentTranslated");
-                        }
+                        service.OnContentTranslateCompleted(new ContentTranslateEventArgs(siteInfo.Id, channelInfo.Id, contentId, targetSiteId, targetChannelId, newContentId));
                     }
-                    if (pluginChannel.OnContentDeleted != null)
+                    catch (Exception ex)
                     {
-                        try
-                        {
-                            pluginChannel.OnContentDeleted(publishmentSystemInfo.PublishmentSystemId, nodeInfo.NodeId, contentId);
-                        }
-                        catch (Exception ex)
-                        {
-                            LogUtils.AddPluginErrorLog(pluginId, ex, "OnContentDeleted");
-                        }
+                        LogUtils.AddErrorLog(service.PluginId, ex, nameof(service.OnContentTranslateCompleted));
+                    }
+
+                    try
+                    {
+                        service.OnContentDeleteCompleted(new ContentEventArgs(siteInfo.Id, channelInfo.Id, contentId));
+                    }
+                    catch (Exception ex)
+                    {
+                        LogUtils.AddErrorLog(service.PluginId, ex, nameof(service.OnContentDeleteCompleted));
                     }
                 }
 
-                if (contentInfo.IsChecked)
-                {
-                    CreateManager.CreateContentAndTrigger(targetPublishmentSystemInfo.PublishmentSystemId, contentInfo.NodeId, newContentId);
-                }
+                CreateManager.CreateContentAndTrigger(targetSiteInfo.Id, contentInfo.ChannelId, newContentId);
             }
             else if (translateType == ETranslateContentType.Reference)
             {
                 if (contentInfo.ReferenceId != 0) return;
 
-                contentInfo.PublishmentSystemId = targetPublishmentSystemId;
-                contentInfo.SourceId = contentInfo.NodeId;
-                contentInfo.NodeId = targetNodeId;
+                contentInfo.SiteId = targetSiteId;
+                contentInfo.SourceId = contentInfo.ChannelId;
+                contentInfo.ChannelId = targetChannelId;
                 contentInfo.ReferenceId = contentId;
                 contentInfo.Set(ContentAttribute.TranslateContentType, ETranslateContentType.Reference.ToString());
                 //contentInfo.Attributes.Add(ContentAttribute.TranslateContentType, ETranslateContentType.Reference.ToString());
-                DataProvider.ContentDao.Insert(targetTableName, targetPublishmentSystemInfo, contentInfo);
+                DataProvider.ContentDao.Insert(targetTableName, targetSiteInfo, contentInfo);
             }
             else if (translateType == ETranslateContentType.ReferenceContent)
             {
                 if (contentInfo.ReferenceId != 0) return;
 
-                FileUtility.MoveFileByContentInfo(publishmentSystemInfo, targetPublishmentSystemInfo, contentInfo);
+                FileUtility.MoveFileByContentInfo(siteInfo, targetSiteInfo, contentInfo);
 
-                contentInfo.PublishmentSystemId = targetPublishmentSystemId;
-                contentInfo.SourceId = contentInfo.NodeId;
-                contentInfo.NodeId = targetNodeId;
+                contentInfo.SiteId = targetSiteId;
+                contentInfo.SourceId = contentInfo.ChannelId;
+                contentInfo.ChannelId = targetChannelId;
                 contentInfo.ReferenceId = contentId;
                 contentInfo.Set(ContentAttribute.TranslateContentType, ETranslateContentType.ReferenceContent.ToString());
-                var theContentId = DataProvider.ContentDao.Insert(targetTableName, targetPublishmentSystemInfo, contentInfo);
+                var theContentId = DataProvider.ContentDao.Insert(targetTableName, targetSiteInfo, contentInfo);
 
-                var pluginChannels = PluginCache.GetChannelFeatures(nodeInfo);
-                foreach (var pluginId in pluginChannels.Keys)
+                foreach (var service in PluginManager.Services)
                 {
-                    var pluginChannel = pluginChannels[pluginId];
-
-                    if (pluginChannel.OnContentTranslated == null) continue;
-
                     try
                     {
-                        pluginChannel.OnContentTranslated(publishmentSystemInfo.PublishmentSystemId, nodeInfo.NodeId, contentId, targetPublishmentSystemId, targetNodeId, theContentId);
+                        service.OnContentTranslateCompleted(new ContentTranslateEventArgs(siteInfo.Id, channelInfo.Id, contentId, targetSiteId, targetChannelId, theContentId));
                     }
                     catch (Exception ex)
                     {
-                        LogUtils.AddPluginErrorLog(pluginId, ex, "OnContentTranslated");
+                        LogUtils.AddErrorLog(service.PluginId, ex, nameof(service.OnContentTranslateCompleted));
                     }
                 }
 
-                if (contentInfo.IsChecked)
-                {
-                    CreateManager.CreateContentAndTrigger(targetPublishmentSystemInfo.PublishmentSystemId, contentInfo.NodeId, theContentId);
-                }
+                CreateManager.CreateContentAndTrigger(targetSiteInfo.Id, contentInfo.ChannelId, theContentId);
             }
         }
 
@@ -603,55 +581,199 @@ namespace SiteServer.CMS.Core
             {
                 foreach (var ids in TranslateUtils.StringCollectionToStringList(queryString["IDsCollection"]))
                 {
-                    var nodeId = TranslateUtils.ToInt(ids.Split('_')[0]);
+                    var channelId = TranslateUtils.ToIntWithNagetive(ids.Split('_')[0]);
                     var contentId = TranslateUtils.ToInt(ids.Split('_')[1]);
                     var contentIdList = new List<int>();
-                    if (dic.ContainsKey(nodeId))
+                    if (dic.ContainsKey(channelId))
                     {
-                        contentIdList = dic[nodeId];
+                        contentIdList = dic[channelId];
                     }
                     if (!contentIdList.Contains(contentId))
                     {
                         contentIdList.Add(contentId);
                     }
 
-                    dic[nodeId] = contentIdList;
+                    dic[channelId] = contentIdList;
                 }
             }
             else
             {
-                var nodeId = TranslateUtils.ToInt(queryString["NodeID"]);
-                dic[nodeId] = TranslateUtils.StringCollectionToIntList(queryString["ContentIDCollection"]);
+                var channelId = TranslateUtils.ToInt(queryString["channelId"]);
+                dic[channelId] = TranslateUtils.StringCollectionToIntList(queryString["contentIdCollection"]);
             }
 
             return dic;
         }
 
-        public static Dictionary<string, object> ContentToDictionary(ContentInfo contentInfo, ETableStyle tableStyle, string tableName, List<int> relatedIdentities)
+        public static string GetTitleHtml(string titleFormat, string titleAjaxUrl)
         {
-            var dict = TranslateUtils.ObjectToDictionary(contentInfo);
-            dict.Remove("Attributes");
-
-            var styleInfoList = TableStyleManager.GetTableStyleInfoList(tableStyle, tableName, relatedIdentities);
-            foreach (var styleInfo in styleInfoList)
+            var builder = new StringBuilder();
+            var formatStrong = false;
+            var formatEm = false;
+            var formatU = false;
+            var formatColor = string.Empty;
+            if (titleFormat != null)
             {
-                if (!styleInfo.IsVisible) continue;
-                if (!dict.ContainsKey(styleInfo.AttributeName))
-                {
-                    dict[styleInfo.AttributeName] = contentInfo.GetString(styleInfo.AttributeName);
-                }
-                if (InputTypeUtils.Equals(styleInfo.InputType, InputType.Image))
-                {
-                    var extendName = ContentAttribute.GetExtendAttributeName(styleInfo.AttributeName);
-                    var extendValue = contentInfo.GetString(extendName);
-                    if (!string.IsNullOrEmpty(extendValue))
-                    {
-                        dict[extendName] = extendValue;
-                    }
-                }
+                SetTitleFormatControls(titleFormat, out formatStrong, out formatEm, out formatU, out formatColor);
             }
 
-            return dict;
+            builder.Append(
+                $@"<a class=""btn"" href=""javascript:;"" onclick=""$('#div_{ContentAttribute.Title}').toggle();return false;""><i class=""icon-text-height""></i></a>
+<script type=""text/javascript"">
+function {ContentAttribute.Title}_strong(e){{
+var e = $(e);
+if ($('#{ContentAttribute.Title}_formatStrong').val() == 'true'){{
+$('#{ContentAttribute.Title}_formatStrong').val('false');
+e.removeClass('btn-success');
+}}else{{
+$('#{ContentAttribute.Title}_formatStrong').val('true');
+e.addClass('btn-success');
+}}
+}}
+function {ContentAttribute.Title}_em(e){{
+var e = $(e);
+if ($('#{ContentAttribute.Title}_formatEM').val() == 'true'){{
+$('#{ContentAttribute.Title}_formatEM').val('false');
+e.removeClass('btn-success');
+}}else{{
+$('#{ContentAttribute.Title}_formatEM').val('true');
+e.addClass('btn-success');
+}}
+}}
+function {ContentAttribute.Title}_u(e){{
+var e = $(e);
+if ($('#{ContentAttribute.Title}_formatU').val() == 'true'){{
+$('#{ContentAttribute.Title}_formatU').val('false');
+e.removeClass('btn-success');
+}}else{{
+$('#{ContentAttribute.Title}_formatU').val('true');
+e.addClass('btn-success');
+}}
+}}
+function {ContentAttribute.Title}_color(){{
+if ($('#{ContentAttribute.Title}_formatColor').val()){{
+$('#{ContentAttribute.Title}_colorBtn').css('color', $('#{ContentAttribute.Title}_formatColor').val());
+$('#{ContentAttribute.Title}_colorBtn').addClass('btn-success');
+}}else{{
+$('#{ContentAttribute.Title}_colorBtn').css('color', '');
+$('#{ContentAttribute.Title}_colorBtn').removeClass('btn-success');
+}}
+$('#{ContentAttribute.Title}_colorContainer').hide();
+}}
+</script>
+");
+
+            builder.Append($@"
+<div class=""btn-group btn-group-sm"" style=""float:left;"">
+    <button class=""btn{(formatStrong ? @" btn-success" : string.Empty)}"" style=""font-weight:bold"" onclick=""{ContentAttribute.Title}_strong(this);return false;"">粗体</button>
+    <button class=""btn{(formatEm ? " btn-success" : string.Empty)}"" style=""font-style:italic"" onclick=""{ContentAttribute.Title}_em(this);return false;"">斜体</button>
+    <button class=""btn{(formatU ? " btn-success" : string.Empty)}"" style=""text-decoration:underline"" onclick=""{ContentAttribute.Title}_u(this);return false;"">下划线</button>
+    <button class=""btn{(!string.IsNullOrEmpty(formatColor) ? " btn-success" : string.Empty)}"" id=""{ContentAttribute.Title}_colorBtn"" onclick=""$('#{ContentAttribute.Title}_colorContainer').toggle();return false;"">颜色</button>
+</div>
+<div id=""{ContentAttribute.Title}_colorContainer"" class=""input-append"" style=""float:left;display:none"">
+    <input id=""{ContentAttribute.Title}_formatColor"" name=""{ContentAttribute.Title}_formatColor"" class=""input-mini color {{required:false}}"" type=""text"" value=""{formatColor}"" placeholder=""颜色值"">
+    <button class=""btn"" type=""button"" onclick=""Title_color();return false;"">确定</button>
+</div>
+<input id=""{ContentAttribute.Title}_formatStrong"" name=""{ContentAttribute.Title}_formatStrong"" type=""hidden"" value=""{formatStrong.ToString().ToLower()}"" />
+<input id=""{ContentAttribute.Title}_formatEM"" name=""{ContentAttribute.Title}_formatEM"" type=""hidden"" value=""{formatEm.ToString().ToLower()}"" />
+<input id=""{ContentAttribute.Title}_formatU"" name=""{ContentAttribute.Title}_formatU"" type=""hidden"" value=""{formatU.ToString().ToLower()}"" />
+");
+
+            builder.Append(@"
+<script type=""text/javascript"">
+function getTitles(title){
+	$.get('[url]&title=' + encodeURIComponent(title) + '&channelID=' + $('#channelID').val() + '&r=' + Math.random(), function(data) {
+		if(data !=''){
+			var arr = data.split('|');
+			var temp='';
+			for(i=0;i<arr.length;i++)
+			{
+				temp += '<li><a>'+arr[i].replace(title,'<b>' + title + '</b>') + '</a></li>';
+			}
+			var myli='<ul>'+temp+'</ul>';
+			$('#titleTips').html(myli);
+			$('#titleTips').show();
+		}else{
+            $('#titleTips').hide();
+        }
+		$('#titleTips li').click(function () {
+			$('#Title').val($(this).text());
+			$('#titleTips').hide();
+		})
+	});	
+}
+$(document).ready(function () {
+$('#Title').keyup(function (e) {
+    if (e.keyCode != 40 && e.keyCode != 38) {
+        var title = $('#Title').val();
+        if (title != ''){
+            window.setTimeout(""getTitles('"" + title + ""');"", 200);
+        }else{
+            $('#titleTips').hide();
+        }
+    }
+}).blur(function () {
+	window.setTimeout(""$('#titleTips').hide();"", 200);
+})});
+</script>
+<div id=""titleTips"" class=""inputTips""></div>");
+            builder.Replace("[url]", titleAjaxUrl);
+
+            return builder.ToString();
+        }
+
+        public static string GetTagsHtml(string tagsAjaxUrl)
+        {
+            const string tagScript = @"
+<script type=""text/javascript"">
+function getTags(tag){
+	$.get('[url]&tag=' + encodeURIComponent(tag) + '&r=' + Math.random(), function(data) {
+		if(data !=''){
+			var arr = data.split('|');
+			var temp='';
+			for(i=0;i<arr.length;i++)
+			{
+				temp += '<li><a>'+arr[i].replace(tag,'<b>' + tag + '</b>') + '</a></li>';
+			}
+			var myli='<ul>'+temp+'</ul>';
+			$('#tagTips').html(myli);
+			$('#tagTips').show();
+		}else{
+            $('#tagTips').hide();
+        }
+		$('#tagTips li').click(function () {
+			var tag = $('#TbTags').val();
+			var i = tag.lastIndexOf(' ');
+			if (i > 0)
+			{
+				tag = tag.substring(0, i) + ' ' + $(this).text();
+			}else{
+				tag = $(this).text();	
+			}
+			$('#TbTags').val(tag);
+			$('#tagTips').hide();
+		})
+	});	
+}
+$(document).ready(function () {
+$('#TbTags').keyup(function (e) {
+    if (e.keyCode != 40 && e.keyCode != 38) {
+        var tag = $('#TbTags').val();
+		var i = tag.lastIndexOf(' ');
+		if (i > 0){ tag = tag.substring(i + 1);}
+        if (tag != '' && tag != ' '){
+            window.setTimeout(""getTags('"" + tag + ""');"", 200);
+        }else{
+            $('#tagTips').hide();
+        }
+    }
+}).blur(function () {
+	window.setTimeout(""$('#tagTips').hide();"", 200);
+})});
+</script>
+<div id=""tagTips"" class=""inputTips""></div>
+";
+            return tagScript.Replace("[url]", tagsAjaxUrl);
         }
     }
 }

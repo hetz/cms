@@ -1,21 +1,17 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Data;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.AuxiliaryTable;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
 using SiteServer.BackgroundPages.Core;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Core.Permissions;
-using SiteServer.CMS.Core.Security;
-using SiteServer.CMS.Core.User;
 using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.Plugin;
-using SiteServer.Plugin.Features;
+using SiteServer.Plugin;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -23,41 +19,46 @@ namespace SiteServer.BackgroundPages.Cms
     {
         public DropDownList DdlChannelId;
         public DropDownList DdlState;
-        public CheckBox CbIsDuplicate;
         public DropDownList DdlSearchType;
         public TextBox TbKeyword;
         public DateTimeTextBox TbDateFrom;
         public DateTimeTextBox TbDateTo;
 
         public Repeater RptContents;
-        public SqlPager SpContents;
-        public Literal LtlColumnHeadRows;
-        public Literal LtlCommandHeadRows;
+        public Pager PgContents;
+        public Literal LtlColumnsHead;
 
-        public Button BtnAddContent;
         public Button BtnAddToGroup;
         public Button BtnDelete;
         public Button BtnTranslate;
         public Button BtnSelect;
         public PlaceHolder PhCheck;
         public Button BtnCheck;
+        public PlaceHolder PhTrash;
+        public Button BtnRestore;
+        public Button BtnRestoreAll;
+        public Button BtnDeleteAll;
 
+        private bool _isCheckOnly;
+        private bool _isTrashOnly;
         private bool _isWritingOnly;
-        private bool _isSelfOnly;
+        private bool _isAdminOnly;
         private int _channelId;
-        private NodeInfo _nodeInfo;
-        private ETableStyle _tableStyle;
-        private StringCollection _attributesOfDisplay;
+        private ChannelInfo _channelInfo;
         private List<int> _relatedIdentities;
-        private List<TableStyleInfo> _tableStyleInfoList;
-        private Dictionary<string, IChannel> _pluginChannels;
-        private readonly Hashtable _valueHashtable = new Hashtable();
+        private List<TableStyleInfo> _styleInfoList;
+        private StringCollection _attributesOfDisplay;
+        private List<TableStyleInfo> _allStyleInfoList;
+        private Dictionary<string, List<Plugin.Menu>> _pluginMenus;
+        private Dictionary<string, Dictionary<string, Func<IContentContext, string>>> _pluginColumns;
+        private bool _isEdit;
+        private readonly Dictionary<string, string> _nameValueCacheDict = new Dictionary<string, string>();
 
-        public static string GetRedirectUrl(int publishmentSystemId)
+        public static string GetRedirectUrlCheck(int siteId)
         {
-            return PageUtils.GetCmsUrl(nameof(PageContentSearch), new NameValueCollection
+            return PageUtils.GetCmsUrl(siteId, nameof(PageContentSearch), new NameValueCollection
             {
-                {"publishmentSystemId", publishmentSystemId.ToString()}
+                {"isCheckOnly", true.ToString() }
             });
         }
 
@@ -65,122 +66,182 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            var permissions = PermissionsManager.GetPermissions(Body.AdminName);
+            PageUtils.CheckRequestParameter("siteId");
+            _channelId = AuthRequest.IsQueryExists("channelId") ? AuthRequest.GetQueryInt("channelId") : SiteId;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemId");
-            _channelId = Body.IsQueryExists("ChannelId") ? Body.GetQueryInt("ChannelId") : PublishmentSystemId;
+            _isCheckOnly = AuthRequest.GetQueryBool("isCheckOnly");
+            _isTrashOnly = AuthRequest.GetQueryBool("isTrashOnly");
+            _isWritingOnly = AuthRequest.GetQueryBool("isWritingOnly");
+            _isAdminOnly = AuthRequest.GetQueryBool("isAdminOnly");
 
-            _isWritingOnly = Body.GetQueryBool("isWritingOnly");
+            _channelInfo = ChannelManager.GetChannelInfo(SiteId, _channelId);
+            var tableName = ChannelManager.GetTableName(SiteInfo, _channelInfo);
+            _relatedIdentities = RelatedIdentities.GetChannelRelatedIdentities(SiteId, _channelId);
+            _styleInfoList = TableStyleManager.GetTableStyleInfoList(tableName, _relatedIdentities);
+            _attributesOfDisplay = TranslateUtils.StringCollectionToStringCollection(ChannelManager.GetContentAttributesOfDisplay(SiteId, _channelId));
+            _allStyleInfoList = ContentUtility.GetAllTableStyleInfoList(_styleInfoList);
+            _pluginMenus = PluginContentManager.GetContentMenus(_channelInfo);
+            _pluginColumns = PluginContentManager.GetContentColumns(_channelInfo);
+            _isEdit = TextUtility.IsEdit(SiteInfo, _channelId, AuthRequest.AdminPermissions);
 
-            var administratorName = string.Empty;
-            _isSelfOnly = Body.GetQueryBool("isSelfOnly");
-            if (!_isSelfOnly)
+            var state = AuthRequest.IsQueryExists("state") ? AuthRequest.GetQueryInt("state") : CheckManager.LevelInt.All;
+            var searchType = AuthRequest.IsQueryExists("searchType") ? AuthRequest.GetQueryString("searchType") : ContentAttribute.Title;
+            var dateFrom = AuthRequest.IsQueryExists("dateFrom") ? AuthRequest.GetQueryString("dateFrom") : string.Empty;
+            var dateTo = AuthRequest.IsQueryExists("dateTo") ? AuthRequest.GetQueryString("dateTo") : string.Empty;
+            var keyword = AuthRequest.IsQueryExists("keyword") ? AuthRequest.GetQueryString("keyword") : string.Empty;
+
+            var checkedLevel = 5;
+            var isChecked = true;
+            foreach (var owningChannelId in AuthRequest.AdminPermissions.OwningChannelIdList)
             {
-                administratorName = AdminUtility.IsViewContentOnlySelf(Body.AdminName, PublishmentSystemId, _channelId) ? Body.AdminName : string.Empty;
+                int checkedLevelByChannelId;
+                var isCheckedByChannelId = CheckManager.GetUserCheckLevel(AuthRequest.AdminPermissions, SiteInfo, owningChannelId, out checkedLevelByChannelId);
+                if (checkedLevel > checkedLevelByChannelId)
+                {
+                    checkedLevel = checkedLevelByChannelId;
+                }
+                if (!isCheckedByChannelId)
+                {
+                    isChecked = false;
+                }
             }
 
-            _nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, _channelId);
-            _tableStyle = NodeManager.GetTableStyle(PublishmentSystemInfo, _nodeInfo);
-            var tableName = NodeManager.GetTableName(PublishmentSystemInfo, _nodeInfo);
-            _attributesOfDisplay = TranslateUtils.StringCollectionToStringCollection(NodeManager.GetContentAttributesOfDisplay(PublishmentSystemId, _channelId));
-            _relatedIdentities = RelatedIdentities.GetChannelRelatedIdentities(PublishmentSystemId, _channelId);
-            _tableStyleInfoList = TableStyleManager.GetTableStyleInfoList(_tableStyle, tableName, _relatedIdentities);
-            _pluginChannels = PluginCache.GetChannelFeatures(_nodeInfo);
-
-            var stateType = Body.IsQueryExists("state") ? ETriStateUtils.GetEnumType(Body.GetQueryString("state")) : ETriState.All;
-            var searchType = Body.IsQueryExists("searchType") ? Body.GetQueryString("searchType") : ContentAttribute.Title;
-            var dateFrom = Body.IsQueryExists("dateFrom") ? Body.GetQueryString("dateFrom") : DateUtils.GetDateString(DateTime.Now.AddMonths(-1));
-            var dateTo = Body.IsQueryExists("dateTo") ? Body.GetQueryString("dateTo") : DateUtils.GetDateString(DateTime.Now);
-            var isDuplicate = Body.IsQueryExists("isDuplicate") && Body.GetQueryBool("isDuplicate");
-            var keyword = Body.IsQueryExists("keyword") ? Body.GetQueryString("keyword") : string.Empty;
-
-            SpContents.ControlToPaginate = RptContents;
-            SpContents.SelectCommand = DataProvider.ContentDao.GetSelectCommend(_tableStyle, tableName, PublishmentSystemId, _channelId, permissions.IsSystemAdministrator, ProductPermissionsManager.Current.OwningNodeIdList, searchType, keyword, dateFrom, dateTo, true, stateType, !isDuplicate, false, _isWritingOnly, administratorName);
-            SpContents.ItemsPerPage = PublishmentSystemInfo.Additional.PageSize;
-            SpContents.SortField = ContentAttribute.Id;
-            SpContents.SortMode = SortMode.DESC;
-            SpContents.OrderByString = ETaxisTypeUtils.GetOrderByString(_tableStyle, ETaxisType.OrderByIdDesc);
             RptContents.ItemDataBound += RptContents_ItemDataBound;
 
-            if (!IsPostBack)
+            var allLowerAttributeNameList = TableMetadataManager.GetAllLowerAttributeNameListExcludeText(tableName);
+            var whereString = DataProvider.ContentDao.GetPagerWhereSqlString(SiteInfo, _channelInfo,
+                searchType, keyword,
+                dateFrom, dateTo, state, _isCheckOnly, false, _isTrashOnly, _isWritingOnly, _isAdminOnly,
+                AuthRequest.AdminPermissions,
+                allLowerAttributeNameList);
+
+            PgContents.Param = new PagerParam
             {
-                var pageTitle = _isSelfOnly ? "我的内容" : "内容搜索";
-                if (_isWritingOnly)
+                ControlToPaginate = RptContents,
+                TableName = tableName,
+                PageSize = SiteInfo.Additional.PageSize,
+                Page = AuthRequest.GetQueryInt(Pager.QueryNamePage, 1),
+                OrderSqlString = ETaxisTypeUtils.GetContentOrderByString(ETaxisType.OrderByIdDesc),
+                ReturnColumnNames = TranslateUtils.ObjectCollectionToString(allLowerAttributeNameList),
+                WhereSqlString = whereString,
+                TotalCount = DataProvider.DatabaseDao.GetPageTotalCount(tableName, whereString)
+            };
+
+            if (IsPostBack) return;
+
+            if (_isTrashOnly)
+            {
+                if (AuthRequest.IsQueryExists("IsDeleteAll"))
                 {
-                    pageTitle = "投稿内容";
+                    DataProvider.ContentDao.DeleteContentsByTrash(SiteId, tableName);
+                    AuthRequest.AddSiteLog(SiteId, "清空回收站");
+                    SuccessMessage("成功清空回收站!");
                 }
-                BreadCrumb(AppManager.Cms.LeftMenu.IdContent, pageTitle, string.Empty);
-
-                NodeManager.AddListItems(DdlChannelId.Items, PublishmentSystemInfo, true, true, Body.AdminName);
-
-                DdlSearchType.Items.Add(new ListItem("标题", ContentAttribute.Title));
-                if (_tableStyleInfoList != null)
+                else if (AuthRequest.IsQueryExists("IsRestore"))
                 {
-                    foreach (var styleInfo in _tableStyleInfoList)
+                    var idsDictionary = ContentUtility.GetIDsDictionary(Request.QueryString);
+                    foreach (var channelId in idsDictionary.Keys)
                     {
-                        if (styleInfo.IsVisible && styleInfo.AttributeName != ContentAttribute.AddDate)
-                        {
-                            var listitem = new ListItem(styleInfo.DisplayName, styleInfo.AttributeName);
-                            DdlSearchType.Items.Add(listitem);
-                        }
+                        var contentIdArrayList = idsDictionary[channelId];
+                        DataProvider.ContentDao.TrashContents(SiteId, ChannelManager.GetTableName(SiteInfo, channelId), contentIdArrayList);
                     }
+                    AuthRequest.AddSiteLog(SiteId, "从回收站还原内容");
+                    SuccessMessage("成功还原内容!");
                 }
-                DdlSearchType.Items.Add(new ListItem("内容ID", ContentAttribute.Id));
-                DdlSearchType.Items.Add(new ListItem("添加者", ContentAttribute.AddUserName));
-                DdlSearchType.Items.Add(new ListItem("最后修改者", ContentAttribute.LastEditUserName));
-
-                ETriStateUtils.AddListItems(DdlState, "全部", "已审核", "待审核");
-
-                if (PublishmentSystemId != _channelId)
+                else if (AuthRequest.IsQueryExists("IsRestoreAll"))
                 {
-                    ControlUtils.SelectListItems(DdlChannelId, _channelId.ToString());
+                    DataProvider.ContentDao.RestoreContentsByTrash(SiteId, tableName);
+                    AuthRequest.AddSiteLog(SiteId, "从回收站还原所有内容");
+                    SuccessMessage("成功还原所有内容!");
                 }
-                ControlUtils.SelectListItems(DdlState, Body.GetQueryString("State"));
-                CbIsDuplicate.Checked = isDuplicate;
-                ControlUtils.SelectListItems(DdlSearchType, searchType);
-                TbKeyword.Text = keyword;
-                TbDateFrom.Text = dateFrom;
-                TbDateTo.Text = dateTo;
+            }
 
-                SpContents.DataBind();
+            ChannelManager.AddListItems(DdlChannelId.Items, SiteInfo, true, true, AuthRequest.AdminPermissions);
 
-                var showPopWinString = ModalAddToGroup.GetOpenWindowStringToContentForMultiChannels(PublishmentSystemId);
-                BtnAddToGroup.Attributes.Add("onclick", showPopWinString);
+            CheckManager.LoadContentLevelToList(DdlState, SiteInfo, _isCheckOnly, isChecked, checkedLevel);
+            ControlUtils.SelectSingleItem(DdlState, state.ToString());
 
-                showPopWinString = ModalSelectColumns.GetOpenWindowStringToContent(PublishmentSystemId, _channelId, true);
-                BtnSelect.Attributes.Add("onclick", showPopWinString);
+            foreach (var styleInfo in _allStyleInfoList)
+            {
+                if (styleInfo.InputType == InputType.TextEditor) continue;
 
-                if (AdminUtility.HasChannelPermissions(Body.AdminName, PublishmentSystemId, PublishmentSystemId, AppManager.Permissions.Channel.ContentCheck))
+                var listitem = new ListItem(styleInfo.DisplayName, styleInfo.AttributeName);
+                DdlSearchType.Items.Add(listitem);
+            }
+
+            //ETriStateUtils.AddListItems(DdlState, "全部", "已审核", "待审核");
+
+            if (SiteId != _channelId)
+            {
+                ControlUtils.SelectSingleItem(DdlChannelId, _channelId.ToString());
+            }
+            //ControlUtils.SelectSingleItem(DdlState, AuthRequest.GetQueryString("State"));
+            ControlUtils.SelectSingleItem(DdlSearchType, searchType);
+            TbKeyword.Text = keyword;
+            TbDateFrom.Text = dateFrom;
+            TbDateTo.Text = dateTo;
+
+            PgContents.DataBind();
+
+            LtlColumnsHead.Text += TextUtility.GetColumnsHeadHtml(_styleInfoList, _pluginColumns, _attributesOfDisplay);
+            
+
+            BtnSelect.Attributes.Add("onclick", ModalSelectColumns.GetOpenWindowString(SiteId, _channelId));
+
+            if (_isTrashOnly)
+            {
+                LtlColumnsHead.Text += @"<th class=""text-center text-nowrap"" width=""150"">删除时间</th>";
+                BtnAddToGroup.Visible = BtnTranslate.Visible = BtnCheck.Visible = false;
+                PhTrash.Visible = true;
+                if (!HasChannelPermissions(_channelId, ConfigManager.ChannelPermissions.ContentDelete))
                 {
-                    showPopWinString = ModalContentCheck.GetOpenWindowStringForMultiChannels(PublishmentSystemId, PageUrl);
-                    BtnCheck.Attributes.Add("onclick", showPopWinString);
+                    BtnDelete.Visible = false;
+                    BtnDeleteAll.Visible = false;
+                }
+                else
+                {
+                    BtnDelete.Attributes.Add("onclick", PageContentDelete.GetRedirectClickStringForMultiChannels(SiteId, true, PageUrl));
+                    BtnDeleteAll.Attributes.Add("onclick", PageUtils.GetRedirectStringWithConfirm(PageUtils.AddQueryString(PageUrl, "IsDeleteAll", "True"), "确实要清空回收站吗?"));
+                }
+                BtnRestore.Attributes.Add("onclick", PageUtils.GetRedirectStringWithCheckBoxValue(PageUtils.AddQueryString(PageUrl, "IsRestore", "True"), "IDsCollection", "IDsCollection", "请选择需要还原的内容！"));
+                BtnRestoreAll.Attributes.Add("onclick", PageUtils.GetRedirectStringWithConfirm(PageUtils.AddQueryString(PageUrl, "IsRestoreAll", "True"), "确实要还原所有内容吗?"));
+            }
+            else
+            {
+                LtlColumnsHead.Text += @"<th class=""text-center text-nowrap"" width=""100"">操作</th>";
+
+                BtnAddToGroup.Attributes.Add("onclick", ModalAddToGroup.GetOpenWindowStringToContentForMultiChannels(SiteId));
+
+                if (HasChannelPermissions(SiteId, ConfigManager.ChannelPermissions.ContentCheck))
+                {
+                    BtnCheck.Attributes.Add("onclick", ModalContentCheck.GetOpenWindowStringForMultiChannels(SiteId, PageUrl));
+                    if (_isCheckOnly)
+                    {
+                        BtnCheck.CssClass = "btn m-r-5 btn-success";
+                    }
                 }
                 else
                 {
                     PhCheck.Visible = false;
                 }
 
-                LtlColumnHeadRows.Text = TextUtility.GetColumnHeadRowsHtml(_tableStyleInfoList, _attributesOfDisplay, _tableStyle, PublishmentSystemInfo);
-                LtlCommandHeadRows.Text = TextUtility.GetCommandHeadRowsHtml(Body.AdminName, PublishmentSystemInfo, _nodeInfo, _pluginChannels);
-            }
+                if (!HasChannelPermissions(_channelId, ConfigManager.ChannelPermissions.ContentTranslate))
+                {
+                    BtnTranslate.Visible = false;
+                }
+                else
+                {
+                    BtnTranslate.Attributes.Add("onclick", PageContentTranslate.GetRedirectClickStringForMultiChannels(SiteId, PageUrl));
+                }
 
-            if (!HasChannelPermissions(_channelId, AppManager.Permissions.Channel.ContentAdd)) BtnAddContent.Visible = false;
-            if (!HasChannelPermissions(_channelId, AppManager.Permissions.Channel.ContentTranslate))
-            {
-                BtnTranslate.Visible = false;
-            }
-            else
-            {
-                BtnTranslate.Attributes.Add("onclick", PageContentTranslate.GetRedirectClickStringForMultiChannels(PublishmentSystemId, PageUrl));
-            }
-
-            if (!HasChannelPermissions(_channelId, AppManager.Permissions.Channel.ContentDelete))
-            {
-                BtnDelete.Visible = false;
-            }
-            else
-            {
-                BtnDelete.Attributes.Add("onclick", PageContentDelete.GetRedirectClickStringForMultiChannels(PublishmentSystemId, false, PageUrl));
+                if (!HasChannelPermissions(_channelId, ConfigManager.ChannelPermissions.ContentDelete))
+                {
+                    BtnDelete.Visible = false;
+                }
+                else
+                {
+                    BtnDelete.Attributes.Add("onclick", PageContentDelete.GetRedirectClickStringForMultiChannels(SiteId, false, PageUrl));
+                }
             }
         }
 
@@ -188,66 +249,42 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-            var ltlItemTitle = e.Item.FindControl("ltlItemTitle") as Literal;
-            var ltlChannel = e.Item.FindControl("ltlChannel") as Literal;
-            var ltlColumnItemRows = e.Item.FindControl("ltlColumnItemRows") as Literal;
-            var ltlItemStatus = e.Item.FindControl("ltlItemStatus") as Literal;
-            var ltlItemEditUrl = e.Item.FindControl("ltlItemEditUrl") as Literal;
-            var ltlCommandItemRows = e.Item.FindControl("ltlCommandItemRows") as Literal;
-            var ltlSelect = e.Item.FindControl("ltlSelect") as Literal;
+            var contentInfo = new ContentInfo((IDataRecord)e.Item.DataItem);
 
-            var contentInfo = new ContentInfo(e.Item.DataItem);
-            var nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, contentInfo.NodeId);
+            var ltlTitle = (Literal)e.Item.FindControl("ltlTitle");
+            var ltlChannel = (Literal)e.Item.FindControl("ltlChannel");
+            var ltlColumns = (Literal)e.Item.FindControl("ltlColumns");
+            var ltlStatus = (Literal)e.Item.FindControl("ltlStatus");
+            var ltlSelect = (Literal)e.Item.FindControl("ltlSelect");
 
-            if (ltlItemTitle != null)
-            {
-                ltlItemTitle.Text = WebUtils.GetContentTitle(PublishmentSystemInfo, contentInfo, PageUrl);
-            }
-            var nodeName = _valueHashtable[contentInfo.NodeId] as string;
-            if (nodeName == null)
-            {
-                nodeName = NodeManager.GetNodeNameNavigation(PublishmentSystemId, contentInfo.NodeId);
-                _valueHashtable[contentInfo.NodeId] = nodeName;
-            }
-            if (ltlChannel != null) ltlChannel.Text = nodeName;
+            ltlTitle.Text = WebUtils.GetContentTitle(SiteInfo, contentInfo, PageUrl);
 
-            var showPopWinString = ModalCheckState.GetOpenWindowString(PublishmentSystemId, contentInfo, PageUrl);
-            if (ltlItemStatus != null)
+            var specialHtml = _isTrashOnly
+                ? DateUtils.GetDateAndTimeString(contentInfo.LastEditDate)
+                : TextUtility.GetCommandsHtml(SiteInfo, _pluginMenus, contentInfo, PageUrl,
+                    AuthRequest.AdminName, _isEdit);
+
+            ltlColumns.Text = $@"<td class=""text-center text-nowrap"">
+{specialHtml}
+{TextUtility.GetColumnsHtml(_nameValueCacheDict, SiteInfo, contentInfo, _attributesOfDisplay, _allStyleInfoList, _pluginColumns)}
+</td>";
+
+            string nodeName;
+            if (!_nameValueCacheDict.TryGetValue(contentInfo.ChannelId.ToString(), out nodeName))
             {
-                ltlItemStatus.Text =
-                    $@"<a href=""javascript:;"" title=""设置内容状态"" onclick=""{showPopWinString}"">{LevelManager.GetCheckState(
-                        PublishmentSystemInfo, contentInfo.IsChecked, contentInfo.CheckedLevel)}</a>";
+                nodeName = ChannelManager.GetChannelNameNavigation(SiteId, contentInfo.ChannelId);
+                _nameValueCacheDict[contentInfo.ChannelId.ToString()] = nodeName;
             }
 
-            if (HasChannelPermissions(contentInfo.NodeId, AppManager.Permissions.Channel.ContentEdit) || Body.AdminName == contentInfo.AddUserName)
-            {
-                if (ltlItemEditUrl != null)
-                {
-                    ltlItemEditUrl.Text =
-                        $"<a href=\"{WebUtils.GetContentAddEditUrl(PublishmentSystemId, nodeInfo, contentInfo.Id, PageUrl)}\">编辑</a>";
-                }
-            }
+            ltlChannel.Text = nodeName;
 
-            if (ltlColumnItemRows != null)
-            {
-                ltlColumnItemRows.Text = TextUtility.GetColumnItemRowsHtml(_tableStyleInfoList, _attributesOfDisplay, _valueHashtable, _tableStyle, PublishmentSystemInfo, contentInfo);
-            }
+            ltlStatus.Text = _isTrashOnly
+                ? CheckManager.GetCheckState(SiteInfo, contentInfo.IsChecked, contentInfo.CheckedLevel)
+                : $@"<a href=""javascript:;"" title=""设置内容状态"" onclick=""{
+                        ModalCheckState.GetOpenWindowString(SiteId, contentInfo, PageUrl)
+                    }"">{CheckManager.GetCheckState(SiteInfo, contentInfo.IsChecked, contentInfo.CheckedLevel)}</a>";
 
-            if (ltlCommandItemRows != null)
-            {
-                ltlCommandItemRows.Text = TextUtility.GetCommandItemRowsHtml(PublishmentSystemInfo, _pluginChannels, contentInfo, PageUrl, Body.AdminName);
-            }
-
-            if (ltlSelect != null)
-            {
-                ltlSelect.Text =
-                    $@"<input type=""checkbox"" name=""IDsCollection"" value=""{contentInfo.NodeId}_{contentInfo.Id}"" />";
-            }
-        }
-
-        public void AddContent_OnClick(object sender, EventArgs e)
-        {
-            PageUtils.Redirect(WebUtils.GetContentAddAddUrl(PublishmentSystemId, _nodeInfo, PageUrl));
+            ltlSelect.Text = $@"<input type=""checkbox"" name=""IDsCollection"" value=""{contentInfo.ChannelId}_{contentInfo.Id}"" />";
         }
 
         public void Search_OnClick(object sender, EventArgs e)
@@ -262,18 +299,18 @@ namespace SiteServer.BackgroundPages.Cms
             {
                 if (string.IsNullOrEmpty(_pageUrl))
                 {
-                    _pageUrl = PageUtils.GetCmsUrl(nameof(PageContentSearch), new NameValueCollection
+                    _pageUrl = PageUtils.GetCmsUrl(SiteId, nameof(PageContentSearch), new NameValueCollection
                     {
-                        {"PublishmentSystemId", PublishmentSystemId.ToString()},
-                        {"ChannelId", DdlChannelId.SelectedValue},
-                        {"State", DdlState.SelectedValue},
-                        {"IsDuplicate", CbIsDuplicate.Checked.ToString()},
-                        {"SearchType", DdlSearchType.SelectedValue},
-                        {"Keyword", TbKeyword.Text},
-                        {"DateFrom", TbDateFrom.Text},
-                        {"DateTo", TbDateTo.Text},
+                        {"channelId", DdlChannelId.SelectedValue},
+                        {"state", DdlState.SelectedValue},
+                        {"searchType", DdlSearchType.SelectedValue},
+                        {"keyword", TbKeyword.Text},
+                        {"dateFrom", TbDateFrom.Text},
+                        {"dateTo", TbDateTo.Text},
+                        {"isCheckOnly", _isCheckOnly.ToString()},
+                        {"isTrashOnly", _isTrashOnly.ToString()},
                         {"isWritingOnly", _isWritingOnly.ToString()},
-                        {"isSelfOnly", _isSelfOnly.ToString()}
+                        {"isAdminOnly", _isAdminOnly.ToString()}
                     });
                 }
                 return _pageUrl;

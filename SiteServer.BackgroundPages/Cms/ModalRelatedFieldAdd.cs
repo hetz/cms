@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Model;
 
@@ -10,101 +10,95 @@ namespace SiteServer.BackgroundPages.Cms
 {
 	public class ModalRelatedFieldAdd : BasePageCms
     {
-        protected TextBox RelatedFieldName;
-        protected DropDownList TotalLevel;
+        public TextBox TbRelatedFieldName;
+        public DropDownList DdlTotalLevel;
 
-        protected TextBox Prefix1;
-        protected TextBox Suffix1;
-        protected PlaceHolder phFix2;
-        protected TextBox Prefix2;
-        protected TextBox Suffix2;
-        protected PlaceHolder phFix3;
-        protected TextBox Prefix3;
-        protected TextBox Suffix3;
-        protected PlaceHolder phFix4;
-        protected TextBox Prefix4;
-        protected TextBox Suffix4;
-        protected PlaceHolder phFix5;
-        protected TextBox Prefix5;
-        protected TextBox Suffix5;
+        public TextBox TbPrefix1;
+        public TextBox TbSuffix1;
+        public PlaceHolder PhFix2;
+        public TextBox TbPrefix2;
+        public TextBox TbSuffix2;
+        public PlaceHolder PhFix3;
+        public TextBox TbPrefix3;
+        public TextBox TbSuffix3;
+        public PlaceHolder PhFix4;
+        public TextBox TbPrefix4;
+        public TextBox TbSuffix4;
+        public PlaceHolder PhFix5;
+        public TextBox TbPrefix5;
+        public TextBox TbSuffix5;
 
-        public static string GetOpenWindowString(int publishmentSystemId, int relatedFieldId)
+        public static string GetOpenWindowString(int siteId, int relatedFieldId)
         {
-            return PageUtils.GetOpenWindowString("修改联动字段", PageUtils.GetCmsUrl(nameof(ModalRelatedFieldAdd), new NameValueCollection
+            return LayerUtils.GetOpenScript("修改联动字段", PageUtils.GetCmsUrl(siteId, nameof(ModalRelatedFieldAdd), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
                 {"RelatedFieldID", relatedFieldId.ToString()}
-            }), 420, 450);
+            }), 550, 550);
         }
 
-        public static string GetOpenWindowString(int publishmentSystemId)
+        public static string GetOpenWindowString(int siteId)
         {
-            return PageUtils.GetOpenWindowString("添加联动字段", PageUtils.GetCmsUrl(nameof(ModalRelatedFieldAdd), new NameValueCollection
-            {
-                {"PublishmentSystemID", publishmentSystemId.ToString()}
-            }), 420, 450);
+            return LayerUtils.GetOpenScript("添加联动字段", PageUtils.GetCmsUrl(siteId, nameof(ModalRelatedFieldAdd), null), 550, 550);
         }
 
 		public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-			if (!IsPostBack)
-			{
-                if (Body.IsQueryExists("RelatedFieldID"))
-				{
-                    var relatedFieldId = Body.GetQueryInt("RelatedFieldID");
-                    var relatedFieldInfo = DataProvider.RelatedFieldDao.GetRelatedFieldInfo(relatedFieldId);
-                    if (relatedFieldInfo != null)
-					{
-                        RelatedFieldName.Text = relatedFieldInfo.RelatedFieldName;
-                        ControlUtils.SelectListItemsIgnoreCase(TotalLevel, relatedFieldInfo.TotalLevel.ToString());
+            if (IsPostBack) return;
 
-                        if (!string.IsNullOrEmpty(relatedFieldInfo.Prefixes))
-                        {
-                            var collection = TranslateUtils.StringCollectionToStringCollection(relatedFieldInfo.Prefixes);
-                            Prefix1.Text = collection[0];
-                            Prefix2.Text = collection[1];
-                            Prefix3.Text = collection[2];
-                            Prefix4.Text = collection[3];
-                            Prefix5.Text = collection[4];
-                        }
-                        if (!string.IsNullOrEmpty(relatedFieldInfo.Suffixes))
-                        {
-                            var collection = TranslateUtils.StringCollectionToStringCollection(relatedFieldInfo.Suffixes);
-                            Suffix1.Text = collection[0];
-                            Suffix2.Text = collection[1];
-                            Suffix3.Text = collection[2];
-                            Suffix4.Text = collection[3];
-                            Suffix5.Text = collection[4];
-                        }
-					}
-				}
-                TotalLevel_SelectedIndexChanged(null, EventArgs.Empty);
-				
-			}
-		}
+            if (AuthRequest.IsQueryExists("RelatedFieldID"))
+            {
+                var relatedFieldId = AuthRequest.GetQueryInt("RelatedFieldID");
+                var relatedFieldInfo = DataProvider.RelatedFieldDao.GetRelatedFieldInfo(relatedFieldId);
+                if (relatedFieldInfo != null)
+                {
+                    TbRelatedFieldName.Text = relatedFieldInfo.Title;
+                    ControlUtils.SelectSingleItemIgnoreCase(DdlTotalLevel, relatedFieldInfo.TotalLevel.ToString());
 
-        public void TotalLevel_SelectedIndexChanged(object sender, EventArgs e)
+                    if (!string.IsNullOrEmpty(relatedFieldInfo.Prefixes))
+                    {
+                        var collection = TranslateUtils.StringCollectionToStringCollection(relatedFieldInfo.Prefixes);
+                        TbPrefix1.Text = collection[0];
+                        TbPrefix2.Text = collection[1];
+                        TbPrefix3.Text = collection[2];
+                        TbPrefix4.Text = collection[3];
+                        TbPrefix5.Text = collection[4];
+                    }
+                    if (!string.IsNullOrEmpty(relatedFieldInfo.Suffixes))
+                    {
+                        var collection = TranslateUtils.StringCollectionToStringCollection(relatedFieldInfo.Suffixes);
+                        TbSuffix1.Text = collection[0];
+                        TbSuffix2.Text = collection[1];
+                        TbSuffix3.Text = collection[2];
+                        TbSuffix4.Text = collection[3];
+                        TbSuffix5.Text = collection[4];
+                    }
+                }
+            }
+            DdlTotalLevel_SelectedIndexChanged(null, EventArgs.Empty);
+        }
+
+        public void DdlTotalLevel_SelectedIndexChanged(object sender, EventArgs e)
         {
-            phFix2.Visible = phFix3.Visible = phFix4.Visible = phFix5.Visible = false;
+            PhFix2.Visible = PhFix3.Visible = PhFix4.Visible = PhFix5.Visible = false;
 
-            var totalLevel = TranslateUtils.ToInt(TotalLevel.SelectedValue);
+            var totalLevel = TranslateUtils.ToInt(DdlTotalLevel.SelectedValue);
             if (totalLevel >= 2)
             {
-                phFix2.Visible = true;
+                PhFix2.Visible = true;
             }
             if (totalLevel >= 3)
             {
-                phFix3.Visible = true;
+                PhFix3.Visible = true;
             }
             if (totalLevel >= 4)
             {
-                phFix4.Visible = true;
+                PhFix4.Visible = true;
             }
             if (totalLevel >= 5)
             {
-                phFix5.Visible = true;
+                PhFix5.Visible = true;
             }
         }
 
@@ -114,36 +108,36 @@ namespace SiteServer.BackgroundPages.Cms
 
             var relatedFieldInfo = new RelatedFieldInfo
             {
-                RelatedFieldName = RelatedFieldName.Text,
-                PublishmentSystemId = PublishmentSystemId,
-                TotalLevel = TranslateUtils.ToInt(TotalLevel.SelectedValue)
+                Title = TbRelatedFieldName.Text,
+                SiteId = SiteId,
+                TotalLevel = TranslateUtils.ToInt(DdlTotalLevel.SelectedValue)
             };
             var prefix = new ArrayList
             {
-                Prefix1.Text,
-                Prefix2.Text,
-                Prefix3.Text,
-                Prefix4.Text,
-                Prefix5.Text
+                TbPrefix1.Text,
+                TbPrefix2.Text,
+                TbPrefix3.Text,
+                TbPrefix4.Text,
+                TbPrefix5.Text
             };
             relatedFieldInfo.Prefixes = TranslateUtils.ObjectCollectionToString(prefix);
             var suffix = new ArrayList
             {
-                Suffix1.Text,
-                Suffix2.Text,
-                Suffix3.Text,
-                Suffix4.Text,
-                Suffix5.Text
+                TbSuffix1.Text,
+                TbSuffix2.Text,
+                TbSuffix3.Text,
+                TbSuffix4.Text,
+                TbSuffix5.Text
             };
             relatedFieldInfo.Suffixes = TranslateUtils.ObjectCollectionToString(suffix);
 				
-			if (Body.IsQueryExists("RelatedFieldID"))
+			if (AuthRequest.IsQueryExists("RelatedFieldID"))
 			{
 				try
 				{
-                    relatedFieldInfo.RelatedFieldId = Body.GetQueryInt("RelatedFieldID");
+                    relatedFieldInfo.Id = AuthRequest.GetQueryInt("RelatedFieldID");
                     DataProvider.RelatedFieldDao.Update(relatedFieldInfo);
-                    Body.AddSiteLog(PublishmentSystemId, "修改联动字段", $"联动字段:{relatedFieldInfo.RelatedFieldName}");
+                    AuthRequest.AddSiteLog(SiteId, "修改联动字段", $"联动字段:{relatedFieldInfo.Title}");
 					isChanged = true;
 				}
 				catch(Exception ex)
@@ -153,8 +147,8 @@ namespace SiteServer.BackgroundPages.Cms
 			}
 			else
 			{
-                var relatedFieldNameArrayList = DataProvider.RelatedFieldDao.GetRelatedFieldNameArrayList(PublishmentSystemId);
-                if (relatedFieldNameArrayList.IndexOf(RelatedFieldName.Text) != -1)
+                var relatedFieldNameList = DataProvider.RelatedFieldDao.GetTitleList(SiteId);
+                if (relatedFieldNameList.IndexOf(TbRelatedFieldName.Text) != -1)
 				{
                     FailMessage("联动字段添加失败，联动字段名称已存在！");
 				}
@@ -163,7 +157,7 @@ namespace SiteServer.BackgroundPages.Cms
 					try
 					{
                         DataProvider.RelatedFieldDao.Insert(relatedFieldInfo);
-                        Body.AddSiteLog(PublishmentSystemId, "添加联动字段", $"联动字段:{relatedFieldInfo.RelatedFieldName}");
+                        AuthRequest.AddSiteLog(SiteId, "添加联动字段", $"联动字段:{relatedFieldInfo.Title}");
 						isChanged = true;
 					}
 					catch(Exception ex)
@@ -175,7 +169,7 @@ namespace SiteServer.BackgroundPages.Cms
 
 			if (isChanged)
 			{
-				PageUtils.CloseModalPage(Page);
+                LayerUtils.Close(Page);
 			}
 		}
 	}

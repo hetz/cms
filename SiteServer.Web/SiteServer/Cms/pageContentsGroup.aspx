@@ -1,79 +1,93 @@
 ﻿<%@ Page Language="C#" Inherits="SiteServer.BackgroundPages.Cms.PageContentsGroup" %>
-<%@ Register TagPrefix="bairong" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <!--#include file="../inc/header.aspx"-->
-</head>
+  <%@ Register TagPrefix="ctrl" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
+    <!DOCTYPE html>
+    <html>
 
-<body>
-    <!--#include file="../inc/openWindow.html"-->
-    <form class="form-inline" runat="server">
-        <asp:Literal ID="LtlBreadCrumb" runat="server" />
-        <bairong:Alerts runat="server" />
+    <head>
+      <meta charset="utf-8">
+      <!--#include file="../inc/head.html"-->
+    </head>
 
-        <div class="well well-small">
-            <table class="table table-noborder">
-                <tr>
-                    <td>
-                        <asp:Literal ID="ltlContentGroupName" runat="server"></asp:Literal>
-                    </td>
-                </tr>
-            </table>
+    <body>
+      <form class="m-l-15 m-r-15" runat="server">
+
+        <div class="card-box">
+          <ul class="nav nav-pills">
+            <li class="nav-item">
+              <a class="nav-link" href="pageNodeGroup.aspx?siteId=<%=SiteId%>">栏目组管理</a>
+            </li>
+            <li class="nav-item active">
+              <a class="nav-link" href="pageContentGroup.aspx?siteId=<%=SiteId%>">内容组管理</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="pageContentTags.aspx?siteId=<%=SiteId%>">内容标签管理</a>
+            </li>
+          </ul>
         </div>
 
-        <table class="table table-bordered table-hover">
-            <tr class="info thead">
-                <td>内容标题(点击查看)
-                </td>
-                <td width="250">所属栏目
-                </td>
-                <td width="200">作者
-                </td>
-                <td width="100">添加日期
-                </td>
-                <td width="100">状态
-                </td>
-                <td></td>
-                <td></td>
-            </tr>
-            <asp:Repeater ID="rptContents" runat="server">
-                <ItemTemplate>
+        <ctrl:alerts runat="server" />
+
+        <div class="card-box">
+          <div class="m-t-0 header-title">
+            <asp:Literal ID="LtlContentGroupName" runat="server"></asp:Literal>
+          </div>
+          <p class="text-muted font-13 m-b-25"></p>
+
+          <div class="panel panel-default m-t-20">
+            <div class="panel-body p-0">
+              <div class="table-responsive">
+                <table class="table tablesaw table-hover m-0">
+                  <thead>
                     <tr>
-                        <td>
-                            <asp:Literal ID="ltlItemTitle" runat="server"></asp:Literal>
-                        </td>
-                        <td>
-                            <asp:Literal ID="ltlItemChannel" runat="server"></asp:Literal>
-                        </td>
-                        <td>
-                            <asp:Literal ID="ltlItemAuthor" runat="server"></asp:Literal>
-                        </td>
-                        <td class="center">
-                            <asp:Literal ID="ltlItemAddDate" runat="server"></asp:Literal>
-                        </td>
-                        <td class="center">
-                            <asp:Literal ID="ltlItemStatus" runat="server"></asp:Literal>
-                        </td>
-                        <td class="center">
-                            <asp:Literal ID="ltlItemEditUrl" runat="server"></asp:Literal>
-                        </td>
-                        <td class="center">
-                            <asp:Literal ID="ltlItemDeleteUrl" runat="server"></asp:Literal>
-                        </td>
+                      <th>内容标题(点击查看)</th>
+                      <th>所属栏目</th>
+                      <th width="160">添加日期</th>
+                      <th width="80">状态</th>
+                      <th width="80"></th>
+                      <th width="160"></th>
                     </tr>
-                </ItemTemplate>
-            </asp:Repeater>
-        </table>
+                  </thead>
+                  <tbody>
+                    <asp:Repeater ID="RptContents" runat="server">
+                      <itemtemplate>
+                        <tr>
+                          <td>
+                            <asp:Literal ID="ltlItemTitle" runat="server"></asp:Literal>
+                          </td>
+                          <td>
+                            <asp:Literal ID="ltlItemChannel" runat="server"></asp:Literal>
+                          </td>
+                          <td>
+                            <asp:Literal ID="ltlItemAddDate" runat="server"></asp:Literal>
+                          </td>
+                          <td>
+                            <asp:Literal ID="ltlItemStatus" runat="server"></asp:Literal>
+                          </td>
+                          <td class="text-center">
+                            <asp:Literal ID="ltlItemEditUrl" runat="server"></asp:Literal>
+                          </td>
+                          <td class="text-center">
+                            <asp:Literal ID="ltlItemDeleteUrl" runat="server"></asp:Literal>
+                          </td>
+                        </tr>
+                      </itemtemplate>
+                    </asp:Repeater>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
 
-        <bairong:SqlPager ID="spContents" runat="server" class="table table-pager" />
+          <ctrl:SqlPager ID="SpContents" runat="server" class="table table-pager" />
 
-        <ul class="breadcrumb breadcrumb-button">
-            <asp:Button class="btn" Text="返 回" OnClick="Return_OnClick" runat="server" />
-        </ul>
+          <hr />
 
-    </form>
-</body>
-</html>
+          <asp:Button class="btn" text="返 回" onclick="Return_OnClick" runat="server" />
 
+        </div>
+
+      </form>
+    </body>
+
+    </html>
+    <!--#include file="../inc/foot.html"-->

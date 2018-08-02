@@ -1,13 +1,10 @@
-using System.Collections.Generic;
-using SiteServer.CMS.StlParser.Model;
+锘縰sing SiteServer.CMS.StlParser.Model;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
-    [Stl(Usage = "载入模板", Description = "通过 stl:loading 标签在模板中创建载入中显示的内容")]
+    [StlClass(Usage = "杞藉叆妯℃澘", Description = "閫氳繃 stl:loading 鏍囩鍦ㄦā鏉夸腑鍒涘缓杞藉叆涓樉绀虹殑鍐呭")]
     public sealed class StlLoading
     {
         public const string ElementName = "stl:loading";
-
-        public static SortedList<string, string> AttributeList => null;
     }
 }

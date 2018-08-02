@@ -1,78 +1,62 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Settings;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Create;
-using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Plugin;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class PageCreateFile : BasePageCms
     {
-        public ListBox FileCollectionToCreate;
-        public Button CreateFileButton;
-        public Button DeleteAllFileButton;
+        public ListBox LbTemplateIdList;
 
         public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID");
+            PageUtils.CheckRequestParameter("siteId");
 
-            if (!IsPostBack)
+            if (IsPostBack) return;
+
+            VerifySitePermissions(ConfigManager.WebSitePermissions.Create);
+
+            var templateInfoList = DataProvider.TemplateDao.GetTemplateInfoListOfFile(SiteId);
+
+            foreach (var templateInfo in templateInfoList)
             {
-                BreadCrumb(AppManager.Cms.LeftMenu.IdCreate, "生成文件页", AppManager.Permissions.WebSite.Create);
-
-                var templateInfoList = DataProvider.TemplateDao.GetTemplateInfoListOfFile(PublishmentSystemId);
-
-                foreach (var templateInfo in templateInfoList)
-                {
-                    var listitem = new ListItem(templateInfo.CreatedFileFullName, templateInfo.TemplateId.ToString());
-                    FileCollectionToCreate.Items.Add(listitem);
-                }
-
-                DeleteAllFileButton.Attributes.Add("onclick", "return confirm(\"此操作将删除所有已生成的文件页面，确定吗？\");");
+                var listitem = new ListItem(templateInfo.CreatedFileFullName, templateInfo.Id.ToString());
+                LbTemplateIdList.Items.Add(listitem);
             }
         }
 
-        public void CreateFileButton_OnClick(object sender, EventArgs e)
+        public void Create_OnClick(object sender, EventArgs e)
         {
-            if (Page.IsPostBack && Page.IsValid)
+            if (!Page.IsPostBack || !Page.IsValid) return;
+
+            var templateIdList = new List<int>();
+            foreach (ListItem item in LbTemplateIdList.Items)
             {
-                var templateIdList = new List<int>();
-                foreach (ListItem item in FileCollectionToCreate.Items)
-                {
-                    if (!item.Selected) continue;
+                if (!item.Selected) continue;
 
-                    var templateId = int.Parse(item.Value);
-                    templateIdList.Add(templateId);
-                }
-
-                if (templateIdList.Count == 0)
-                {
-                    FailMessage("请选择需要生成的文件页！");
-                    return;
-                }
-
-                foreach (var templateId in templateIdList)
-                {
-                    CreateManager.CreateFile(PublishmentSystemId, templateId);
-                }
-
-                PageCreateStatus.Redirect(PublishmentSystemId);
+                var templateId = int.Parse(item.Value);
+                templateIdList.Add(templateId);
             }
-        }
 
-        public void DeleteAllFileButton_OnClick(object sender, EventArgs e)
-        {
-            if (Page.IsPostBack && Page.IsValid)
+            if (templateIdList.Count == 0)
             {
-                var url = PageProgressBar.GetDeleteAllPageUrl(PublishmentSystemId, ETemplateType.FileTemplate);
-                PageUtils.RedirectToLoadingPage(url);
+                FailMessage("请选择需要生成的文件页！");
+                return;
             }
+
+            foreach (var templateId in templateIdList)
+            {
+                CreateManager.CreateFile(SiteId, templateId);
+            }
+
+            PageCreateStatus.Redirect(SiteId);
         }
     }
 }

@@ -2,11 +2,10 @@
 using System.Data.OleDb;
 using System.Collections;
 using System.Collections.Generic;
-using BaiRong.Core.Model;
 using System.Text;
-using BaiRong.Core.Data;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.CMS.Model;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.Core.Office
 {
@@ -41,7 +40,7 @@ namespace SiteServer.CMS.Core.Office
             return createBuilder.ToString();
         }
 
-        public ArrayList GetInsertSqlStringArrayList(string nodeName, int publishmentSystemId, int nodeId, ETableStyle tableStyle, string tableName, List<TableStyleInfo> styleInfoList, List<string> displayAttributes, List<int> contentIdList, bool isPeriods, string dateFrom, string dateTo, ETriState checkedState, out bool isExport)
+        public ArrayList GetInsertSqlStringArrayList(string nodeName, int siteId, int channelId, string tableName, List<TableStyleInfo> styleInfoList, List<string> displayAttributes, List<int> contentIdList, bool isPeriods, string dateFrom, string dateTo, ETriState checkedState, out bool isExport)
         {
             var insertSqlArrayList = new ArrayList();
 
@@ -61,14 +60,14 @@ namespace SiteServer.CMS.Core.Office
 
             if (contentIdList == null || contentIdList.Count == 0)
             {
-                contentIdList = BaiRongDataProvider.ContentDao.GetContentIdList(tableName, nodeId, isPeriods, dateFrom, dateTo, checkedState);
+                contentIdList = DataProvider.ContentDao.GetContentIdList(tableName, channelId, isPeriods, dateFrom, dateTo, checkedState);
             }
 
             isExport = contentIdList.Count > 0;
 
             foreach (var contentId in contentIdList)
             {
-                var contentInfo = DataProvider.ContentDao.GetContentInfo(tableStyle, tableName, contentId);
+                var contentInfo = DataProvider.ContentDao.GetContentInfo(tableName, contentId);
                 if (contentInfo != null)
                 {
                     var insertBuilder = new StringBuilder();

@@ -2,122 +2,118 @@
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Model;
 using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class ModalCrossSiteTransEdit : BasePageCms
     {
-        protected DropDownList TransType;
+        public DropDownList DdlTransType;
+        public PlaceHolder PhSite;
+        public DropDownList DdlSiteId;
+        public ListBox LbChannelId;
+        public PlaceHolder PhNodeNames;
+        public TextBox TbNodeNames;
+        public PlaceHolder PhIsAutomatic;
+        public DropDownList DdlIsAutomatic;
+        public DropDownList DdlTranslateDoneType;
 
-        protected PlaceHolder PlaceHolder_PublishmentSystem;
-        protected DropDownList PublishmentSystemIDCollection;
-        protected ListBox NodeIDCollection;
+        private ChannelInfo _channelInfo;
 
-        protected PlaceHolder PlaceHolder_NodeNames;
-        protected TextBox NodeNames;
-
-        protected PlaceHolder PlaceHolder_IsAutomatic;
-        protected RadioButtonList IsAutomatic;
-
-        private NodeInfo nodeInfo;
-
-        protected RadioButtonList ddlTranslateDoneType;
-
-        public static string GetOpenWindowString(int publishmentSystemId, int nodeID)
+        public static string GetOpenWindowString(int siteId, int channelId)
         {
-            return PageUtils.GetOpenWindowString("跨站转发设置", PageUtils.GetCmsUrl(nameof(ModalCrossSiteTransEdit), new NameValueCollection
+            return LayerUtils.GetOpenScript("跨站转发设置", PageUtils.GetCmsUrl(siteId, nameof(ModalCrossSiteTransEdit), new NameValueCollection
             {
-                {"PublishmentSystemID", publishmentSystemId.ToString()},
-                {"NodeID", nodeID.ToString()}
-            }), 650, 500);
+                {"channelId", channelId.ToString()}
+            }));
         }
 
         public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID", "NodeID");
-            var nodeId = int.Parse(Body.GetQueryString("NodeID"));
-            nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, nodeId);
+            PageUtils.CheckRequestParameter("siteId", "channelId");
+            var channelId = int.Parse(AuthRequest.GetQueryString("channelId"));
+            _channelInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
 
-            if (!IsPostBack)
-            {
-                ECrossSiteTransTypeUtils.AddAllListItems(TransType);
+            if (IsPostBack) return;
 
-                ControlUtils.SelectListItems(TransType, ECrossSiteTransTypeUtils.GetValue(nodeInfo.Additional.TransType));
+            ECrossSiteTransTypeUtils.AddAllListItems(DdlTransType, SiteInfo.ParentId > 0);
 
-                TransType_OnSelectedIndexChanged(null, EventArgs.Empty);
-                ControlUtils.SelectListItems(PublishmentSystemIDCollection, nodeInfo.Additional.TransPublishmentSystemId.ToString());
+            ControlUtils.SelectSingleItem(DdlTransType, ECrossSiteTransTypeUtils.GetValue(_channelInfo.Additional.TransType));
+
+            DdlTransType_OnSelectedIndexChanged(null, EventArgs.Empty);
+            ControlUtils.SelectSingleItem(DdlSiteId, _channelInfo.Additional.TransSiteId.ToString());
 
 
-                PublishmentSystemIDCollection_OnSelectedIndexChanged(null, EventArgs.Empty);
-                ControlUtils.SelectListItems(NodeIDCollection, TranslateUtils.StringCollectionToStringList(nodeInfo.Additional.TransNodeIds));
-                NodeNames.Text = nodeInfo.Additional.TransNodeNames;
+            DdlSiteId_OnSelectedIndexChanged(null, EventArgs.Empty);
+            ControlUtils.SelectMultiItems(LbChannelId, TranslateUtils.StringCollectionToStringList(_channelInfo.Additional.TransChannelIds));
+            TbNodeNames.Text = _channelInfo.Additional.TransChannelNames;
 
-                EBooleanUtils.AddListItems(IsAutomatic, "自动", "提示");
-                ControlUtils.SelectListItemsIgnoreCase(IsAutomatic, nodeInfo.Additional.TransIsAutomatic.ToString());
+            EBooleanUtils.AddListItems(DdlIsAutomatic, "系统自动转发", "需手动操作");
+            ControlUtils.SelectSingleItemIgnoreCase(DdlIsAutomatic, _channelInfo.Additional.TransIsAutomatic.ToString());
 
-                ETranslateContentTypeUtils.AddListItems(ddlTranslateDoneType, false);
-                ControlUtils.SelectListItems(ddlTranslateDoneType, ETranslateContentTypeUtils.GetValue(nodeInfo.Additional.TransDoneType));
-            }
+            ETranslateContentTypeUtils.AddListItems(DdlTranslateDoneType, false);
+            ControlUtils.SelectSingleItem(DdlTranslateDoneType, ETranslateContentTypeUtils.GetValue(_channelInfo.Additional.TransDoneType));
         }
 
-        protected void TransType_OnSelectedIndexChanged(object sender, EventArgs e)
+        protected void DdlTransType_OnSelectedIndexChanged(object sender, EventArgs e)
         {
-            PublishmentSystemIDCollection.Items.Clear();
-            PublishmentSystemIDCollection.Enabled = true;
+            DdlSiteId.Items.Clear();
+            DdlSiteId.Enabled = true;
 
-            PlaceHolder_IsAutomatic.Visible = false;
+            PhIsAutomatic.Visible = false;
 
-            var contributeType = ECrossSiteTransTypeUtils.GetEnumType(TransType.SelectedValue);
+            var contributeType = ECrossSiteTransTypeUtils.GetEnumType(DdlTransType.SelectedValue);
             if (contributeType == ECrossSiteTransType.None)
             {
-                PlaceHolder_PublishmentSystem.Visible = PlaceHolder_NodeNames.Visible = false;
+                PhSite.Visible = PhNodeNames.Visible = false;
             }
             else if (contributeType == ECrossSiteTransType.SelfSite || contributeType == ECrossSiteTransType.SpecifiedSite)
             {
-                PlaceHolder_PublishmentSystem.Visible = true;
-                PlaceHolder_NodeNames.Visible = false;
+                PhSite.Visible = true;
+                PhNodeNames.Visible = false;
 
-                PlaceHolder_IsAutomatic.Visible = true;
+                PhIsAutomatic.Visible = true;
             }
             else if (contributeType == ECrossSiteTransType.ParentSite)
             {
-                PlaceHolder_PublishmentSystem.Visible = true;
-                PlaceHolder_NodeNames.Visible = false;
-                PublishmentSystemIDCollection.Enabled = false;
+                PhSite.Visible = true;
+                PhNodeNames.Visible = false;
+                DdlSiteId.Enabled = false;
 
-                PlaceHolder_IsAutomatic.Visible = true;
+                PhIsAutomatic.Visible = true;
             }
             else if (contributeType == ECrossSiteTransType.AllParentSite || contributeType == ECrossSiteTransType.AllSite)
             {
-                PlaceHolder_PublishmentSystem.Visible = false;
-                PlaceHolder_NodeNames.Visible = true;
+                PhSite.Visible = false;
+                PhNodeNames.Visible = true;
             }
 
-            if (PlaceHolder_PublishmentSystem.Visible)
+            if (PhSite.Visible)
             {
-                var publishmentSystemIDArrayList = PublishmentSystemManager.GetPublishmentSystemIdList();
+                var siteIdList = SiteManager.GetSiteIdList();
 
-                var allParentPublishmentSystemIDArrayList = new List<int>();
+                var allParentSiteIdList = new List<int>();
                 if (contributeType == ECrossSiteTransType.AllParentSite)
                 {
-                    PublishmentSystemManager.GetAllParentPublishmentSystemIdList(allParentPublishmentSystemIDArrayList, publishmentSystemIDArrayList, PublishmentSystemId);
+                    SiteManager.GetAllParentSiteIdList(allParentSiteIdList, siteIdList, SiteId);
                 }
                 else if (contributeType == ECrossSiteTransType.SelfSite)
                 {
-                    publishmentSystemIDArrayList = new List<int>();
-                    publishmentSystemIDArrayList.Add(PublishmentSystemId);
+                    siteIdList = new List<int>
+                    {
+                        SiteId
+                    };
                 }
 
-                foreach (int psID in publishmentSystemIDArrayList)
+                foreach (var psId in siteIdList)
                 {
-                    var psInfo = PublishmentSystemManager.GetPublishmentSystemInfo(psID);
+                    var psInfo = SiteManager.GetSiteInfo(psId);
                     var show = false;
                     if (contributeType == ECrossSiteTransType.SpecifiedSite)
                     {
@@ -125,35 +121,34 @@ namespace SiteServer.BackgroundPages.Cms
                     }
                     else if (contributeType == ECrossSiteTransType.SelfSite)
                     {
-                        if (psID == PublishmentSystemId)
+                        if (psId == SiteId)
                         {
                             show = true;
                         }
                     }
                     else if (contributeType == ECrossSiteTransType.ParentSite)
                     {
-                        if (psInfo.PublishmentSystemId == PublishmentSystemInfo.ParentPublishmentSystemId || (PublishmentSystemInfo.ParentPublishmentSystemId == 0 && psInfo.IsHeadquarters))
+                        if (psInfo.Id == SiteInfo.ParentId || (SiteInfo.ParentId == 0 && psInfo.IsRoot))
                         {
                             show = true;
                         }
                     }
-                    if (show)
-                    {
-                        var listitem = new ListItem(psInfo.PublishmentSystemName, psID.ToString());
-                        if (psInfo.IsHeadquarters) listitem.Selected = true;
-                        PublishmentSystemIDCollection.Items.Add(listitem);
-                    }
+                    if (!show) continue;
+
+                    var listitem = new ListItem(psInfo.SiteName, psId.ToString());
+                    if (psInfo.IsRoot) listitem.Selected = true;
+                    DdlSiteId.Items.Add(listitem);
                 }
             }
-            PublishmentSystemIDCollection_OnSelectedIndexChanged(sender, e);
+            DdlSiteId_OnSelectedIndexChanged(sender, e);
         }
 
-        protected void PublishmentSystemIDCollection_OnSelectedIndexChanged(object sender, EventArgs e)
+        protected void DdlSiteId_OnSelectedIndexChanged(object sender, EventArgs e)
         {
-            NodeIDCollection.Items.Clear();
-            if (PlaceHolder_PublishmentSystem.Visible && PublishmentSystemIDCollection.Items.Count > 0)
+            LbChannelId.Items.Clear();
+            if (PhSite.Visible && DdlSiteId.Items.Count > 0)
             {
-                NodeManager.AddListItemsForAddContent(NodeIDCollection.Items, PublishmentSystemManager.GetPublishmentSystemInfo(int.Parse(PublishmentSystemIDCollection.SelectedValue)), false, Body.AdminName);
+                ChannelManager.AddListItemsForAddContent(LbChannelId.Items, SiteManager.GetSiteInfo(int.Parse(DdlSiteId.SelectedValue)), false, AuthRequest.AdminPermissions);
             }
         }
 
@@ -163,27 +158,19 @@ namespace SiteServer.BackgroundPages.Cms
 
             try
             {
-                nodeInfo.Additional.TransType = ECrossSiteTransTypeUtils.GetEnumType(TransType.SelectedValue);
-                if (nodeInfo.Additional.TransType == ECrossSiteTransType.SpecifiedSite)
-                {
-                    nodeInfo.Additional.TransPublishmentSystemId = TranslateUtils.ToInt(PublishmentSystemIDCollection.SelectedValue);
-                }
-                else
-                {
-                    nodeInfo.Additional.TransPublishmentSystemId = 0;
-                }
-                nodeInfo.Additional.TransNodeIds = ControlUtils.GetSelectedListControlValueCollection(NodeIDCollection);
-                nodeInfo.Additional.TransNodeNames = NodeNames.Text;
+                _channelInfo.Additional.TransType = ECrossSiteTransTypeUtils.GetEnumType(DdlTransType.SelectedValue);
+                _channelInfo.Additional.TransSiteId = _channelInfo.Additional.TransType == ECrossSiteTransType.SpecifiedSite ? TranslateUtils.ToInt(DdlSiteId.SelectedValue) : 0;
+                _channelInfo.Additional.TransChannelIds = ControlUtils.GetSelectedListControlValueCollection(LbChannelId);
+                _channelInfo.Additional.TransChannelNames = TbNodeNames.Text;
 
-                nodeInfo.Additional.TransIsAutomatic = TranslateUtils.ToBool(IsAutomatic.SelectedValue);
+                _channelInfo.Additional.TransIsAutomatic = TranslateUtils.ToBool(DdlIsAutomatic.SelectedValue);
 
+                var translateDoneType = ETranslateContentTypeUtils.GetEnumType(DdlTranslateDoneType.SelectedValue);
+                _channelInfo.Additional.TransDoneType = translateDoneType;
 
-                var translateDoneType = ETranslateContentTypeUtils.GetEnumType(ddlTranslateDoneType.SelectedValue);
-                nodeInfo.Additional.TransDoneType = translateDoneType;
+                DataProvider.ChannelDao.Update(_channelInfo);
 
-                DataProvider.NodeDao.UpdateNodeInfo(nodeInfo);
-
-                Body.AddSiteLog(PublishmentSystemId, "修改跨站转发设置");
+                AuthRequest.AddSiteLog(SiteId, "修改跨站转发设置");
 
                 isSuccess = true;
             }
@@ -194,7 +181,7 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (isSuccess)
             {
-                PageUtils.CloseModalPageAndRedirect(Page, PageConfigurationCrossSiteTrans.GetRedirectUrl(PublishmentSystemId, nodeInfo.NodeId));
+                LayerUtils.Close(Page);
             }
         }
     }

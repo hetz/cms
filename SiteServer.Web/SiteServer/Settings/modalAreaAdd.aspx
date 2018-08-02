@@ -1,35 +1,51 @@
 ﻿<%@ Page Language="C#" Inherits="SiteServer.BackgroundPages.Settings.ModalAreaAdd" %>
-<%@ Register TagPrefix="bairong" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<!--#include file="../inc/header.aspx"-->
-</head>
+	<%@ Register TagPrefix="ctrl" Namespace="SiteServer.BackgroundPages.Controls" Assembly="SiteServer.BackgroundPages" %>
+		<!DOCTYPE html>
+		<html class="modalPage">
 
-<body>
-<!--#include file="../inc/openWindow.html"-->
-<form class="form-inline" runat="server">
-<asp:Button id="btnSubmit" useSubmitBehavior="false" OnClick="Submit_OnClick" runat="server" style="display:none" />
-<bairong:alerts runat="server"></bairong:alerts>
+		<head>
+			<meta charset="utf-8">
+			<!--#include file="../inc/head.html"-->
+		</head>
 
-  <table class="table noborder table-hover">
-	<asp:PlaceHolder ID="phParentID" runat="server">
-	<tr>
-	  <td width="120">上级区域：</td>
-	  <td><asp:DropDownList ID="ParentID" runat="server"> </asp:DropDownList></td>
-	</tr>
-    </asp:PlaceHolder>
-    <tr>
-	  <td>区域名称：</td>
-	  <td>
-	  	<asp:TextBox Columns="25" MaxLength="50" id="AreaName" runat="server" />
-		<asp:RequiredFieldValidator ControlToValidate="AreaName" errorMessage=" *" foreColor="red" display="Dynamic" runat="server" />
-		<asp:RegularExpressionValidator runat="server" ControlToValidate="AreaName" ValidationExpression="[^']+" errorMessage=" *" foreColor="red" display="Dynamic" />
-	  </td>
-	</tr>
-  </table>
+		<body>
+			<form runat="server">
+				<ctrl:alerts runat="server" />
 
-</form>
-</body>
-</html>
+				<asp:PlaceHolder ID="PhParentId" runat="server">
+					<div class="form-group form-row">
+						<label class="col-3 text-right col-form-label">上级区域</label>
+						<div class="col-8">
+							<asp:DropDownList ID="DdlParentId" class="form-control" runat="server"> </asp:DropDownList>
+						</div>
+						<div class="col-1 help-block">
+
+						</div>
+					</div>
+				</asp:PlaceHolder>
+
+				<div class="form-group form-row">
+					<label class="col-3 text-right col-form-label">区域名称</label>
+					<div class="col-8">
+						<asp:TextBox cssClass="form-control" id="TbAreaName" runat="server" />
+					</div>
+					<div class="col-1 help-block">
+						<asp:RequiredFieldValidator ControlToValidate="TbAreaName" errorMessage=" *" foreColor="red" display="Dynamic" runat="server"
+						/>
+						<asp:RegularExpressionValidator runat="server" ControlToValidate="TbAreaName" ValidationExpression="[^']+" errorMessage=" *"
+						  foreColor="red" display="Dynamic" />
+					</div>
+				</div>
+
+				<hr />
+
+				<div class="text-right mr-1">
+					<asp:Button class="btn btn-primary m-l-5" text="确 定" runat="server" onClick="Submit_OnClick" />
+					<button type="button" class="btn btn-default m-l-5" onclick="window.parent.layer.closeAll()">取 消</button>
+				</div>
+
+			</form>
+		</body>
+
+		</html>
+		<!--#include file="../inc/foot.html"-->

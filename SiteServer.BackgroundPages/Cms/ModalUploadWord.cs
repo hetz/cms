@@ -1,121 +1,117 @@
 ﻿using System;
 using System.Collections.Specialized;
+using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model;
-using SiteServer.BackgroundPages.Ajax;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Core;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Create;
 using SiteServer.CMS.Core.Office;
-using SiteServer.CMS.Core.User;
 using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
 
 namespace SiteServer.BackgroundPages.Cms
 {
     public class ModalUploadWord : BasePageCms
     {
-        public CheckBox cbIsFirstLineTitle;
-        public CheckBox cbIsFirstLineRemove;
-        public CheckBox cbIsClearFormat;
-        public CheckBox cbIsFirstLineIndent;
-        public CheckBox cbIsClearFontSize;
-        public CheckBox cbIsClearFontFamily;
-        public CheckBox cbIsClearImages;
-        public RadioButtonList rblContentLevel;
+        public HtmlInputHidden HihFileNames;
+        public CheckBox CbIsFirstLineTitle;
+        public CheckBox CbIsFirstLineRemove;
+        public CheckBox CbIsClearFormat;
+        public CheckBox CbIsFirstLineIndent;
+        public CheckBox CbIsClearFontSize;
+        public CheckBox CbIsClearFontFamily;
+        public CheckBox CbIsClearImages;
+        public DropDownList DdlContentLevel;
 
-        private NodeInfo _nodeInfo;
+        private ChannelInfo _channelInfo;
         private string _returnUrl;
 
-        public static string GetOpenWindowString(int publishmentSystemId, int nodeId, string returnUrl)
+        public static string GetOpenWindowString(int siteId, int channelId, string returnUrl)
         {
-            return PageUtils.GetOpenWindowString("批量导入Word文件",
-                PageUtils.GetCmsUrl(nameof(ModalUploadWord), new NameValueCollection
+            return LayerUtils.GetOpenScript("批量导入Word文件",
+                PageUtils.GetCmsUrl(siteId, nameof(ModalUploadWord), new NameValueCollection
                 {
-                    {"publishmentSystemID", publishmentSystemId.ToString()},
-                    {"nodeID", nodeId.ToString()},
+                    {"channelId", channelId.ToString()},
                     {"returnUrl", returnUrl}
-                }), 550, 400);
+                }), 700, 550);
         }
 
-        public string GetUploadWordMultipleUrl()
-        {
-            return AjaxUploadService.GetUploadWordMultipleUrl(PublishmentSystemId);
-        }
+        public string UploadUrl => ModalUploadWordHandler.GetRedirectUrl(SiteId);
 
         public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
-            PageUtils.CheckRequestParameter("PublishmentSystemID", "ReturnUrl");
-            var nodeId = int.Parse(Body.GetQueryString("NodeID"));
-            _nodeInfo = NodeManager.GetNodeInfo(PublishmentSystemId, nodeId);
-            _returnUrl = Body.GetQueryString("ReturnUrl");
+            PageUtils.CheckRequestParameter("siteId", "ReturnUrl");
+            var channelId = int.Parse(AuthRequest.GetQueryString("channelId"));
+            _channelInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
+            _returnUrl = AuthRequest.GetQueryString("ReturnUrl");
 
-            if (!IsPostBack)
-            {
-                int checkedLevel;
-                var isChecked = CheckManager.GetUserCheckLevel(Body.AdminName, PublishmentSystemInfo, PublishmentSystemId, out checkedLevel);
-                LevelManager.LoadContentLevelToEdit(rblContentLevel, PublishmentSystemInfo, _nodeInfo.NodeId, null, isChecked, checkedLevel);
-                ControlUtils.SelectListItems(rblContentLevel, LevelManager.LevelInt.CaoGao.ToString());
-            }
+            if (IsPostBack) return;
+
+            int checkedLevel;
+            var isChecked = CheckManager.GetUserCheckLevel(AuthRequest.AdminPermissions, SiteInfo, SiteId, out checkedLevel);
+            CheckManager.LoadContentLevelToEdit(DdlContentLevel, SiteInfo, _channelInfo.Id, null, isChecked, checkedLevel);
+            ControlUtils.SelectSingleItem(DdlContentLevel, CheckManager.LevelInt.CaoGao.ToString());
         }
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
-            if (Page.IsPostBack && Page.IsValid)
+            if (!Page.IsPostBack || !Page.IsValid) return;
+
+            var fileNames = TranslateUtils.StringCollectionToStringList(HihFileNames.Value);
+            if (fileNames.Count == 1)
             {
-                var fileCount = TranslateUtils.ToInt(Request.Form["File_Count"]);
-                if (fileCount == 1)
+                var fileName = fileNames[0];
+                if (!string.IsNullOrEmpty(fileName))
                 {
-                    var fileName = Request.Form["fileName_1"];
-                    var redirectUrl = WebUtils.GetContentAddUploadWordUrl(PublishmentSystemId, _nodeInfo, cbIsFirstLineTitle.Checked, cbIsFirstLineRemove.Checked, cbIsClearFormat.Checked, cbIsFirstLineIndent.Checked, cbIsClearFontSize.Checked, cbIsClearFontFamily.Checked, cbIsClearImages.Checked, TranslateUtils.ToIntWithNagetive(rblContentLevel.SelectedValue), fileName, _returnUrl);
-                    PageUtils.CloseModalPageAndRedirect(Page, redirectUrl);
-
-                    return;
+                    var redirectUrl = WebUtils.GetContentAddUploadWordUrl(SiteId, _channelInfo, CbIsFirstLineTitle.Checked, CbIsFirstLineRemove.Checked, CbIsClearFormat.Checked, CbIsFirstLineIndent.Checked, CbIsClearFontSize.Checked, CbIsClearFontFamily.Checked, CbIsClearImages.Checked, TranslateUtils.ToIntWithNagetive(DdlContentLevel.SelectedValue), fileName, _returnUrl);
+                    LayerUtils.CloseAndRedirect(Page, redirectUrl);
                 }
-                if (fileCount > 1)
+
+                return;
+            }
+
+            if (fileNames.Count > 1)
+            {
+                var tableName = ChannelManager.GetTableName(SiteInfo, _channelInfo);
+                var relatedIdentities = RelatedIdentities.GetChannelRelatedIdentities(SiteId, _channelInfo.Id);
+                var styleInfoList = TableStyleManager.GetTableStyleInfoList(tableName, relatedIdentities);
+
+                foreach (var fileName in fileNames)
                 {
-                    var tableStyle = NodeManager.GetTableStyle(PublishmentSystemInfo, _nodeInfo);
-                    var tableName = NodeManager.GetTableName(PublishmentSystemInfo, _nodeInfo);
-                    var relatedIdentities = RelatedIdentities.GetChannelRelatedIdentities(PublishmentSystemId, _nodeInfo.NodeId);
-
-                    for (var index = 1; index <= fileCount; index++)
+                    if (!string.IsNullOrEmpty(fileName))
                     {
-                        var fileName = Request.Form["fileName_" + index];
-                        if (!string.IsNullOrEmpty(fileName))
+                        var formCollection = WordUtils.GetWordNameValueCollection(SiteId, CbIsFirstLineTitle.Checked, CbIsFirstLineRemove.Checked, CbIsClearFormat.Checked, CbIsFirstLineIndent.Checked, CbIsClearFontSize.Checked, CbIsClearFontFamily.Checked, CbIsClearImages.Checked, TranslateUtils.ToInt(DdlContentLevel.SelectedValue), fileName);
+
+                        if (!string.IsNullOrEmpty(formCollection[ContentAttribute.Title]))
                         {
-                            var formCollection = WordUtils.GetWordNameValueCollection(PublishmentSystemId, _nodeInfo.ContentModelId, cbIsFirstLineTitle.Checked, cbIsFirstLineRemove.Checked, cbIsClearFormat.Checked, cbIsFirstLineIndent.Checked, cbIsClearFontSize.Checked, cbIsClearFontFamily.Checked, cbIsClearImages.Checked, TranslateUtils.ToInt(rblContentLevel.SelectedValue), fileName);
+                            var contentInfo = new ContentInfo();
 
-                            if (!string.IsNullOrEmpty(formCollection[ContentAttribute.Title]))
-                            {
-                                var contentInfo = ContentUtility.GetContentInfo(tableStyle);
+                            BackgroundInputTypeParser.SaveAttributes(contentInfo, SiteInfo, styleInfoList, formCollection, ContentAttribute.AllAttributesLowercase);
 
-                                BackgroundInputTypeParser.AddValuesToAttributes(tableStyle, tableName, PublishmentSystemInfo, relatedIdentities, formCollection, contentInfo.ToNameValueCollection(), ContentAttribute.HiddenAttributes);
+                            contentInfo.ChannelId = _channelInfo.Id;
+                            contentInfo.SiteId = SiteId;
+                            contentInfo.AddUserName = AuthRequest.AdminName;
+                            contentInfo.AddDate = DateTime.Now;
+                            contentInfo.LastEditUserName = contentInfo.AddUserName;
+                            contentInfo.LastEditDate = contentInfo.AddDate;
 
-                                contentInfo.NodeId = _nodeInfo.NodeId;
-                                contentInfo.PublishmentSystemId = PublishmentSystemId;
-                                contentInfo.AddUserName = Body.AdminName;
-                                contentInfo.AddDate = DateTime.Now;
-                                contentInfo.LastEditUserName = contentInfo.AddUserName;
-                                contentInfo.LastEditDate = contentInfo.AddDate;
+                            contentInfo.CheckedLevel = TranslateUtils.ToIntWithNagetive(DdlContentLevel.SelectedValue);
+                            contentInfo.IsChecked = contentInfo.CheckedLevel >= SiteInfo.Additional.CheckContentLevel;
 
-                                contentInfo.CheckedLevel = TranslateUtils.ToIntWithNagetive(rblContentLevel.SelectedValue);
-                                contentInfo.IsChecked = contentInfo.CheckedLevel >= PublishmentSystemInfo.CheckContentLevel;
+                            contentInfo.Title = formCollection[ContentAttribute.Title];
 
-                                contentInfo.Id = DataProvider.ContentDao.Insert(tableName, PublishmentSystemInfo, contentInfo);
+                            contentInfo.Id = DataProvider.ContentDao.Insert(tableName, SiteInfo, contentInfo);
 
-                                if (contentInfo.IsChecked)
-                                {
-                                    CreateManager.CreateContentAndTrigger(PublishmentSystemId, _nodeInfo.NodeId, contentInfo.Id);
-                                }
-                            }
+                            CreateManager.CreateContentAndTrigger(SiteId, _channelInfo.Id, contentInfo.Id);
                         }
                     }
                 }
-
-                PageUtils.CloseModalPage(Page);
             }
+
+            LayerUtils.Close(Page);
         }
     }
 }

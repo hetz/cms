@@ -2,11 +2,10 @@
 using System.Collections.Specialized;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.IO;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Cms;
 using SiteServer.CMS.Core;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Settings
 {
@@ -14,7 +13,7 @@ namespace SiteServer.BackgroundPages.Settings
 	{
 	    public const string TypeSiteTemplate = "SiteTemplate";
 
-        public RadioButtonList RblImportType;
+        public DropDownList DdlImportType;
         public PlaceHolder PhUpload;
 		public HtmlInputFile HifFile;
         public PlaceHolder PhDownload;
@@ -24,21 +23,21 @@ namespace SiteServer.BackgroundPages.Settings
 
         public static string GetOpenWindowString(string type)
         {
-            return PageUtils.GetOpenWindowString(type == TypeSiteTemplate ? "导入站点模板" : "导入插件",
+            return LayerUtils.GetOpenScript(type == TypeSiteTemplate ? "导入站点模板" : "导入插件",
                 PageUtils.GetSettingsUrl(nameof(ModalImportZip), new NameValueCollection
                 {
                     {"type", type}
-                }), 460, 300);
+                }), 520, 240);
         }
 
 		public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
-            _type = Body.GetQueryString("type");
+            _type = AuthRequest.GetQueryString("type");
             if (Page.IsPostBack) return;
 
-            EBooleanUtils.AddListItems(RblImportType, "上传压缩包并导入", "从指定地址下载压缩包并导入");
-            ControlUtils.SelectListItemsIgnoreCase(RblImportType, true.ToString());
+            EBooleanUtils.AddListItems(DdlImportType, "上传压缩包并导入", "从指定地址下载压缩包并导入");
+            ControlUtils.SelectSingleItemIgnoreCase(DdlImportType, true.ToString());
 
             PhUpload.Visible = true;
             PhDownload.Visible = false;
@@ -46,7 +45,7 @@ namespace SiteServer.BackgroundPages.Settings
 
         public void RblImportType_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (TranslateUtils.ToBool(RblImportType.SelectedValue))
+            if (TranslateUtils.ToBool(DdlImportType.SelectedValue))
             {
                 PhUpload.Visible = true;
                 PhDownload.Visible = false;
@@ -60,7 +59,7 @@ namespace SiteServer.BackgroundPages.Settings
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
-            var isUpload = TranslateUtils.ToBool(RblImportType.SelectedValue);
+            var isUpload = TranslateUtils.ToBool(DdlImportType.SelectedValue);
             if (_type == TypeSiteTemplate)
             {
                 ImportSiteTemplate(isUpload);
@@ -94,9 +93,9 @@ namespace SiteServer.BackgroundPages.Settings
 
 	                    HifFile.PostedFile.SaveAs(localFilePath);
 
-	                    ZipUtils.UnpackFiles(localFilePath, directoryPath);
+	                    ZipUtils.ExtractZip(localFilePath, directoryPath);
 
-	                    PageUtils.CloseModalPageAndRedirect(Page, PageSiteTemplate.GetRedirectUrl());
+                        LayerUtils.CloseAndRedirect(Page, PageSiteTemplate.GetRedirectUrl());
 	                }
 	                catch (Exception ex)
 	                {
@@ -112,9 +111,8 @@ namespace SiteServer.BackgroundPages.Settings
 	                FailMessage("站点模板压缩包为zip格式，请输入有效文件地址");
 	                return;
 	            }
-	            var directoryName = PathUtils.GetFileNameWithoutExtension(TbDownloadUrl.Text);
-	            PageUtils.Redirect(ModalProgressBar.GetRedirectUrlStringWithSiteTemplateDownload(TbDownloadUrl.Text,
-	                directoryName));
+	            
+	            PageUtils.Redirect(ModalProgressBar.GetRedirectUrlStringWithSiteTemplateDownload(0, TbDownloadUrl.Text));
 	        }
 	    }
     }

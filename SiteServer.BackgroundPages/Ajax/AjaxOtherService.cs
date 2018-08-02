@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Text;
 using System.Web.UI;
-using BaiRong.Core;
-using BaiRong.Core.IO;
-using BaiRong.Core.Net;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Core;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Core.Security;
+using SiteServer.CMS.Model;
 using SiteServer.CMS.Model.Enumerations;
+using SiteServer.CMS.Plugin;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Ajax
 {
@@ -111,11 +111,12 @@ namespace SiteServer.BackgroundPages.Ajax
             });
         }
 
-        public static string GetGetLoadingChannelsParameters(int publishmentSystemId, ELoadingType loadingType, NameValueCollection additional)
+        public static string GetGetLoadingChannelsParameters(int siteId, string contentModelPluginId, ELoadingType loadingType, NameValueCollection additional)
         {
             return TranslateUtils.NameValueCollectionToString(new NameValueCollection
             {
-                {"publishmentSystemID", publishmentSystemId.ToString() },
+                {"siteId", siteId.ToString() },
+                {"contentModelPluginId", contentModelPluginId },
                 {"loadingType", ELoadingTypeUtils.GetValue(loadingType)},
                 {"additional", TranslateUtils.EncryptStringBySecretKey(TranslateUtils.NameValueCollectionToString(additional))}
             });
@@ -126,8 +127,8 @@ namespace SiteServer.BackgroundPages.Ajax
             var type = Request["type"];
             var retval = new NameValueCollection();
             string retString = null;
-            var body = new RequestBody();
-            if (!body.IsAdminLoggin) return;
+            var request = new AuthRequest();
+            if (!request.IsAdminLoggin) return;
 
             if (type == TypeGetCountArray)
             {
@@ -155,11 +156,12 @@ namespace SiteServer.BackgroundPages.Ajax
             }
             else if (type == TypeGetLoadingChannels)
             {
-                var publishmentSystemId = TranslateUtils.ToInt(Request["publishmentSystemID"]);
-                var parentId = TranslateUtils.ToInt(Request["parentID"]);
+                var siteId = TranslateUtils.ToInt(Request["siteId"]);
+                var contentModelPluginId = Request["contentModelPluginId"];
+                var parentId = TranslateUtils.ToInt(Request["parentId"]);
                 var loadingType = Request["loadingType"];
                 var additional = Request["additional"];
-                retString = GetLoadingChannels(publishmentSystemId, parentId, loadingType, additional, body);
+                retString = GetLoadingChannels(siteId, contentModelPluginId, parentId, loadingType, additional, request);
             }
             else if (type == TypePluginDownload)
             {
@@ -170,25 +172,25 @@ namespace SiteServer.BackgroundPages.Ajax
             //else if (type == "GetLoadingGovPublicCategories")
             //{
             //    string classCode = base.Request["classCode"];
-            //    int publishmentSystemID = TranslateUtils.ToInt(base.Request["publishmentSystemID"]);
+            //    int siteID = TranslateUtils.ToInt(base.Request["siteID"]);
             //    int parentID = TranslateUtils.ToInt(base.Request["parentID"]);
             //    string loadingType = base.Request["loadingType"];
             //    string additional = base.Request["additional"];
-            //    retString = GetLoadingGovPublicCategories(classCode, publishmentSystemID, parentID, loadingType, additional);
+            //    retString = GetLoadingGovPublicCategories(classCode, siteID, parentID, loadingType, additional);
             //}
             //else if (type == "GetLoadingTemplates")
             //{
-            //    int publishmentSystemID = TranslateUtils.ToInt(base.Request["publishmentSystemID"]);
+            //    int siteID = TranslateUtils.ToInt(base.Request["siteID"]);
             //    string templateType = base.Request["templateType"];
-            //    retString = GetLoadingTemplates(publishmentSystemID, templateType);
+            //    retString = GetLoadingTemplates(siteID, templateType);
             //}
             //else if (type == "StlTemplate")
             //{
-            //    int publishmentSystemID = TranslateUtils.ToInt(base.Request["publishmentSystemID"]);
+            //    int siteID = TranslateUtils.ToInt(base.Request["siteID"]);
             //    int templateID = TranslateUtils.ToInt(base.Request["templateID"]);
             //    string includeUrl = base.Request["includeUrl"];
             //    string operation = base.Request["operation"];
-            //    retval = TemplateDesignOperation.Operate(publishmentSystemID, templateID, includeUrl, operation, base.Request.Form);
+            //    retval = TemplateDesignOperation.Operate(siteID, templateID, includeUrl, operation, base.Request.Form);
             //}
 
             if (retString != null)
@@ -245,7 +247,7 @@ namespace SiteServer.BackgroundPages.Ajax
                 var directoryPath = PathUtility.GetSiteTemplatesPath(directoryName);
                 if (!DirectoryUtils.IsDirectoryExists(directoryPath))
                 {
-                    ZipUtils.UnpackFiles(filePath, directoryPath);
+                    ZipUtils.ExtractZip(filePath, directoryPath);
                 }
 
                 CacheUtils.Insert(cacheCurrentCountKey, "5");
@@ -285,14 +287,14 @@ namespace SiteServer.BackgroundPages.Ajax
                 CacheUtils.Insert(cacheMessageKey, "开始下载插件压缩包，可能需要几分钟，请耐心等待");
 
                 var fileName = PageUtils.GetFileNameFromUrl(downloadUrl);
-                var filePath = PathUtils.GetPluginsPath(fileName);
+                var filePath = PathUtils.GetPluginPath(fileName);
                 FileUtils.DeleteFileIfExists(filePath);
                 WebClientUtils.SaveRemoteFileToLocal(downloadUrl, filePath);
 
                 CacheUtils.Insert(cacheCurrentCountKey, "4");
                 CacheUtils.Insert(cacheMessageKey, "插件压缩包下载成功，开始安装");
 
-                ZipUtils.UnpackFiles(filePath, PathUtils.GetPluginsPath(fileName.Substring(0, fileName.IndexOf(".", StringComparison.Ordinal))));
+                ZipUtils.ExtractZip(filePath, PathUtils.GetPluginPath(fileName.Substring(0, fileName.IndexOf(".", StringComparison.Ordinal))));
 
                 CacheUtils.Insert(cacheCurrentCountKey, "5");
                 CacheUtils.Insert(cacheMessageKey, string.Empty);
@@ -334,7 +336,7 @@ namespace SiteServer.BackgroundPages.Ajax
 
                 FileUtils.DeleteFileIfExists(filePath);
 
-                ZipUtils.PackFiles(filePath, directoryPath);
+                ZipUtils.CreateZip(filePath, directoryPath);
 
                 CacheUtils.Insert(cacheCurrentCountKey, "1");//存储当前的页面总数
 
@@ -372,7 +374,7 @@ namespace SiteServer.BackgroundPages.Ajax
                 var directoryPath = PathUtility.GetSiteTemplatesPath(PathUtils.GetFileNameWithoutExtension(fileName));
                 var zipFilePath = PathUtility.GetSiteTemplatesPath(fileName);
 
-                ZipUtils.UnpackFiles(zipFilePath, directoryPath);
+                ZipUtils.ExtractZip(zipFilePath, directoryPath);
 
                 CacheUtils.Insert(cacheCurrentCountKey, "1");//存储当前的页面总数
 
@@ -391,31 +393,38 @@ namespace SiteServer.BackgroundPages.Ajax
             return retval;
         }
 
-        public string GetLoadingChannels(int publishmentSystemId, int parentId, string loadingType, string additional, RequestBody body)
+        public string GetLoadingChannels(int siteId, string contentModelPluginId, int parentId, string loadingType, string additional, AuthRequest request)
         {
             var list = new List<string>();
 
             var eLoadingType = ELoadingTypeUtils.GetEnumType(loadingType);
 
-            var nodeIdList = DataProvider.NodeDao.GetNodeIdListByParentId(publishmentSystemId, parentId);
+            var channelIdList =
+                ChannelManager.GetChannelIdList(
+                    ChannelManager.GetChannelInfo(siteId, parentId == 0 ? siteId : parentId), EScopeType.Children,
+                    string.Empty, string.Empty, string.Empty);
 
-            var publishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(publishmentSystemId);
+            var siteInfo = SiteManager.GetSiteInfo(siteId);
 
             var nameValueCollection = TranslateUtils.ToNameValueCollection(TranslateUtils.DecryptStringBySecretKey(additional));
 
-            foreach (var nodeId in nodeIdList)
+            foreach (var channelId in channelIdList)
             {
-                var enabled = AdminUtility.IsOwningNodeId(body.AdminName, nodeId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
+
+                var enabled = request.AdminPermissions.IsOwningChannelId(channelId);
+                if (!string.IsNullOrEmpty(contentModelPluginId) &&
+                            !StringUtils.EqualsIgnoreCase(channelInfo.ContentModelPluginId, contentModelPluginId))
+                {
+                    enabled = false;
+                }
                 if (!enabled)
                 {
-                    if (!AdminUtility.IsHasChildOwningNodeId(body.AdminName, nodeId))
-                    {
-                        continue;
-                    }
+                    if (!request.AdminPermissions.IsDescendantOwningChannelId(siteId, channelId)) continue;
+                    if (!IsDesendantContentModelPluginIdExists(channelInfo, contentModelPluginId)) continue;
                 }
-                var nodeInfo = NodeManager.GetNodeInfo(publishmentSystemId, nodeId);
 
-                list.Add(ChannelLoading.GetChannelRowHtml(publishmentSystemInfo, nodeInfo, enabled, eLoadingType, nameValueCollection, body.AdminName));
+                list.Add(ChannelLoading.GetChannelRowHtml(siteInfo, channelInfo, enabled, eLoadingType, nameValueCollection, request.AdminPermissions));
             }
 
             //arraylist.Reverse();
@@ -426,6 +435,14 @@ namespace SiteServer.BackgroundPages.Ajax
                 builder.Append(html);
             }
             return builder.ToString();
+        }
+
+        private bool IsDesendantContentModelPluginIdExists(ChannelInfo channelInfo, string contentModelPluginId)
+        {
+            if (string.IsNullOrEmpty(contentModelPluginId)) return true;
+
+            var channelIdList = ChannelManager.GetChannelIdList(channelInfo, EScopeType.Descendant, string.Empty, string.Empty, contentModelPluginId);
+            return channelIdList.Count > 0;
         }
     }
 }

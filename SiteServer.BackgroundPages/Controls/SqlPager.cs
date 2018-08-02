@@ -5,9 +5,9 @@ using System.ComponentModel;
 using System.Data;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Data;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Core;
+using SiteServer.CMS.Core;
 
 namespace SiteServer.BackgroundPages.Controls
 {
@@ -18,7 +18,7 @@ namespace SiteServer.BackgroundPages.Controls
     {
         private PagedDataSource _dataSource;
         private string CacheKeyName => Page.Request.FilePath + "_" + UniqueID + "_Data";
-        public const string ParmPage = "page";
+        private const string ParmPage = "page";
         private bool _isSetTotalCount;
 
         //        private string GetQueryPageCommandText(int recsToRetrieve)
@@ -334,6 +334,7 @@ namespace SiteServer.BackgroundPages.Controls
         /// </summary>
         protected override void Render(HtmlTextWriter output)
         {
+            if (TotalPages <= 1) return;
             // If in design-mode ensure that child controls have been created.
             // Child controls are not created at this time in design-mode because
             // there's no pre-render stage. Do so for composite controls like this 
@@ -359,46 +360,43 @@ namespace SiteServer.BackgroundPages.Controls
         /// </summary>
         private void BuildControlHierarchy()
         {
-            if (TotalPages > 1)
+            if (TotalPages <= 1) return;
+
+            // Build the surrounding table (one row, two cells)
+
+            // Build the table row
+            var row = new TableRow
             {
-                // Build the surrounding table (one row, two cells)
+                Height = 25
+            };
+            Rows.Add(row);
+            //t.Rows.Add(row);
 
-                // Build the table row
-                var row = new TableRow
+            // Build the cell with navigation bar
+            var cellNavBar = new TableCell
+            {
+                VerticalAlign = VerticalAlign.Middle
+            };
+            if (PagerStyle == PagerStyle.NextPrev)
+            {
+                BuildNextPrevUi(cellNavBar);
+                row.Cells.Add(cellNavBar);
+                // Build the cell with the page index
+                var cellPageDesc = new TableCell();
+                if (!string.IsNullOrEmpty(TextCssClass))
                 {
-                    Height = 25
-                };
-                Rows.Add(row);
-                //t.Rows.Add(row);
-
-                // Build the cell with navigation bar
-                var cellNavBar = new TableCell
-                {
-                    VerticalAlign = VerticalAlign.Middle
-                };
-                if (PagerStyle == PagerStyle.NextPrev)
-                {
-                    BuildNextPrevUi(cellNavBar);
-                    row.Cells.Add(cellNavBar);
-                    // Build the cell with the page index
-                    var cellPageDesc = new TableCell();
-                    if (!string.IsNullOrEmpty(TextCssClass))
-                    {
-                        cellPageDesc.CssClass = TextCssClass;
-                    }
-                    cellPageDesc.HorizontalAlign = HorizontalAlign.Right;
-                    cellPageDesc.VerticalAlign = VerticalAlign.Top;
-                    BuildCurrentPage(cellPageDesc);
-                    row.Cells.Add(cellPageDesc);
+                    cellPageDesc.CssClass = TextCssClass;
                 }
-                else
-                {
-                    row.Cells.Add(cellNavBar);
-                }
+                cellPageDesc.HorizontalAlign = HorizontalAlign.Right;
+                cellPageDesc.VerticalAlign = VerticalAlign.Top;
+                BuildCurrentPage(cellPageDesc);
+                row.Cells.Add(cellPageDesc);
+            }
+            else
+            {
+                row.Cells.Add(cellNavBar);
             }
         }
-
-        public ArrayList RemoveQueryString = new ArrayList();
 
         private string GetNavigationUrl(int page)
         {
@@ -410,13 +408,6 @@ namespace SiteServer.BackgroundPages.Controls
             else
             {
                 queryString.Remove(ParmPage);
-            }
-            if (RemoveQueryString.Count > 0)
-            {
-                foreach (string name in RemoveQueryString)
-                {
-                    queryString.Remove(name);
-                }
             }
             return PageUtils.AddQueryString(PageUtils.GetUrlWithoutQueryString(Page.Request.RawUrl), queryString);
         }
@@ -757,11 +748,11 @@ namespace SiteServer.BackgroundPages.Controls
 
         private int GetQueryVirtualCount()
         {
-            var recCount = BaiRongDataProvider.DatabaseDao.GetPageTotalCount(SelectCommand);
+            var recCount = DataProvider.DatabaseDao.GetPageTotalCount(SelectCommand);
             //            SqlConnection conn = new SqlConnection(ConnectionString);
             //            SqlCommand cmd = new SqlCommand(cmdText, conn);
-            //IDbConnection conn = SqlUtils.GetIDbConnection(BaiRongDataProvider.ADOType, ConnectionString);
-            //IDbCommand cmd = SqlUtils.GetIDbCommand(BaiRongDataProvider.ADOType);
+            //IDbConnection conn = SqlUtils.GetIDbConnection(DataProvider.ADOType, ConnectionString);
+            //IDbCommand cmd = SqlUtils.GetIDbCommand(DataProvider.ADOType);
             //cmd.Connection = conn;
             //cmd.CommandText = cmdText;
 

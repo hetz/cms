@@ -2,9 +2,10 @@
 using System.Collections;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
+using SiteServer.CMS.Core;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Settings
 {
@@ -13,8 +14,9 @@ namespace SiteServer.BackgroundPages.Settings
         public Literal LtlPageTitle;
         public DateTimeTextBox TbDateFrom;
         public DateTimeTextBox TbDateTo;
-        public Literal LtlArray;
         public DropDownList DdlXType;
+
+        public string StrArray { get; set; }
 
         //用户数量
         private readonly Hashtable _userNumHashtable = new Hashtable();
@@ -98,12 +100,12 @@ namespace SiteServer.BackgroundPages.Settings
             if (IsForbidden) return;
             if (IsPostBack) return;
 
-            BreadCrumbSettings("会员新增数据统计", AppManager.Permissions.Settings.Chart);
-            LtlPageTitle.Text = $"用户增加最近{_count}{EStatictisXTypeUtils.GetText(EStatictisXTypeUtils.GetEnumType(Body.GetQueryString("XType")))}分配图表";
+            VerifySystemPermissions(ConfigManager.SettingsPermissions.Chart);
+            LtlPageTitle.Text = $"用户增加最近{_count}{EStatictisXTypeUtils.GetText(EStatictisXTypeUtils.GetEnumType(AuthRequest.GetQueryString("XType")))}分配图表";
 
             EStatictisXTypeUtils.AddListItems(DdlXType);
 
-            _xType = EStatictisXTypeUtils.GetEnumType(Body.GetQueryString("XType"));
+            _xType = EStatictisXTypeUtils.GetEnumType(AuthRequest.GetQueryString("XType"));
 
             if (Equals(_xType, EStatictisXType.Day))
             {
@@ -118,12 +120,12 @@ namespace SiteServer.BackgroundPages.Settings
                 _count = 10;
             }
 
-            TbDateFrom.Text = Body.GetQueryString("DateFrom");
-            TbDateTo.Text = Body.GetQueryString("DateTo");
+            TbDateFrom.Text = AuthRequest.GetQueryString("DateFrom");
+            TbDateTo.Text = AuthRequest.GetQueryString("DateTo");
             DdlXType.SelectedValue = EStatictisXTypeUtils.GetValue(_xType);
 
             //用户添加量统计
-            var trackingDayDict = BaiRongDataProvider.UserDao.GetTrackingDictionary( TranslateUtils.ToDateTime(Body.GetQueryString("DateFrom")), TranslateUtils.ToDateTime(Body.GetQueryString("DateTo"), DateTime.Now), EStatictisXTypeUtils.GetValue(_xType));
+            var trackingDayDict = DataProvider.UserDao.GetTrackingDictionary( TranslateUtils.ToDateTime(AuthRequest.GetQueryString("DateFrom")), TranslateUtils.ToDateTime(AuthRequest.GetQueryString("DateTo"), DateTime.Now), EStatictisXTypeUtils.GetValue(_xType));
 
             var now = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, 0, 0, 0);
             for (var i = 0; i < _count; i++)
@@ -159,7 +161,7 @@ namespace SiteServer.BackgroundPages.Settings
 
             for (var i = 1; i <= _count; i++)
             {
-                LtlArray.Text += $@"
+                StrArray += $@"
 xArray.push('{GetGraphicX(i)}');
 yArray.push('{GetGraphicY(i)}');
 ";

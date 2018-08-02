@@ -5,7 +5,7 @@ using SiteServer.CMS.StlParser.Utility;
 
 namespace SiteServer.CMS.StlParser.StlEntity
 {
-    [Stl(Usage = "STL标签实体", Description = "通过 {stl:} 实体在模板中实现STL标签")]
+    [StlClass(Usage = "STL标签实体", Description = "通过 {stl:} 实体在模板中实现STL标签")]
     public class StlElementEntities
     {
         private StlElementEntities()
@@ -20,10 +20,10 @@ namespace SiteServer.CMS.StlParser.StlEntity
         {
             var parsedContent = string.Empty;
 
-            contextInfo.IsCurlyBrace = true;
+            contextInfo.IsStlEntity = true;
             try
             {
-                var stlElement = StlParserUtility.HtmlToXml($"<{stlEntity.Trim(' ', '{', '}')} />");
+                var stlElement = $"<{stlEntity.Trim(' ', '{', '}')} />";
 
                 var innerBuilder = new StringBuilder(stlElement);
                 StlParserManager.ParseInnerContent(innerBuilder, pageInfo, contextInfo);
@@ -33,7 +33,7 @@ namespace SiteServer.CMS.StlParser.StlEntity
             {
                 // ignored
             }
-            contextInfo.IsCurlyBrace = false;
+            contextInfo.IsStlEntity = false;
 
             return parsedContent;
         }
